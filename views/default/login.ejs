@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authorize</title>
+</head>
+
+<body>
+  <script type="module">
+    const fragment = window.location.hash.substring(1);
+    if (!fragment) {
+      window.open('/', '_self');
+    };
+    const params = new URLSearchParams(fragment);
+    const accessToken = params.get('access_token');
+    const expiresIn = params.get('expires_in');
+    const scope = params.get('scope');
+    fetch('/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ accessToken, expiresIn, scope }),
+    }).then(async (res) => {
+      if (res.status === 302) {
+        const body = await res.json();
+        window.open(body.route, '_self');
+      } else {
+        window.open('/unauthorized', '_self');
+      }
+    })
+  </script>
+</body>
+
+</html>

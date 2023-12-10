@@ -1,0 +1,52 @@
+{
+	"name": "fonzi2",
+	"version": "0.5.4",
+	"description": "Discord bot starter kit",
+	"private": true,
+	"type": "commonjs",
+	"engines": {
+		"node": ">=18.12.1",
+		"npm": ">=9.1.1"
+	},
+	"scripts": {
+		"start": "cross-env NODE_ENV=production node ./dist/bundle.js --enable-source-maps",
+		"dev": "cross-env NODE_ENV=development tsnd --respawn --clear  --debounce --transpile-only ./src/main.ts",
+		"build": "rimraf dist && webpack --config webpack.config.js --mode production",
+		"build:secrets": "node replit.secrets.mjs",
+		"lint:check": "prettier --check .",
+		"lint": "prettier --write ."
+	},
+	"keywords": [
+		"discord",
+		"bot",
+		"typescript"
+	],
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"cookie-session": "^2.0.0",
+		"cross-env": "^7.0.3",
+		"discord.js": "^14.14.1",
+		"ejs": "^3.1.9",
+		"express": "^4.18.2",
+		"firebase": "^10.7.1",
+		"ts-loader": "^9.5.1",
+		"typescript": "^5.3.2"
+	},
+	"devDependencies": {
+		"@types/cookie-session": "^2.0.48",
+		"@types/express": "^4.17.21",
+		"@types/express-session": "^1.17.10",
+		"@types/node": "^20.10.1",
+		"axios": "^1.6.2",
+		"dotenv": "^16.3.1",
+		"prettier": "^3.1.0",
+		"reflect-metadata": "^0.1.13",
+		"rimraf": "^5.0.5",
+		"ts-node": "^10.9.1",
+		"ts-node-dev": "^1.1.8",
+		"webpack": "^5.89.0",
+		"webpack-cli": "^5.1.4",
+		"webpack-node-externals": "^3.0.0"
+	}
+}

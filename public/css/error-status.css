@@ -1,0 +1,87 @@
+@import url('https://fonts.cdnfonts.com/css/montserrat');
+
+body {
+	margin: 0;
+	padding: 0;
+	font-family: 'Montserrat', sans-serif;
+	background-size: 100%;
+	animation: colorTransition 30s ease infinite;
+	display: flex;
+  flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 100vh;
+}
+/* Reset default styles */
+a {
+  text-decoration: none;
+  color: black;
+}
+
+/* Normal state */
+a:hover,
+a:focus {
+  text-decoration: underline;
+}
+
+/* Visited state */
+a:visited {
+  color: black; /* Adjust the color for visited links */
+}
+
+/* Remove outline on click for accessibility */
+a:active,
+a:focus {
+  outline: none;
+}
+
+.card {
+	text-align: center;
+	background-color: #ecf0f1;
+	padding: 30px;
+	border-radius: 12px;
+	box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+	transition: transform 0.3s ease-in-out;
+}
+
+.card:hover {
+	transform: scale(1.05);
+}
+
+h1,
+.error-code {
+	font-size: 2.5em;
+	margin-bottom: 15px;
+	animation: colorTransition 30s ease infinite;
+	background-clip: text;
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+p {
+	color: #555;
+	font-size: 1.2em;
+	margin-bottom: 20px;
+}
+
+@keyframes colorTransition {
+	0% {
+		background-color: #3498db;
+		clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+	}
+
+	50% {
+		background-color: #e74c3c;
+		clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+	}
+
+  75% {
+		background-color: #119723;
+		clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+	}
+
+	100% {
+		background-color: #3498db;
+		clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+	}
+}

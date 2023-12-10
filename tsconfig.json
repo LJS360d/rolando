@@ -1,0 +1,31 @@
+{
+	"compilerOptions": {
+    // Do not touch
+		"target": "ES6",
+		"module": "commonjs",
+		"outDir": "./dist",
+		"moduleResolution": "node",
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+    // Change these if masochist
+		"strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "alwaysStrict": false,
+    // ide rules
+    "noErrorTruncation": true,
+		"forceConsistentCasingInFileNames": true,
+		"composite": true,
+    // Compilation rules
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"isolatedModules": true, // Enables faster builds in some scenarios
+		"declaration": true, // Generate declaration files (.d.ts)
+		"declarationMap": true, // Generate sourcemaps for declaration files
+		"sourceMap": true // Generate sourcemaps for JavaScript files
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules"]
+}
