@@ -1,6 +1,6 @@
 {
 	"name": "rolando2",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "Revamped rolando",
 	"private": true,
 	"type": "commonjs",
@@ -30,7 +30,6 @@
 		"ejs": "^3.1.9",
 		"express": "^4.18.2",
 		"firebase": "^10.7.1",
-		"firebase-admin": "^12.0.0",
 		"ts-loader": "^9.5.1",
 		"typescript": "^5.3.3"
 	},

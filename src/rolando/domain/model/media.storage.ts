@@ -1,20 +1,27 @@
-import { firestore } from 'firebase-admin';
-import {
-	getValidUrl,
-	isGifUrl,
-	isImageUrl,
-	isVideoUrl,
-} from '../utils/url.utils';
-
+import { Firestore } from 'firebase/firestore';
+import { getValidUrl, isGifUrl, isImageUrl, isVideoUrl } from '../../utils/url.utils';
+type MediaMap = {
+	gifs: string[];
+	images: string[];
+	videos: string[];
+};
 export class MediaStorage {
-  public chainId?: string;
+	public chainId?: string;
 	gifs: Set<string>;
 	images: Set<string>;
 	videos: Set<string>;
-	constructor(private db: firestore.Firestore) {
+	constructor() {
 		this.gifs = new Set<string>();
 		this.images = new Set<string>();
 		this.videos = new Set<string>();
+	}
+
+	get mediaMap(): MediaMap {
+		return {
+			gifs: Array.from(this.gifs),
+			images: Array.from(this.images),
+			videos: Array.from(this.videos),
+		};
 	}
 
 	addMedia(url: string) {
@@ -39,5 +46,13 @@ export class MediaStorage {
 		this.gifs.delete(url);
 		this.videos.delete(url);
 		this.images.delete(url);
+	}
+
+	static from(mediaMap: MediaMap) {
+		const mediaStorage = new MediaStorage();
+		mediaStorage.gifs = new Set(mediaMap.gifs);
+		mediaStorage.images = new Set(mediaMap.images);
+		mediaStorage.videos = new Set(mediaMap.videos);
+		return mediaStorage;
 	}
 }

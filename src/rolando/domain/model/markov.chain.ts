@@ -99,4 +99,10 @@ export class MarkovChain {
 
 		return options[options.length - 1];
 	}
+
+  static from(state: MarkovState, mediaStorage: MediaStorage): MarkovChain {
+    const chain = new MarkovChain('', mediaStorage);
+    chain.state = state;
+    return chain;
+  }
 }
