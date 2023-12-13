@@ -7,13 +7,13 @@ export class ButtonInteractionHandler extends Handler {
 
 	@Button('confirm-ping')
 	public async confirmPing(interaction: ButtonInteraction) {
-    void interaction.message.delete();
+		void interaction.message.delete();
 		void interaction.channel?.send('Pong!');
 	}
 
-  @Button('cancel-ping')
+	@Button('cancel-ping')
 	public async cancelPing(interaction: ButtonInteraction) {
-    void interaction.message.delete();
+		void interaction.message.delete();
 		void interaction.channel?.send('no pong :(');
 	}
 }

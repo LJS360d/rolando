@@ -6,6 +6,26 @@ function extractUrlInfo(url: string): { domain?: string; extension?: string } {
 	return { domain, extension };
 }
 
+export function containsURL(text: string): boolean {
+	const urlRegex = /(https?|ftp):\/\/[^\s/$.?#].[^\s]*/;
+	const matches = urlRegex.exec(text);
+
+	if (matches) {
+		for (const url of matches) {
+			try {
+				const { protocol } = new URL(url);
+				if (protocol === 'http:' || protocol === 'https:') {
+					return true;
+				}
+			} catch (error) {
+				// Ignore invalid URLs
+			}
+		}
+	}
+
+	return false;
+}
+
 export function getUrlExtension(url: string) {
 	try {
 		return new URL(url).pathname.match(/\.[^./?]+(?=\?|$| )/)?.[0];

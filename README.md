@@ -45,15 +45,15 @@ For this purpose i reccomend using nvm (Node Version Manager).
 
 2. Navigate into the project directory:
 
-    ```bash
-    cd fonzi2
-    ```
+   ```bash
+   cd fonzi2
+   ```
 
 3. Install the project dependencies:
 
-    ```bash
-    npm install
-    ```
+   ```bash
+   npm install
+   ```
 
 ### Quick Start
 
@@ -61,22 +61,22 @@ For this purpose i reccomend using nvm (Node Version Manager).
 
 2. Obtain the bot token from the Bot tab of your newly created application.
 
-3. [Invite link] Generate an OAuth2 URL using the OAuth2 URL Generator in the Discord Developer Portal. 
-Select the `bot` scope and the permissions you need to generate the bot invite link.
+3. [Invite link] Generate an OAuth2 URL using the OAuth2 URL Generator in the Discord Developer Portal.
+   Select the `bot` scope and the permissions you need to generate the bot invite link.
 
 4. [ServerSide OAuth2] Generate an OAuth2 URL using the OAuth2 URL Generator in the Discord Developer Portal. Select the "identify" scope and `http://localhost:<port>/login` as your redirect uri for development and **CHANGE `response_type` to `token`**.
 
-    - For production: you will need to create a new OAuth2 url using the hostname of your deployment (ex. https://fonzi2.ljs360d.repl.co/login as the redirect uri), remember to **CHANGE `response_type` to `token`**.
+   - For production: you will need to create a new OAuth2 url using the hostname of your deployment (ex. https://fonzi2.ljs360d.repl.co/login as the redirect uri), remember to **CHANGE `response_type` to `token`**.
 
-6. Rename the `common.env` file to just `.env` in the project root directory and fill in at least the required properties
+5. Rename the `common.env` file to just `.env` in the project root directory and fill in at least the required properties
 
-7. Configure the bot intents in the `src\client\options.ts` file. Select only the necessary intents to improve bot efficiency and security.
+6. Configure the bot intents in the `src\client\options.ts` file. Select only the necessary intents to improve bot efficiency and security.
 
-8. Start the bot in development mode:
+7. Start the bot in development mode:
 
-    ```bash
-    npm run dev
-    ```
+   ```bash
+   npm run dev
+   ```
 
 This will start the bot and serverside in development mode, allowing you to test and debug your commands and functionalities.
 
@@ -85,6 +85,7 @@ This will start the bot and serverside in development mode, allowing you to test
 I welcome contributions to the project. Feel free to open issues or submit pull requests with improvements or bug fixes.
 
 ### Todo List
+
 - Database integration with SQL and NoSQL databases
 - Discord DB pre-integration (store data in channels)
 - Firebase integration instead of replit
@@ -134,7 +135,6 @@ You can host your bot on a dedicated server using the [pm2 package](https://pm2.
    - Replace "fonzi2" with your desired PM2 process name.
 7. Monitor and Manage:
 
-
    ```bash
    # see pm2 logs
    pm2 logs fonzi2
@@ -159,7 +159,7 @@ By far the simplest way to host a Discord bot for **free**, this approach is exc
 2. **Setup secrets**
    - Instead of creating a `.env` file, on replit, you have to specify your environment variables in the **Secrets** tool
    - Just like with the `.env` you will need a `TOKEN` and a `LOG_WEBHOOK` secrets for the bot to work and the OAuth2 Secrets for the serverside dashboard
-   - For this purpose there is an npm script that you should run before deployment: `npm run build:secret` that will parse your .env into a JSON file to be quickly inserted into the replit secrets, but remember to change the serverside OAuth2 url to the production one.  
+   - For this purpose there is an npm script that you should run before deployment: `npm run build:secret` that will parse your .env into a JSON file to be quickly inserted into the replit secrets, but remember to change the serverside OAuth2 url to the production one.
 3. Start the Bot
    - Click on the "Start" button in the toolbar
 4. Keep the Repl Alive:

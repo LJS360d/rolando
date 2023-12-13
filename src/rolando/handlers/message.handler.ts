@@ -1,10 +1,9 @@
 import { Message } from 'discord.js';
-import { Handler, HandlersType } from '../../fonzi2/events/handlers/base.handler';
-import { Logger } from '../../fonzi2/lib/logger';
 import { MessageEvent } from '../../fonzi2/events/decorators/message.dec';
+import { Handler, HandlersType } from '../../fonzi2/events/handlers/base.handler';
+import { MarkovChain } from '../domain/model/markov.chain';
 import { ChainsService } from '../domain/services/chains.service';
 import { getRandom } from '../utils/random.utils';
-import { MarkovChain } from '../domain/model/markov.chain';
 
 export class MessageHandler extends Handler {
 	public readonly type = HandlersType.messageEvent;
@@ -15,16 +14,19 @@ export class MessageHandler extends Handler {
 	@MessageEvent('GuildText')
 	async onGuildMessage(message: Message<true>) {
 		const { author, guild, content } = message;
-    if (author === this.client?.user) return;
+		if (author.id === this.client?.user?.id) return;
+
 		const guildId = guild.id;
-		const chain = await this.chainsService.getChain(guildId);
+		const chain = await this.chainsService.getChain(guildId, guild.name);
 		if (!chain) {
-			await this.chainsService.createChain(guildId);
+			await this.chainsService.createChain(guildId, guild.name);
 			return;
 		}
-		// * Learning from message
-		chain.updateState(content);
-		this.chainsService.updateChain(chain);
+		if (content.length > 3) {
+			// * Learning from message
+			chain.updateState(content);
+			this.chainsService.updateChain(chain, content);
+		}
 
 		const mention = content.includes(`<@${this.client?.user?.id}>`);
 		if (mention) {

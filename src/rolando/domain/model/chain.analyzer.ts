@@ -1,4 +1,6 @@
+import { formatBytes } from '../../utils/formatting.utils';
 import { MarkovChain } from './markov.chain';
+import sizeof from 'object-sizeof';
 
 type ChainAnalytics = {
 	complexityScore: number;
@@ -13,6 +15,10 @@ export class MarkovChainAnalyzer {
 	private USE_THRESHOLD = 15;
 
 	constructor(private chain: MarkovChain) {}
+
+	get size() {
+		return formatBytes(sizeof(this.chain));
+	}
 
 	getComplexity(): number {
 		const stateSize = Object.keys(this.chain.state).length;

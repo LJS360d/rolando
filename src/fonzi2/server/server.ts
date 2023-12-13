@@ -17,7 +17,10 @@ export class Fonzi2Server {
 		this.httpServer = http.createServer(this.app);
 		this.app.use(express.static('public'));
 		this.app.use(express.json());
-		const secret = crypto.createHash('sha3-256').update(JSON.stringify(env)).digest('hex');
+		const secret = crypto
+			.createHash('sha3-256')
+			.update(JSON.stringify(env))
+			.digest('hex');
 		this.app.use(session({ secret }));
 		this.app.set('view engine', 'ejs');
 	}
@@ -59,7 +62,7 @@ export class Fonzi2Server {
 			guilds: this.client.guilds.cache,
 			startTime: this.startTime,
 			version: env.VERSION,
-      inviteLink: env.INVITE_LINK,
+			inviteLink: env.INVITE_LINK,
 			userInfo,
 		};
 		res.render('default/dashboard', props);

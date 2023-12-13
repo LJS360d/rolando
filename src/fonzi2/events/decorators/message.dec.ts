@@ -12,7 +12,6 @@ export function getMessageEventsMetadata(target: any): MessageEventMetadata[] {
 }
 
 export function MessageEvent(type: MessageType): MethodDecorator {
-  
 	return (target: Handler, _, descriptor: PropertyDescriptor) => {
 		const messageEvents: MessageEventMetadata[] =
 			Reflect.getOwnMetadata(messageEventsKey, target) || [];

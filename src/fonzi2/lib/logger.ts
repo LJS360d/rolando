@@ -44,7 +44,7 @@ export enum DC {
 
 export class Logger {
 	protected static readonly pattern = `${CC.gray}[%time]$ %color%level$ ${CC.white}%msg$`;
-	static remoteEnabled = true;
+	static readonly remoteEnabled = false;
 
 	public static info(msg: string | object): void {
 		this.log('INFO', 'green', msg);
@@ -114,8 +114,9 @@ export class Logger {
 			.replace('%msg', msg)
 			.replace('%color', CC[color] ?? CC.white);
 
-		console.log(this.$(pattern));    
-		if (this.remoteEnabled && !['DEBUG', 'TRACE'].includes(level)) this.remoteLog(level, color as keyof typeof DC, msg);
+		console.log(this.$(pattern));
+		if (this.remoteEnabled && !['DEBUG', 'TRACE'].includes(level))
+			this.remoteLog(level, color as keyof typeof DC, msg);
 	}
 
 	private static remoteLog(level: string, color: keyof typeof DC, msg: string) {

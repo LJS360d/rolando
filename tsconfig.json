@@ -1,24 +1,24 @@
 {
 	"compilerOptions": {
-    // Do not touch
+		// Do not touch
 		"target": "ES6",
 		"module": "commonjs",
 		"outDir": "./dist",
 		"moduleResolution": "node",
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,
-    // Change these if masochist
+		// Change these if masochist
 		"strict": false,
-    "noImplicitAny": false,
-    "strictNullChecks": true,
-    "noImplicitReturns": true,
-    "noPropertyAccessFromIndexSignature": true,
-    "alwaysStrict": false,
-    // ide rules
-    "noErrorTruncation": true,
+		"noImplicitAny": false,
+		"strictNullChecks": true,
+		"noImplicitReturns": true,
+		"noPropertyAccessFromIndexSignature": true,
+		"alwaysStrict": false,
+		// ide rules
+		"noErrorTruncation": true,
 		"forceConsistentCasingInFileNames": true,
 		"composite": true,
-    // Compilation rules
+		// Compilation rules
 		"skipLibCheck": true,
 		"esModuleInterop": true,
 		"isolatedModules": true, // Enables faster builds in some scenarios

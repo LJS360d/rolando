@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { ClientEvents } from 'discord.js';
 import { Handler } from '../handlers/base.handler';
 
-type ClientEvent = keyof Omit<ClientEvents, 'messageCreate' | 'debug'>
+type ClientEvent = keyof Omit<ClientEvents, 'messageCreate' | 'debug'>;
 
 export type ClientEventMetadata = { event: ClientEvent; method: Function };
 

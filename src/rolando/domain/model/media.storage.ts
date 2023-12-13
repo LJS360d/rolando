@@ -6,11 +6,10 @@ type MediaMap = {
 	videos: string[];
 };
 export class MediaStorage {
-	public chainId?: string;
 	gifs: Set<string>;
 	images: Set<string>;
 	videos: Set<string>;
-	constructor() {
+	constructor(public chainId: string) {
 		this.gifs = new Set<string>();
 		this.images = new Set<string>();
 		this.videos = new Set<string>();
@@ -46,13 +45,5 @@ export class MediaStorage {
 		this.gifs.delete(url);
 		this.videos.delete(url);
 		this.images.delete(url);
-	}
-
-	static from(mediaMap: MediaMap) {
-		const mediaStorage = new MediaStorage();
-		mediaStorage.gifs = new Set(mediaMap.gifs);
-		mediaStorage.images = new Set(mediaMap.images);
-		mediaStorage.videos = new Set(mediaMap.videos);
-		return mediaStorage;
 	}
 }

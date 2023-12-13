@@ -1,16 +1,25 @@
+import sizeof from 'object-sizeof';
+import { formatBytes } from '../../utils/formatting.utils';
+import { MarkovChainAnalyzer } from './chain.analyzer';
 import { MediaStorage } from './media.storage';
 type MarkovState = Record<string, Record<string, number>>;
 
 export class MarkovChain {
-	public state: MarkovState;
-	public replyRate: number;
+	public mediaStorage: MediaStorage;
+	state: MarkovState;
 	constructor(
 		public id: string,
-		public mediaStorage: MediaStorage
+		public name: string,
+		public replyRate = 10,
+		messages?: string[]
 	) {
-    this.mediaStorage.chainId = this.id;
+		this.mediaStorage = new MediaStorage(this.id);
 		this.state = {};
-		this.replyRate = 10;
+		this.provideData(messages || []);
+	}
+
+	get size() {
+		return formatBytes(sizeof(this));
 	}
 
 	provideData(messages: string[]): void {
@@ -20,7 +29,7 @@ export class MarkovChain {
 	updateState(message: string): void {
 		if (message.startsWith('https://')) {
 			this.mediaStorage.addMedia(message);
-      return;
+			return;
 		}
 		const words = message.split(' ');
 
@@ -40,7 +49,7 @@ export class MarkovChain {
 		}
 	}
 
-	generateText(startWord: string, length: number): string {
+	private generateText(startWord: string, length: number): string {
 		let currentWord = startWord;
 		let generatedText = currentWord;
 
@@ -99,10 +108,4 @@ export class MarkovChain {
 
 		return options[options.length - 1];
 	}
-
-  static from(state: MarkovState, mediaStorage: MediaStorage): MarkovChain {
-    const chain = new MarkovChain('', mediaStorage);
-    chain.state = state;
-    return chain;
-  }
 }

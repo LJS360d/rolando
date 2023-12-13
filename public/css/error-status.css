@@ -7,32 +7,32 @@ body {
 	background-size: 100%;
 	animation: colorTransition 30s ease infinite;
 	display: flex;
-  flex-direction: column;
+	flex-direction: column;
 	align-items: center;
 	justify-content: center;
 	height: 100vh;
 }
 /* Reset default styles */
 a {
-  text-decoration: none;
-  color: black;
+	text-decoration: none;
+	color: black;
 }
 
 /* Normal state */
 a:hover,
 a:focus {
-  text-decoration: underline;
+	text-decoration: underline;
 }
 
 /* Visited state */
 a:visited {
-  color: black; /* Adjust the color for visited links */
+	color: black; /* Adjust the color for visited links */
 }
 
 /* Remove outline on click for accessibility */
 a:active,
 a:focus {
-  outline: none;
+	outline: none;
 }
 
 .card {
@@ -75,7 +75,7 @@ p {
 		clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
 	}
 
-  75% {
+	75% {
 		background-color: #119723;
 		clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
 	}

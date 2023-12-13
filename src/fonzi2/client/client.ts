@@ -50,7 +50,7 @@ export default class Fonzi2Client extends Client {
 	private registerMessageEventHandlers(handlers: Handler[]) {
 		handlers.forEach((handler) => {
 			const clientEvents = getMessageEventsMetadata(handler);
-			for (const { type, method } of clientEvents) {        
+			for (const { type, method } of clientEvents) {
 				this.on('messageCreate', (message: Message<boolean>) => {
 					if (message.channel.type === type) method.call(handler, message);
 				});

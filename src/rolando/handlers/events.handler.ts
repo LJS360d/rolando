@@ -24,7 +24,7 @@ export class EventsHandler extends Handler {
 			load('Started refreshing application (/) commands.');
 			await this.client?.application?.commands.set(this.commands);
 			load('Successfully reloaded application (/) commands.', true);
-      this.chainsService.loadChains();
+			this.chainsService.loadChains();
 			new Fonzi2Server(this.client!).start();
 		} catch (err: any) {
 			Logger.error(err);
@@ -35,7 +35,7 @@ export class EventsHandler extends Handler {
 	async onGuildCreate(guild: Guild) {
 		Logger.info(`Joined guild ${guild.name}`);
 		void guild.systemChannel?.send(`Hello ${guild.name}`);
-		void this.chainsService.createChain(guild.id);
+		void this.chainsService.createChain(guild.id, guild.name);
 	}
 
 	@ClientEvent('guildDelete')
