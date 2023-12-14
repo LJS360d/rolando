@@ -1,8 +1,5 @@
 # Rolando2 - Discord Bot AI
 
-[![Deploy](https://api.netlify.com/api/v1/badges/d71238c1-c38f-41c3-9af1-54b2722084d5/deploy-status)](https://app.netlify.com/sites/rolando2/deploys)
-
-
 ## Table of Contents
 
 - [Introduction](#introduction)
