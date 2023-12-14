@@ -1,6 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 import session from 'cookie-session';
 import crypto from 'crypto';
+import cors from 'cors';
 import { Client } from 'discord.js';
 import express, { NextFunction, type Request, type Response } from 'express';
 import http from 'http';
@@ -15,6 +16,7 @@ export class Fonzi2Server {
 	constructor(private client: Client) {
 		this.app = express();
 		this.httpServer = http.createServer(this.app);
+		this.app.use(cors());
 		this.app.use(express.static('public'));
 		this.app.use(express.json());
 		const secret = crypto

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { EmbedBuilder } from 'discord.js';
 import { env } from './env';
+import { capitalize } from '../../rolando/utils/formatting.utils';
 // ConsoleColors
 export enum CC {
 	stop = '\x1b[0m',
@@ -44,7 +45,7 @@ export enum DC {
 
 export class Logger {
 	protected static readonly pattern = `${CC.gray}[%time]$ %color%level$ ${CC.white}%msg$`;
-	static readonly remoteEnabled = false;
+	static readonly remoteEnabled = true;
 
 	public static info(msg: string | object): void {
 		this.log('INFO', 'green', msg);
@@ -116,32 +117,34 @@ export class Logger {
 
 		console.log(this.$(pattern));
 		if (this.remoteEnabled && !['DEBUG', 'TRACE'].includes(level))
-			this.remoteLog(level, color as keyof typeof DC, msg);
+			void this.remoteLog(level, color as keyof typeof DC, msg);
 	}
 
-	private static remoteLog(level: string, color: keyof typeof DC, msg: string) {
+	private static async remoteLog(level: string, color: keyof typeof DC, msg: string) {
 		const embed = new EmbedBuilder()
 			.setColor(DC[color] ?? DC.white)
 			.setDescription(this.now())
 			.addFields({
-				name: `${env.NODE_ENV.charAt(0).toUpperCase() + env.NODE_ENV.slice(1)} ${level}`,
-				value: msg,
+				name: `${capitalize(env.NODE_ENV)} ${level}`,
+				value: this.strip(msg),
 				inline: true,
 			});
 		const body = JSON.stringify({ embeds: [embed] });
 
 		try {
 			if (env.LOG_WEBHOOK)
-				axios.post(env.LOG_WEBHOOK, body, {
+				void axios.post(env.LOG_WEBHOOK, body, {
 					headers: {
 						'Content-Type': 'application/json',
 					},
 				});
-		} catch (error: any) {
-			if (error.response && error.response.status === 429) {
-				// ignore 429 error response
-			}
+		} catch (error) {
+			// ignore
 		}
+	}
+
+	private static strip(str: string) {
+		return this.$(str).replace(/\x1b\[[0-9;]*m/g, '');
 	}
 
 	private static $(str: string) {

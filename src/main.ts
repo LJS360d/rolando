@@ -16,8 +16,13 @@ new Fonzi2Client(options, [
 	new EventsHandler(getRegisteredCommands(), chainService),
 ]);
 
-process.on('uncaughtException', (err) => {
-	Logger.error(`${err.name}: ${err.message}\n${err.stack}`);
+process.on('uncaughtException', (err: any) => {
+	if (err?.response?.status !== 429)
+		Logger.error(`${err.name}: ${err.message}\n${err.stack}`);
+});
+
+process.on('unhandledRejection', (/* reason */) => {
+	//Logger.warn(`Rejection: ${reason}`);
 });
 
 ['SIGINT', 'SIGTERM'].forEach((signal) => {

@@ -1,6 +1,7 @@
-# Fonzi2 - Discord Bot Framework
+# Rolando2 - Discord Bot AI
 
-Fonzi2 is an incredibly simple and blazingly fast Discord bot framework built using TypeScript and Discord.js. It provides a structured architecture with automatic command registration, event handling, and OAuth2 server-side functionality.
+[![Deploy](https://api.netlify.com/api/v1/badges/d71238c1-c38f-41c3-9af1-54b2722084d5/deploy-status)](https://app.netlify.com/sites/rolando2/deploys)
+
 
 ## Table of Contents
 

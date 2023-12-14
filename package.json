@@ -1,6 +1,6 @@
 {
 	"name": "rolando2",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Revamped rolando",
 	"private": true,
 	"type": "commonjs",
@@ -25,6 +25,7 @@
 	"license": "ISC",
 	"dependencies": {
 		"cookie-session": "^2.0.0",
+		"cors": "^2.8.5",
 		"cross-env": "^7.0.3",
 		"discord.js": "^14.14.1",
 		"ejs": "^3.1.9",

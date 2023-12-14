@@ -18,7 +18,7 @@ export function containsURL(text: string): boolean {
 					return true;
 				}
 			} catch (error) {
-				// Ignore invalid URLs
+				continue;
 			}
 		}
 	}
