@@ -1,5 +1,3 @@
-import sizeof from 'object-sizeof';
-import { formatBytes } from '../../utils/formatting.utils';
 import { MarkovChainAnalyzer } from './chain.analyzer';
 import { MediaStorage } from './media.storage';
 type MarkovState = Record<string, Record<string, number>>;
@@ -19,7 +17,7 @@ export class MarkovChain {
 	}
 
 	get size() {
-		return formatBytes(sizeof(this));
+		return new MarkovChainAnalyzer(this).size;
 	}
 
 	provideData(messages: string[]): void {
@@ -49,7 +47,7 @@ export class MarkovChain {
 		}
 	}
 
-	private generateText(startWord: string, length: number): string {
+	generateText(startWord: string, length: number): string {
 		let currentWord = startWord;
 		let generatedText = currentWord;
 

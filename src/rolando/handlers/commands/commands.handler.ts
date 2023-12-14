@@ -1,11 +1,13 @@
-import { ChatInputCommandInteraction, PermissionsBitField } from 'discord.js';
+import { ChatInputCommandInteraction, PermissionsBitField, EmbedBuilder } from 'discord.js';
+import { ActionRow } from '../../../fonzi2/components/action-row';
+import { Buttons } from '../../../fonzi2/components/buttons';
 import { Command } from '../../../fonzi2/events/decorators/command.interaction.dec';
 import { Handler, HandlersType } from '../../../fonzi2/events/handlers/base.handler';
-import { Buttons } from '../../../fonzi2/components/buttons';
-import { ActionRow } from '../../../fonzi2/components/action-row';
 import { env } from '../../../fonzi2/lib/env';
-import { TRAIN_REPLY } from '../../static/text';
 import { ChainsService } from '../../domain/services/chains.service';
+import { TRAIN_REPLY } from '../../static/text';
+import { getRandom } from '../../utils/random.utils';
+import { MarkovChainAnalyzer } from '../../domain/model/chain.analyzer';
 
 export class CommandsHandler extends Handler {
 	public readonly type = HandlersType.commandInteraction;
@@ -57,7 +59,93 @@ export class CommandsHandler extends Handler {
 		void interaction.reply({ content: await chain.mediaStorage.getMedia('video') });
 	}
 
-	private async checkAdmin(interaction: ChatInputCommandInteraction) {
+	@Command({ name: 'analytics', description: 'Returns the analytics of the bot' })
+	public async analytics(interaction: ChatInputCommandInteraction<'cached'>) {
+		const chain = await this.chainsService.getChain(
+			interaction.guild.id,
+			interaction.guild.name
+		);
+		const analytics = new MarkovChainAnalyzer(chain).getAnalytics();
+		const embed = new EmbedBuilder()
+			.setTitle('Analytics')
+			.setDescription(
+				'Complexity Score indicates how _smart_ the bot is.\n Higher value means smarter'
+			)
+			.setColor('Gold')
+			.addFields(
+				{
+					name: 'Complexity Score',
+					value: `\`${analytics.complexityScore}\``,
+					inline: true,
+				},
+				{
+					name: 'Vocabulary',
+					value: `\`${analytics.words} words\` `,
+					inline: true,
+				},
+				{ name: '\t', value: '\t' },
+				{ name: 'Gifs', value: `\`${analytics.gifs}\``, inline: true },
+				{ name: 'Videos', value: `\`${analytics.videos}\``, inline: true },
+				{ name: 'Images', value: `\`${analytics.images}\``, inline: true }
+			);
+		void interaction.reply({
+			embeds: [embed],
+		});
+	}
+
+	@Command({
+		name: 'replyrate',
+		description: 'check or set the reply rate',
+		options: [
+			{
+				name: 'rate',
+				description: 'the rate to set',
+				type: 4,
+				required: false,
+			},
+		],
+	})
+	public async replyrate(interaction: ChatInputCommandInteraction<'cached'>) {
+		const rate = interaction.options.getInteger('rate');
+		const chain = await this.chainsService.getChain(
+			interaction.guild.id,
+			interaction.guild.name
+		);
+		if (rate !== null) {
+			const msg = 'You are not authorized to change the reply rate.';
+			if (!(await this.checkAdmin(interaction, msg))) return;
+			chain.replyRate = rate;
+			await this.chainsService.updateChainProps(chain);
+			void interaction.reply({ content: `Set reply rate to \`${rate}\`` });
+			return;
+		}
+		await interaction.reply({ content: `Current rate is \`${chain.replyRate}\`` });
+	}
+
+	@Command({
+		name: 'opinion',
+		description: 'Get a reply with a specific word as the seed',
+		options: [
+			{
+				name: 'about',
+				description: 'The seed of the message',
+				type: 3,
+				required: true,
+			},
+		],
+	})
+	public async opinion(interaction: ChatInputCommandInteraction<'cached'>) {
+		const about = interaction.options.getString('about')!;
+		const chain = await this.chainsService.getChain(
+			interaction.guild.id,
+			interaction.guild.name
+		);
+		const msg = chain.generateText(about, getRandom(8, 40));
+		void interaction.reply({ content: msg });
+		return;
+	}
+
+	private async checkAdmin(interaction: ChatInputCommandInteraction, msg?: string) {
 		if (env.OWNER_IDS.includes(interaction.user.id)) {
 			return true;
 		}
@@ -66,7 +154,7 @@ export class CommandsHandler extends Handler {
 			return true;
 		}
 		await interaction.reply({
-			content: 'You are not authorized to use this command.',
+			content: msg || 'You are not authorized to use this command.',
 			ephemeral: true,
 		});
 		return false;

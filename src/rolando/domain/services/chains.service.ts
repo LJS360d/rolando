@@ -44,6 +44,15 @@ export class ChainsService {
 		return await this.updateChainDoc(chain, text.join('\n'));
 	}
 
+	async updateChainProps(chain: MarkovChain) {
+		const chainDocRef = doc(this.firestore, 'chains', chain.id);
+		await updateDoc(chainDocRef, {
+			reply_rate: chain.replyRate,
+			name: chain.name,
+		});
+		return chain;
+	}
+
 	async deleteChain(id: string): Promise<void> {
 		Logger.warn(`Deleting chain ${id}`);
 		const chainDoc = doc(this.firestore, 'chains', id);
