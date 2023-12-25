@@ -1,15 +1,14 @@
-import Fonzi2Client from './fonzi2/client/client';
-import { options } from './fonzi2/client/options';
-import { getRegisteredCommands } from './fonzi2/events/decorators/command.interaction.dec';
-import { Logger } from './fonzi2/lib/logger';
-import { firestore, storage } from './fonzi2/server/firebase/firebase';
-import { ChainsService } from './rolando/domain/services/chains.service';
-import { ButtonsHandler } from './rolando/handlers/buttons.handler';
-import { CommandsHandler } from './rolando/handlers/commands/commands.handler';
-import { EventsHandler } from './rolando/handlers/events.handler';
-import { MessageHandler } from './rolando/handlers/message.handler';
+import { Fonzi2Client, getRegisteredCommands, Logger } from 'fonzi2';
+import { ChainsService } from './domain/services/chains.service';
+import { env } from './env';
+import { firestore, storage } from './firebase/firebase';
+import { ButtonsHandler } from './handlers/buttons.handler';
+import { CommandsHandler } from './handlers/commands.handler';
+import { EventsHandler } from './handlers/events.handler';
+import { MessageHandler } from './handlers/message.handler';
+import options from './options';
 const chainService = new ChainsService(firestore, storage);
-new Fonzi2Client(options, [
+new Fonzi2Client(env.TOKEN, options, [
 	new CommandsHandler(chainService),
 	new ButtonsHandler(chainService),
 	new MessageHandler(chainService),
@@ -21,9 +20,10 @@ process.on('uncaughtException', (err: any) => {
 		Logger.error(`${err.name}: ${err.message}\n${err.stack}`);
 });
 
-process.on('unhandledRejection', (/* reason */) => {
-	//Logger.warn(`Rejection: ${reason}`);
+process.on('unhandledRejection', (reason: any) => {
+	if (reason?.status === 429) return;
 });
+
 
 ['SIGINT', 'SIGTERM'].forEach((signal) => {
 	process.on(signal, () => {
