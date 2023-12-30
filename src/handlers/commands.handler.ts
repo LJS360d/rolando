@@ -1,4 +1,9 @@
-import { ChatInputCommandInteraction, PermissionsBitField, EmbedBuilder, ApplicationCommandOptionType } from 'discord.js';
+import {
+	ChatInputCommandInteraction,
+	PermissionsBitField,
+	EmbedBuilder,
+	ApplicationCommandOptionType,
+} from 'discord.js';
 
 import { env } from '../env';
 import { ChainsService } from '../domain/services/chains.service';
@@ -127,7 +132,7 @@ export class CommandsHandler extends Handler {
 			{
 				name: 'about',
 				description: 'The seed of the message',
-				type: 3,
+				type: ApplicationCommandOptionType.String,
 				required: true,
 			},
 		],
@@ -140,6 +145,30 @@ export class CommandsHandler extends Handler {
 		);
 		const msg = chain.generateText(about, getRandom(8, 40));
 		void interaction.reply({ content: msg });
+		return;
+	}
+
+	@Command({
+		name: 'wipe',
+		description: 'deletes the given argument `data` from the training data',
+		options: [
+			{
+				name: 'data',
+				description: 'The message or link you want to be erased from memory',
+				type: ApplicationCommandOptionType.String,
+				required: true,
+			},
+		],
+	})
+	public async wipe(interaction: ChatInputCommandInteraction<'cached'>) {
+		const data = interaction.options.getString('data')!;
+		const chain = await this.chainsService.getChain(
+			interaction.guild.id,
+			interaction.guild.name
+		);
+		chain.delete(data);
+		await this.chainsService.deleteChainDocLine(chain.id, data);
+		void interaction.reply({ content: `Deleted \`${data}\`` });
 		return;
 	}
 

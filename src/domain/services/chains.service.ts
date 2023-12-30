@@ -82,9 +82,12 @@ export class ChainsService {
 	}
 
 	private async setChainDoc(chain: MarkovChain): Promise<MarkovChain> {
-		const chainDocRef = doc(this.firestore, 'chains', chain.id);
+    const chainDocRef = doc(this.firestore, 'chains', chain.id);
 		const messagesRef = ref(this.storage, `messages/${chain.id}.txt`);
+		const blob = new Blob([], { type: 'text/plain' });
+		await uploadBytes(messagesRef, blob);
 		const messagesUrl = await getDownloadURL(messagesRef);
+
 		await setDoc(chainDocRef, {
 			messages: messagesUrl,
 			reply_rate: chain.replyRate,
@@ -93,6 +96,16 @@ export class ChainsService {
 
 		this.chainsMap.set(chain.id, chain);
 		return chain;
+	}
+
+	public async deleteChainDocLine(id: string, textToRemove: string) {
+		const textFileRef = ref(this.storage, `messages/${id}.txt`);
+		const textFileUrl = await getDownloadURL(textFileRef);
+		const rawText = (await axios.get<string>(textFileUrl)).data;
+		const newContent = rawText.replace(new RegExp(textToRemove, 'g'), '');
+		const blob = new Blob([newContent], { type: 'text/plain' });
+		await uploadBytes(textFileRef, blob);
+		return textFileUrl;
 	}
 
 	private async updateChainDoc(chain: MarkovChain, newText: string) {
