@@ -19,7 +19,7 @@ const options: ClientOptions = {
 		Intents.DirectMessages,
 		// Intents.GuildEmojisAndStickers,
 		// Intents.GuildIntegrations,
-		// Intents.GuildInvites,
+		Intents.GuildInvites,
 		Intents.GuildMembers,
 		Intents.GuildMessageReactions,
 		Intents.GuildMessageTyping,

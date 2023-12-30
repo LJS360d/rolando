@@ -21,7 +21,7 @@ h1 {
 a.invite,
 a:active.invite,
 a:any-link.invite {
-  color: #333;
+  color: #fff;
   text-decoration: none;
 }
 
@@ -34,8 +34,7 @@ h2 {
 h4,
 h6 {
   color: white;
-  -webkit-text-stroke: 1px black;
-  background-clip: text;
+  text-shadow: #000 1px 0 10px;
 }
 
 lb {
@@ -76,14 +75,13 @@ ul {
 
       a {
         text-decoration: none;
-        font-weight: 600;
+        font-weight: 500;
         width: max-content;
-        color: black;
-
+        color: white;
         &:hover,
         &:active,
         &:focus {
-          color: black;
+          color: white;
         }
       }
     }

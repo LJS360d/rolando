@@ -37,7 +37,9 @@
     <% guilds.forEach((guild)=> { %>
     <li>
       <div class="guild-wrapper">
-        <span><%= guild.name %></span>
+        <a href=<%= invites[guild.id] %>>
+          <%= guild.name %>
+        </a>
         <img class="guild-icon round" src="<%=guild.iconURL()%>">
         <span>
           <%= guild.memberCount%> members
