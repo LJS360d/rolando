@@ -25,11 +25,11 @@ export class MediaStorage {
 	async getMedia(type: 'gif' | 'video' | 'image'): Promise<string> {
 		switch (type) {
 			case 'gif':
-				return getValidUrl(this.gifs, type);
+				return getValidUrl(this.gifs, this.chainId, type);
 			case 'video':
-				return getValidUrl(this.videos, type);
+				return getValidUrl(this.videos, this.chainId, type);
 			case 'image':
-				return getValidUrl(this.images, type);
+				return getValidUrl(this.images, this.chainId, type);
 		}
 	}
 

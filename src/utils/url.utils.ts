@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 
 function extractUrlInfo(url: string): { domain?: string; extension?: string } {
 	const extension = getUrlExtension(url);
@@ -44,11 +46,17 @@ export function getUrlDomain(url: string) {
 	}
 }
 
-export async function validateUrl(url: string): Promise<boolean> {
+export async function validateUrl(url: string, id: string): Promise<boolean> {
 	try {
 		const response = await axios.head(url);
 		return response.status === 200;
 	} catch (error) {
+		const dataFolder = join(process.cwd(), 'messages');
+		const fileEncoding = 'utf-8';
+		const filepath = join(dataFolder, `${id}.txt`);
+		const fileContent = readFileSync(filepath, fileEncoding);
+		const newFileContent = fileContent.replace(new RegExp(url, 'g'), '');
+		writeFileSync(filepath, newFileContent, fileEncoding);
 		return false;
 	}
 }
@@ -80,13 +88,17 @@ export function isVideoUrl(url: string) {
 	else return false;
 }
 
-export async function getValidUrl(urlsSet: Set<string>, type?: string): Promise<string> {
+export async function getValidUrl(
+	urlsSet: Set<string>,
+	id: string,
+	type?: string
+): Promise<string> {
 	const urls = Array.from(urlsSet);
 	while (urls.length > 0) {
 		const randomIndex = Math.floor(Math.random() * urls.length);
 		const media = urls[randomIndex];
 
-		if (await validateUrl(media)) {
+		if (await validateUrl(media, id)) {
 			// Valid URL
 			return media;
 		}
