@@ -61,6 +61,10 @@ export class ChainsRepository {
 			return fileContent.split('\n');
 		} catch (_) {
 			Logger.error(`Error reading file ${messagesFilepath}`);
+			if (!existsSync(messagesFilepath)) {
+				writeFileSync(messagesFilepath, '', this.fileEncoding);
+        Logger.info(`Created storage file ${id}.txt`)
+			}
 			return [];
 		}
 	}

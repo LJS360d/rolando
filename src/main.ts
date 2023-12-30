@@ -29,14 +29,11 @@ async function main() {
 	process.on('unhandledRejection', (reason: any) => {
 		if (reason?.status === 429) return;
 		if (reason?.response?.status === 429) return;
-    console.log(reason);
-
 	});
 
 	['SIGINT', 'SIGTERM'].forEach((signal) => {
 		process.on(signal, async () => {
-			Logger.warn(`Received ${signal} signal`);
-			Logger.warn(`Closing &u${db?.name}$ database connection`);
+			Logger.warn(`Received ${signal} signal, closing &u${db?.name}$ database connection`);
 			await db?.close();
 			process.exit(0);
 		});
