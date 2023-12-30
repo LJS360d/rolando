@@ -167,7 +167,6 @@ export class CommandsHandler extends Handler {
 			interaction.guild.name
 		);
 		chain.delete(data);
-		await this.chainsService.deleteChainDocLine(chain.id, data);
 		void interaction.reply({ content: `Deleted \`${data}\`` });
 		return;
 	}

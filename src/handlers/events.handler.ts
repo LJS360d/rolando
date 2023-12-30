@@ -21,7 +21,7 @@ export class EventsHandler extends Handler {
 		const load = Logger.loading('Started refreshing application (/) commands.');
 		try {
 			await this.client?.application?.commands.set(this.commands);
-			load.success('Successfully reloaded application (/) commands.');
+			load.success('Reloaded application (/) commands.');
 			this.chainsService.loadChains();
 			new RolandoServer(
 				this.client!,

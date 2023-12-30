@@ -1,6 +1,5 @@
 import { MarkovChainAnalyzer } from './chain.analyzer';
 import { MediaStorage } from './media.storage';
-type MarkovState = Record<string, Record<string, number>>;
 
 export class MarkovChain {
 	public mediaStorage: MediaStorage;
@@ -10,11 +9,11 @@ export class MarkovChain {
 		public id: string,
 		public name: string,
 		public replyRate = 10,
-		messages?: string[]
+		messages: string[] = []
 	) {
 		this.mediaStorage = new MediaStorage(this.id);
 		this.state = {};
-		this.provideData(messages || []);
+		this.provideData(messages);
 	}
 
 	get size() {

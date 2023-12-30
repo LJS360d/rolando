@@ -17,17 +17,9 @@ export const env = {
 	PORT: Number(process.env['PORT']) || 8080,
 	// * the current environment (default: development)
 	NODE_ENV: (process.env['NODE_ENV'] || 'development'),
-	// ! Firebase configuration
-	FIREBASE_ENABLED: !!process.env['FIREBASE_ENABLED'] || false,
-	FIREBASE_CONFIG: {
-		apiKey: process.env['apiKey'],
-		authDomain: process.env['authDomain'],
-		projectId: process.env['projectId'],
-		storageBucket: process.env['storageBucket'],
-		messagingSenderId: process.env['messagingSenderId'],
-		appId: process.env['appId'],
-		measurementId: process.env['measurementId'],
-	},
+	// ! MongoDB configuration
+	MONGODB_ENABLED: !!process.env['MONGODB_ENABLED'] || true,
+	MONGODB_URI: process.env['MONGODB_URI']!,
 } as const;
 
 export function validateEnv(warn = true, Env = env) {

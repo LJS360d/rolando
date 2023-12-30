@@ -4,10 +4,15 @@ export class MediaStorage {
 	gifs: Set<string>;
 	images: Set<string>;
 	videos: Set<string>;
-	constructor(public chainId: string) {
-		this.gifs = new Set<string>();
-		this.images = new Set<string>();
-		this.videos = new Set<string>();
+	constructor(
+		public chainId: string,
+		gifs: string[] = [],
+		images: string[] = [],
+		videos: string[] = []
+	) {
+		this.gifs = new Set<string>(gifs);
+		this.images = new Set<string>(images);
+		this.videos = new Set<string>(videos);
 	}
 
 	addMedia(url: string) {
