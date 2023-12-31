@@ -30,22 +30,20 @@ export class DataFetchService {
 		return messages;
 	}
 
-	async fetchChannelMessages(channel: GuildTextBasedChannel ): Promise<string[]> {
-		return new Promise(async (resolve, reject) => {
+	async fetchChannelMessages(channel: GuildTextBasedChannel): Promise<string[]> {
+		return new Promise(async (resolve, _) => {
+      const messages: string[] = [];
 			try {
-				const messages: string[] = [];
 				let lastMessageID: string | undefined = undefined;
 				let remaining = true;
 				let firstFetch = true;
 				while (remaining && messages.length < this.MSG_LIMIT) {
-					// Fetch a batch of messages
 					const messageBatch = await channel.messages.fetch({
 						limit: 100,
 						before: lastMessageID,
 					});
 
 					if (lastMessageID === undefined && !firstFetch) {
-						// No more messages remaining
 						remaining = false;
 						continue;
 					}
@@ -55,11 +53,11 @@ export class DataFetchService {
 							const message: string = msg.content;
 							if (containsURL(message) || message.split(' ').length > 1) {
 								messages.push(message);
+								// TODO immediatly append messages to text storage
 							}
 						}
 					});
 
-					// Update the last message ID for the next batch
 					lastMessageID = messageBatch.at(-1)?.id;
 					if (firstFetch) {
 						firstFetch = false;
@@ -67,8 +65,10 @@ export class DataFetchService {
 				}
 				resolve(messages);
 			} catch (error) {
-				Logger.error(`Error fetching messages in ${channel.name}`);
-				reject([]);
+				Logger.error(
+					`Error fetching messages in ${channel.name}, interrupted fetching at #green${messages.length}$ messages`
+				);
+				resolve(messages);
 			}
 		});
 	}

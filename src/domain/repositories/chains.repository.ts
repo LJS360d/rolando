@@ -55,15 +55,16 @@ export class ChainsRepository {
 	}
 
 	getChainMessages(id: string) {
-		const messagesFilepath = join(this.dataFolder, `${id}.txt`);
+    const messageFilename = `${id}.txt`;
+		const messagesFilepath = join(this.dataFolder, messageFilename);
 		try {
 			const fileContent: string = readFileSync(messagesFilepath, this.fileEncoding);
 			return fileContent.split('\n');
 		} catch (_) {
-			Logger.error(`Error reading file ${messagesFilepath}`);
+			Logger.warn(`Could not read file ${messageFilename}`);
 			if (!existsSync(messagesFilepath)) {
 				writeFileSync(messagesFilepath, '', this.fileEncoding);
-        Logger.info(`Created storage file ${id}.txt`)
+        Logger.info(`Created storage file ${messageFilename}`)
 			}
 			return [];
 		}
