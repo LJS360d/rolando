@@ -13,6 +13,7 @@ export class ButtonsHandler extends Handler {
 
 	@Button('confirm-train')
 	async onConfirmTrain(interaction: ButtonInteraction<'cached'>) {
+    void interaction.deferUpdate();
 		await interaction.channel?.send({
 			content: FETCH_CONFIRM_MSG(interaction.user.id),
 		});

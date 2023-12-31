@@ -5,39 +5,39 @@ import {
 	GuildTextBasedChannel,
 	Message,
 	PermissionFlagsBits,
-	PermissionsBitField,
 } from 'discord.js';
-import { containsURL } from '../../utils/url.utils';
 import { Logger } from 'fonzi2';
+import { containsURL } from '../../utils/url.utils';
 
 export class DataFetchService {
 	private readonly MSG_LIMIT = 500000;
+	private readonly MSG_FETCH_MAXERRORS = 5;
 	constructor(private client: Client) {}
 
 	async fetchAllGuildMessages(guild: Guild): Promise<string[]> {
-		const load = Logger.loading(`Fetching messages in guild: ${guild.name}`);
+		Logger.info(`Fetching messages in guild: ${guild.name}`);
 		const fetchPromises: Promise<string[]>[] = [];
-		guild.channels.cache.forEach((channel) => {
-			const channelPerms = channel.permissionsFor(this.client.user!)!;
-			const channelAccess = this.hasChannelAccess(channelPerms, channel);
-			if (channel.isTextBased() && channelAccess) {
+		Array.from(guild.channels.cache.values())
+			.filter((channel) => this.hasChannelAccess(channel))
+			.forEach((channel: GuildTextBasedChannel) => {
 				fetchPromises.push(this.fetchChannelMessages(channel));
-			}
-		});
+			});
 		const results = await Promise.all(fetchPromises);
 		const messages = results.flat();
-		load.success(`Fetched #green${messages.length}$ messages in guild: ${guild.name}`);
+		Logger.info(`Fetched #green${messages.length}$ messages in guild: ${guild.name}`);
 		return messages;
 	}
 
 	async fetchChannelMessages(channel: GuildTextBasedChannel): Promise<string[]> {
-		return new Promise(async (resolve, _) => {
-      const messages: string[] = [];
-			try {
-				let lastMessageID: string | undefined = undefined;
-				let remaining = true;
-				let firstFetch = true;
-				while (remaining && messages.length < this.MSG_LIMIT) {
+		return new Promise(async (resolve) => {
+			const load = Logger.loading(`Fetching messages in #${channel.name}...`);
+			const messages: string[] = [];
+			let lastMessageID: string | undefined = undefined;
+			let remaining = true;
+			let firstFetch = true;
+			let errorCount = 0;
+			while (remaining && messages.length < this.MSG_LIMIT) {
+				try {
 					const messageBatch = await channel.messages.fetch({
 						limit: 100,
 						before: lastMessageID,
@@ -57,26 +57,31 @@ export class DataFetchService {
 							}
 						}
 					});
+					load.update(`Fetched #green${messages.length}$ messages in #${channel.name}`);
 
 					lastMessageID = messageBatch.at(-1)?.id;
 					if (firstFetch) {
 						firstFetch = false;
 					}
+				} catch (error) {
+					Logger.warn(
+						`Message fetching error in ${channel.name} at #green${messages.length}$ messages, current error count: ${errorCount}`
+					);
+					if (errorCount > this.MSG_FETCH_MAXERRORS) {
+						load.fail(
+							`Fetching error limit reached in ${channel.name} at #green${messages.length}$ messages, Error ${error}`
+						);
+						resolve(messages);
+					}
 				}
-				resolve(messages);
-			} catch (error) {
-				Logger.error(
-					`Error fetching messages in ${channel.name}, interrupted fetching at #green${messages.length}$ messages`
-				);
-				resolve(messages);
 			}
+			load.success(`Fetched #green${messages.length}$ messages in #${channel.name}`);
+			resolve(messages);
 		});
 	}
 
-	private hasChannelAccess(
-		perms: Readonly<PermissionsBitField>,
-		channel: GuildBasedChannel
-	): boolean {
+	private hasChannelAccess(channel: GuildBasedChannel): boolean {
+		const perms = channel.permissionsFor(this.client.user!)!;
 		const canReadChannel = perms.has(PermissionFlagsBits.ReadMessageHistory);
 		const canAccessChannel = perms.has(PermissionFlagsBits.SendMessages);
 		const canViewChannel = perms.has(PermissionFlagsBits.ViewChannel);

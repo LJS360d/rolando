@@ -3,6 +3,7 @@ import { ClientEvent, Handler, HandlerType, Logger } from 'fonzi2';
 import { ChainsService } from '../domain/services/chains.service';
 import { env } from '../env';
 import { RolandoServer } from '../server/rolando.server';
+import { GUILD_CREATE_MSG } from '../static/text';
 
 export class EventsHandler extends Handler {
 	public readonly type = HandlerType.clientEvent;
@@ -43,7 +44,7 @@ export class EventsHandler extends Handler {
 	@ClientEvent('guildCreate')
 	async onGuildCreate(guild: Guild) {
 		Logger.info(`Joined guild ${guild.name}`);
-		void guild.systemChannel?.send(`Hello ${guild.name}`);
+		void guild.systemChannel?.send(GUILD_CREATE_MSG(guild.name));
 		void this.chainsService.createChain(guild.id, guild.name);
 	}
 

@@ -18,3 +18,8 @@ export const FETCH_COMPLETE_MSG = (id: string, amount: number, time: number) => 
   Messages fetched: \`${amount}\`
   Time elapsed: \`${formatTime(time)}\`
 `;
+
+export const GUILD_CREATE_MSG = (name: string) => `
+  Hello ${name},
+  perform the command \`/train\` to use all the server's messages as training data
+`;
