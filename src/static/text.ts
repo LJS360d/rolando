@@ -2,7 +2,7 @@ import { formatTime } from '../utils/formatting.utils';
 
 export const TRAIN_REPLY = `
   Are you sure you want to use **ALL SERVER MESSAGES** as training data for me?
-  This will fetch data in all accessible channels.
+  This will fetch data in all accessible channels and delete all previous training data for this server.
   If you wish to exclude specific channels, revoke my typing permissions in those channels.
 `;
 

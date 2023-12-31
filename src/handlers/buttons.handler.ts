@@ -19,11 +19,12 @@ export class ButtonsHandler extends Handler {
 		});
 		const startTime = Date.now();
 		const dataFetchService = new DataFetchService(this.client!);
-		const messages = await dataFetchService.fetchAllGuildMessages(interaction.guild);
+    this.chainsService.deleteChain(interaction.guild.id);
 		const chain = await this.chainsService.getChain(
 			interaction.guild.id,
 			interaction.guild.name
 		);
+		const messages = await dataFetchService.fetchAllGuildMessages(interaction.guild);
 		await interaction.channel?.send({
 			content: FETCH_COMPLETE_MSG(
 				interaction.user.id,
