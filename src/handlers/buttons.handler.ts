@@ -13,17 +13,12 @@ export class ButtonsHandler extends Handler {
 
 	@Button('confirm-train')
 	async onConfirmTrain(interaction: ButtonInteraction<'cached'>) {
-    void interaction.deferUpdate();
+		void interaction.deferUpdate();
 		await interaction.channel?.send({
 			content: FETCH_CONFIRM_MSG(interaction.user.id),
 		});
 		const startTime = Date.now();
 		const dataFetchService = new DataFetchService(this.client!);
-    this.chainsService.deleteChain(interaction.guild.id);
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
 		const messages = await dataFetchService.fetchAllGuildMessages(interaction.guild);
 		await interaction.channel?.send({
 			content: FETCH_COMPLETE_MSG(
@@ -32,6 +27,11 @@ export class ButtonsHandler extends Handler {
 				Date.now() - startTime
 			),
 		});
+		this.chainsService.deleteChain(interaction.guild.id);
+		const chain = await this.chainsService.getChain(
+			interaction.guild.id,
+			interaction.guild.name
+		);
 		this.chainsService.updateChain(chain, messages);
 	}
 
