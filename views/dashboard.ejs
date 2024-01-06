@@ -53,7 +53,7 @@
             <%= guild.name %>
           </span>
         </div>
-        <img class="guild-icon round" src="<%=guild.iconURL()%>">
+        <img class="guild-icon round" src="<%=guild.iconURL() || "assets/noimage.svg"%>">
         <span>
           <%= guild.memberCount%> members
         </span>
