@@ -1,12 +1,11 @@
 {
 	"name": "rolando2",
-	"version": "2.4.0",
+	"version": "2.4.1",
 	"description": "Revamped rolando",
 	"private": true,
 	"type": "commonjs",
 	"engines": {
-		"node": ">=18.12.1",
-		"npm": ">=8.19.2"
+		"node": ">=18"
 	},
 	"scripts": {
 		"start": "cross-env NODE_ENV=production node ./dist/bundle.js --enable-source-maps",

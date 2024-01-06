@@ -138,7 +138,7 @@ export class CommandsHandler extends Handler {
 		],
 	})
 	public async opinion(interaction: ChatInputCommandInteraction<'cached'>) {
-		const about = interaction.options.getString('about')!;
+		const about = interaction.options.getString('about')!.split(' ').at(-1)!;
 		const chain = await this.chainsService.getChain(
 			interaction.guild.id,
 			interaction.guild.name
