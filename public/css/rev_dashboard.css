@@ -69,6 +69,16 @@ ul li {
   align-items: center;
   gap: 1rem;
 }
+ul li a {
+  text-decoration: none;
+  font-weight: 500;
+  width: -moz-max-content;
+  width: max-content;
+  color: white;
+}
+ul li a:hover, ul li a:active, ul li a:focus {
+  color: white;
+}
 ul li .guild-wrapper {
   min-width: 8.5rem;
   gap: 0.5rem;
@@ -77,15 +87,10 @@ ul li .guild-wrapper {
   font-size: 0.9pc;
   align-items: center;
 }
-ul li .guild-wrapper a {
-  text-decoration: none;
-  font-weight: 500;
-  width: -moz-max-content;
-  width: max-content;
-  color: white;
-}
-ul li .guild-wrapper a:hover, ul li .guild-wrapper a:active, ul li .guild-wrapper a:focus {
-  color: white;
+ul li .guild-wrapper .guild-title {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
 }
 
 span,

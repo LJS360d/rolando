@@ -23,7 +23,7 @@ export class EventsHandler extends Handler {
 		try {
 			await this.client?.application?.commands.set(this.commands);
 			load.success('Reloaded application (/) commands.');
-			this.chainsService.loadChains();
+			await this.chainsService.loadChains();
 			new RolandoServer(
 				this.client!,
 				{
