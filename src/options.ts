@@ -1,8 +1,4 @@
-import {
-  GatewayIntentBits as Intents,
-  Partials,
-  type ClientOptions
-} from 'discord.js';
+import { GatewayIntentBits as Intents, Partials, type ClientOptions } from 'discord.js';
 
 const options: ClientOptions = {
 	// allowedMentions: { parse: ['users', 'roles'] },

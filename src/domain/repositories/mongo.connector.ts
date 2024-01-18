@@ -12,6 +12,6 @@ export async function connectMongo(uri: string): Promise<Connection | undefined>
 		return db;
 	} catch (error) {
 		load.fail('Failed to connect to MongoDB!');
-    return;
+		return;
 	}
 }

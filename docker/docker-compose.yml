@@ -5,7 +5,7 @@ services:
     image: mongo:latest
     container_name: $COMPOSE_PROJECT_NAME-mongo
     ports:
-      - "127.0.0.1:$MONGO_EXTERNAL_PORT:$MONGO_INTERNAL_PORT"
+      - '127.0.0.1:$MONGO_EXTERNAL_PORT:$MONGO_INTERNAL_PORT'
     environment:
       MONGO_INITDB_ROOT_DATABASE: $MONGO_DATABASE
       MONGO_INITDB_ROOT_USERNAME: $MONGO_USERNAME

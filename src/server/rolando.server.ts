@@ -1,6 +1,6 @@
 import { ChannelType, Client, TextChannel } from 'discord.js';
 import express, { Request, Response } from 'express';
-import { Fonzi2Server, Fonzi2ServerData, Logger } from 'fonzi2';
+import { Fonzi2Server, Fonzi2ServerData } from 'fonzi2';
 import { resolve } from 'path';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
 import { ChainsService } from '../domain/services/chains.service';
@@ -18,6 +18,7 @@ export class RolandoServer extends Fonzi2Server {
 
 	override async start() {
 		this.app.get('/chain', this.guildChain.bind(this));
+		this.app.get('/invite', this.getGuildInvite.bind(this));
 		super.start();
 	}
 
@@ -28,27 +29,6 @@ export class RolandoServer extends Fonzi2Server {
 			return;
 		}
 
-		const invites = {};
-
-		const invitePromises = this.client.guilds.cache.map(async (guild) => {
-			const channel = guild.channels.cache.find(
-				(channel) => channel && channel.type === ChannelType.GuildText
-			) as TextChannel | undefined;
-
-			if (channel) {
-				try {
-					const invite = await channel.createInvite();
-					invites[guild.id] = `https://discord.gg/${invite.code}`;
-				} catch (error) {
-					Logger.warn(`Missing invite permissions in ${guild.name}`);
-					invites[guild.id] = '';
-				}
-				return;
-			}
-		});
-
-		await Promise.all(invitePromises);
-
 		const props = {
 			client: this.client,
 			guilds: this.client.guilds.cache,
@@ -58,25 +38,46 @@ export class RolandoServer extends Fonzi2Server {
 			userInfo,
 			//? Rolando specific
 			chains: this.chainsService.chains,
-			invites,
-			analyzer: MarkovChainAnalyzer,
+			getGuildInvite: this.getGuildInvite.bind(this),
+			MarkovChainAnalyzer,
 		};
-
 		res.render('dashboard', props);
 	}
 
-	private async guildChain(req: Request, res: Response) {
+	private async getGuildInvite(
+		req: Request<any, any, any, { guildId: string }>,
+		res: Response
+	) {
+		const guild = this.client.guilds.cache.get(req.query.guildId)!;
+		const channel = guild.channels.cache.find(
+			(channel) => channel && channel.type === ChannelType.GuildText
+		) as TextChannel | undefined;
+		if (!channel) {
+			res.send('<a><i style="color: red;" class="fa-solid fa-door-closed"></i></a>');
+			return;
+		}
+		try {
+			const invite = await channel.createInvite();
+			res.render('invite', { invite: `https://discord.gg/${invite.code}` });
+		} catch (error) {
+			res.send('<a><i style="color: red;" class="fa-solid fa-door-closed"></i></a>');
+			return;
+		}
+	}
+
+	private async guildChain(
+		req: Request<any, any, any, { guildId: string }>,
+		res: Response
+	) {
 		if (!req.session!['userInfo']) {
 			res.redirect('/unauthorized');
 			return;
 		}
 		const { guildId } = req.query;
-		if (typeof guildId === 'string') {
-			const chain = this.chainsService.chains.get(guildId) ?? {
-				code: 404,
-				message: `chain ${guildId} not found`,
-			};
-			res.status(!!chain ? 200 : 404).json(chain);
-		}
+		const chain = this.chainsService.chains.get(guildId) ?? {
+			code: 404,
+			message: `chain ${guildId} not found`,
+		};
+		res.status(!!chain ? 200 : 404).json(chain);
 	}
 }

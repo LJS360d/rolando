@@ -27,7 +27,7 @@ export class MessageHandler extends Handler {
 			this.chainsService.updateChain(chain, content);
 		}
 
-		const mention = content.includes(`<@${this.client?.user?.id}>`);
+		const mention = message.mentions.users.some((value) => value === this.client?.user);
 		if (mention) {
 			await message.channel.sendTyping();
 			void message.reply(await this.getMessage(chain));

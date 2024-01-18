@@ -5,18 +5,18 @@ export const env = {
 	TOKEN: process.env['TOKEN']!,
 	// ! [REQUIRED] OAuth2 credentials
 	OAUTH2_URL: process.env['OAUTH2_URL']!,
-  // ! [REQUIRED] the bot Invite link
+	// ! [REQUIRED] the bot Invite link
 	INVITE_LINK: process.env['INVITE_LINK']!,
 	// ? [Recommended] a comma separated list of discord user IDs that can access the admin dashboard, leave empty for no auth
 	OWNER_IDS: process.env['OWNER_IDS'] ? process.env['OWNER_IDS'].split(',') : [],
-  	// ? [Recommended] a webhook for logs
+	// ? [Recommended] a webhook for logs
 	LOG_WEBHOOK: process.env['LOG_WEBHOOK'],
 	// * npm package version
 	VERSION: process.env['npm_package_version']!,
 	// * the server's port (default: 8080)
 	PORT: Number(process.env['PORT']) || 8080,
 	// * the current environment (default: development)
-	NODE_ENV: (process.env['NODE_ENV'] || 'development'),
+	NODE_ENV: process.env['NODE_ENV'] || 'development',
 	// ! MongoDB configuration
 	MONGODB_ENABLED: !!process.env['MONGODB_ENABLED'] || true,
 	MONGODB_URI: process.env['MONGODB_URI']!,

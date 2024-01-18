@@ -55,7 +55,7 @@ export class ChainsRepository {
 	}
 
 	getChainMessages(id: string) {
-    const messageFilename = `${id}.txt`;
+		const messageFilename = `${id}.txt`;
 		const messagesFilepath = join(this.dataFolder, messageFilename);
 		try {
 			const fileContent: string = readFileSync(messagesFilepath, this.fileEncoding);
@@ -64,7 +64,7 @@ export class ChainsRepository {
 			Logger.warn(`Could not read file ${messageFilename}`);
 			if (!existsSync(messagesFilepath)) {
 				writeFileSync(messagesFilepath, '', this.fileEncoding);
-        Logger.info(`Created storage file ${messageFilename}`)
+				Logger.info(`Created storage file ${messageFilename}`);
 			}
 			return [];
 		}

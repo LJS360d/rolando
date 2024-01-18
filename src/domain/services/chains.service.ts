@@ -55,7 +55,7 @@ export class ChainsService {
 		const load = Logger.loading('Loading Chains...');
 		const chains = await this.chainsRepository.getAll();
 		for (const chain of chains) {
-      const messages = this.chainsRepository.getChainMessages(chain.id);
+			const messages = this.chainsRepository.getChainMessages(chain.id);
 
 			this.chainsMap.set(
 				chain.id,

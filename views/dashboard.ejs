@@ -7,6 +7,7 @@
   <title>Fonzi2 Dashboard</title>
   <script src="https://kit.fontawesome.com/ce9bc4dbd7.js" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="/css/rev_dashboard.css">
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <script type="module" src="js/update-uptime.js"></script>
   <script>
     function copyToClipboard(text) {
@@ -25,52 +26,70 @@
     <span id="version">Version:<b>
         <%= version %>
       </b></span>
-    <a class="invite" href="<%=inviteLink%>">
-      <h1><img class="bot-icon round" src="<%=client.user.avatarURL()%>">
-        <%= client.user.tag%>
+    <a class="invite" href="<%= inviteLink %>">
+      <h1><img class="bot-icon round" src="<%= client.user.avatarURL() %>">
+        <%= client.user.tag %>
       </h1>
     </a>
     <!-- evil css fake error -->
-    <div class="user" style="background-color: <%= userInfo.banner_color %>">
-      <img class="user-icon round" src="<%=userInfo.avatar%>" alt="avatar">
+    <div class="user" style="background-color:<%= userInfo.banner_color %>">
+      <img class="user-icon round" src="<%= userInfo.avatar %>" alt="avatar">
       <div>
-        <h4><%=userInfo.global_name%></h4>
-        <h6><%=userInfo.username%></h6>
+        <h4>
+          <%= userInfo.global_name %>
+        </h4>
+        <h6>
+          <%= userInfo.username %>
+        </h6>
       </div>
     </div>
   </header>
   <hr>
-  <span>Uptime: <b id="uptime" start=<%=startTime%>></b></span>
+  <span>Uptime: <b id="uptime" start=<%= startTime %>></b></span>
   <br>
-  <span>Currently part of <b><%=guilds.size%></b> guilds</span>
+  <span>Currently part of <b>
+      <%= guilds.size %>
+    </b> guilds</span>
   <ul>
-    <% guilds.forEach((guild)=> { %>
+    <% guilds.forEach((guild) => { %>
     <li>
       <div class="guild-wrapper">
         <div class="guild-title">
-          <a href=<%= invites[guild.id] %>><i class="fa-solid fa-door-open"></i></a>
-          <span style="cursor: pointer;" onclick=copyToClipboard(<%= guild.id%>)>
+          <a style="cursor: pointer;" hx-get="/invite?guildId=<%= guild.id %>" hx-swap="outerHTML"><i
+              class="fa-solid fa-door-closed"></i></a>
+          <span style="cursor: pointer;" onclick="copyToClipboard(<%= guild.id %>)">
             <%= guild.name %>
           </span>
         </div>
-        <img class="guild-icon round" src="<%=guild.iconURL() || "assets/noimage.svg"%>">
+        <img class="guild-icon round" src="<%= guild.iconURL() || "assets/noimage.svg" %>">
         <span>
-          <%= guild.memberCount%> members
+          <%= guild.memberCount %> members
         </span>
       </div>
       <div class="chain-wrapper">
-        <% if(chains.get(guild.id)) { %>
-        <% const analytics = new analyzer(chains.get(guild.id)).getAnalytics()%>
-        <a href="/chain?guildId=<%= guild.id%>"><i class="fa-solid fa-link"></i>Analytics</a>
-        <span>Complexity: <b><%= analytics.complexityScore %></b></span>
-        <span>Vocabulary: <b><%= analytics.words %></b></span>
-        <span>Reply rate: <b><%= analytics.replyRate %></b></span>
-        <span>Gifs: <b><%= analytics.gifs %></b></span>
-        <span>Videos: <b><%= analytics.videos %></b></span>
-        <span>Images: <b><%= analytics.images %></b></span>
-        <%} else {%>
-        <i class="fa-solid fa-link-slash"></i>
-        <%}; %>
+        <% if (chains.get(guild.id)) { %>
+        <% const analytics = new MarkovChainAnalyzer(chains.get(guild.id)).getAnalytics() %>
+        <a href="/chain?guildId=<%= guild.id %>"><i class="fa-solid fa-link"></i>Analytics</a>
+        <span>Complexity: <b>
+            <%= analytics.complexityScore %>
+          </b></span>
+        <span>Vocabulary: <b>
+            <%= analytics.words %>
+          </b></span>
+        <span>Reply rate: <b>
+            <%= analytics.replyRate %>
+          </b></span>
+        <span>Gifs: <b>
+            <%= analytics.gifs %>
+          </b></span>
+        <span>Videos: <b>
+            <%= analytics.videos %>
+          </b></span>
+        <span>Images: <b>
+            <%= analytics.images %>
+          </b></span>
+        <% } else { %><i class="fa-solid fa-link-slash"></i>
+        <% }; %>
       </div>
     </li>
     <% }); %>
