@@ -51,7 +51,7 @@ export async function validateUrl(url: string, id: string): Promise<boolean> {
 		const response = await axios.head(url);
 		return response.status === 200;
 	} catch (error) {
-		const dataFolder = join(process.cwd(), 'messages');
+		const dataFolder = join(process.cwd(), 'data');
 		const fileEncoding = 'utf-8';
 		const filepath = join(dataFolder, `${id}.txt`);
 		const fileContent = readFileSync(filepath, fileEncoding);
