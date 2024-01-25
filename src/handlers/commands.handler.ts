@@ -92,6 +92,7 @@ export class CommandsHandler extends Handler {
 				name: 'rate',
 				description: 'the rate to set',
 				type: ApplicationCommandOptionType.Integer,
+        minValue: 0,
 				required: false,
 			},
 		],
