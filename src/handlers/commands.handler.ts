@@ -37,37 +37,25 @@ export class CommandsHandler extends Handler {
 
 	@Command({ name: 'gif', description: 'Returns a gif from the ones it knows' })
 	public async gif(interaction: ChatInputCommandInteraction<'cached'>) {
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
+		const chain = await this.chainsService.getChain(interaction.guild.id);
 		void interaction.reply({ content: await chain.mediaStorage.getMedia('gif') });
 	}
 
 	@Command({ name: 'image', description: 'Returns a image from the ones it knows' })
 	public async image(interaction: ChatInputCommandInteraction<'cached'>) {
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
+		const chain = await this.chainsService.getChain(interaction.guild.id);
 		void interaction.reply({ content: await chain.mediaStorage.getMedia('image') });
 	}
 
 	@Command({ name: 'video', description: 'Returns a video from the ones it knows' })
 	public async video(interaction: ChatInputCommandInteraction<'cached'>) {
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
+		const chain = await this.chainsService.getChain(interaction.guild.id);
 		void interaction.reply({ content: await chain.mediaStorage.getMedia('video') });
 	}
 
 	@Command({ name: 'analytics', description: 'Returns the analytics of the bot' })
 	public async analytics(interaction: ChatInputCommandInteraction<'cached'>) {
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
+		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const analytics = new MarkovChainAnalyzer(chain).getAnalytics();
 		const embed = new EmbedBuilder()
 			.setTitle('Analytics')
@@ -110,15 +98,12 @@ export class CommandsHandler extends Handler {
 	})
 	public async replyrate(interaction: ChatInputCommandInteraction<'cached'>) {
 		const rate = interaction.options.getInteger('rate');
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
+		const chain = await this.chainsService.getChain(interaction.guild.id);
 		if (rate !== null) {
 			const msg = 'You are not authorized to change the reply rate.';
 			if (!(await this.checkAdmin(interaction, msg))) return;
 			chain.replyRate = rate;
-			await this.chainsService.updateChainProps(chain);
+			await this.chainsService.updateChainProps(chain.id, { replyRate: rate });
 			void interaction.reply({ content: `Set reply rate to \`${rate}\`` });
 			return;
 		}
@@ -139,10 +124,7 @@ export class CommandsHandler extends Handler {
 	})
 	public async opinion(interaction: ChatInputCommandInteraction<'cached'>) {
 		const about = interaction.options.getString('about')!.split(' ').at(-1)!;
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
+		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const msg = chain.generateText(about, getRandom(8, 40));
 		void interaction.reply({ content: msg });
 		return;
@@ -162,10 +144,7 @@ export class CommandsHandler extends Handler {
 	})
 	public async wipe(interaction: ChatInputCommandInteraction<'cached'>) {
 		const data = interaction.options.getString('data')!;
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
+		const chain = await this.chainsService.getChain(interaction.guild.id);
 		chain.delete(data);
 		void interaction.reply({ content: `Deleted \`${data}\`` });
 		return;

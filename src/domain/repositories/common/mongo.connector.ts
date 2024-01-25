@@ -1,11 +1,16 @@
 import { Logger } from 'fonzi2';
 import mongoose, { Connection } from 'mongoose';
 
-export async function connectMongo(uri: string): Promise<Connection | undefined> {
+export async function connectMongo(
+	uri: string,
+	name?: string
+): Promise<Connection | undefined> {
 	const load = Logger.loading('Connecting to MongoDB...');
+	name ??= 'default';
 	try {
 		await mongoose.connect(uri, {
-			appName: 'rolando',
+			dbName: name,
+			appName: name,
 		});
 		const db = mongoose.connection;
 		load.success('Connected to MongoDB!');

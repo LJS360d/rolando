@@ -1,6 +1,9 @@
 import { Logger } from 'fonzi2';
 import { MarkovChain } from '../model/markov.chain';
-import { ChainsRepository } from '../repositories/chains.repository';
+import { ChainsRepository } from '../repositories/chains/chains.repository';
+import { Client } from 'discord.js';
+import { ChainDocumentFields } from '../repositories/chains/models/chain.model';
+import { Container } from 'typedi';
 
 export class ChainsService {
 	private readonly chainsMap: Map<string, MarkovChain>;
@@ -13,10 +16,11 @@ export class ChainsService {
 		return this.chainsMap;
 	}
 
-	async getChain(id: string, name: string): Promise<MarkovChain> {
+	async getChain(id: string): Promise<MarkovChain> {
 		const chain = this.chainsMap.get(id);
 		if (!chain) {
-			return await this.createChain(id, name);
+			const guild = await Container.get(Client).guilds.fetch(id);
+			return await this.createChain(id, guild.name);
 		}
 		return chain;
 	}
@@ -25,24 +29,24 @@ export class ChainsService {
 		Logger.info(`Creating chain ${name}`);
 		const chain = new MarkovChain(id, name);
 		this.chainsMap.set(id, chain);
-		await this.chainsRepository.create(chain);
+		await this.chainsRepository.create(id, { name });
 		return chain;
 	}
 
-	async updateChain(chain: MarkovChain, text: string | string[]): Promise<MarkovChain> {
+	async updateChainState(id: string, text: string | string[]): Promise<MarkovChain> {
+		const chain = await this.getChain(id);
 		if (typeof text === 'string') {
 			chain.updateState(text);
-			this.chainsRepository.updateState(chain, text);
+			this.chainsRepository.updateState(chain.id, text);
 			return chain;
 		}
 		chain.provideData(text);
-		this.chainsRepository.updateState(chain, text);
+		this.chainsRepository.updateState(chain.id, text);
 		return chain;
 	}
 
-	async updateChainProps(chain: MarkovChain) {
-		this.chainsRepository.updateCommon(chain);
-		return chain;
+	async updateChainProps(id: string, fields: Partial<ChainDocumentFields>) {
+		return this.chainsRepository.update(id, fields);
 	}
 
 	async deleteChain(id: string): Promise<void> {

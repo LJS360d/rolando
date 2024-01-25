@@ -1,7 +1,6 @@
 import { ApplicationCommandData, Guild } from 'discord.js';
 import { ClientEvent, Handler, HandlerType, Logger } from 'fonzi2';
 import { ChainsService } from '../domain/services/chains.service';
-import { env } from '../env';
 import { RolandoServer } from '../server/rolando.server';
 import { GUILD_CREATE_MSG } from '../static/text';
 
@@ -24,21 +23,17 @@ export class EventsHandler extends Handler {
 			await this.client?.application?.commands.set(this.commands);
 			load.success('Reloaded application (/) commands.');
 			await this.chainsService.loadChains();
-			new RolandoServer(
-				this.client!,
-				{
-					port: env.PORT,
-					inviteLink: env.INVITE_LINK,
-					oauth2url: env.OAUTH2_URL,
-					ownerIds: env.OWNER_IDS,
-					version: env.VERSION,
-				},
-				this.chainsService
-			).start();
+			new RolandoServer(this.client, this.chainsService).start();
 		} catch (err: any) {
 			load.fail('Failed to refresh application (/) commands.');
 			Logger.error(err);
 		}
+	}
+
+	@ClientEvent('guildUpdate')
+	async onGuildUpdate(oldGuild: Guild, newGuild: Guild) {
+		Logger.info(`Guild ${oldGuild.name} updated`);
+		void this.chainsService.updateChainProps(oldGuild.id, { name: newGuild.name });
 	}
 
 	@ClientEvent('guildCreate')

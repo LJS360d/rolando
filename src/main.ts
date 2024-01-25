@@ -1,6 +1,5 @@
 import { Fonzi2Client, getRegisteredCommands, Logger } from 'fonzi2';
-import { ChainsRepository } from './domain/repositories/chains.repository';
-import { connectMongo } from './domain/repositories/mongo.connector';
+import { ChainsRepository } from './domain/repositories/chains/chains.repository';
 import { ChainsService } from './domain/services/chains.service';
 import { env } from './env';
 import { ButtonsHandler } from './handlers/buttons.handler';
@@ -8,17 +7,25 @@ import { CommandsHandler } from './handlers/commands.handler';
 import { EventsHandler } from './handlers/events.handler';
 import { MessageHandler } from './handlers/message.handler';
 import options from './options';
+import { connectMongo } from './domain/repositories/common/mongo.connector';
+import { TextDataRepository } from './domain/repositories/fs-storage/text-data.repository';
+import { Container } from 'typedi';
+import { Client } from 'discord.js';
+
 async function main() {
-	const db = await connectMongo(env.MONGODB_URI);
+	const db = await connectMongo(env.MONGODB_URI, 'rolando');
 
-	const chainService = new ChainsService(new ChainsRepository());
+	const textDataRepository = new TextDataRepository();
+	const chainsRepository = new ChainsRepository(textDataRepository);
+	const chainService = new ChainsService(chainsRepository);
 
-	new Fonzi2Client(env.TOKEN, options, [
+	const client = new Fonzi2Client(env.TOKEN, options, [
 		new CommandsHandler(chainService),
 		new ButtonsHandler(chainService),
 		new MessageHandler(chainService),
 		new EventsHandler(getRegisteredCommands(), chainService),
 	]);
+	Container.set(Client, client);
 
 	process.on('uncaughtException', (err: any) => {
 		if (err?.response?.status !== 429)
@@ -28,6 +35,7 @@ async function main() {
 	process.on('unhandledRejection', (reason: any) => {
 		if (reason?.status === 429) return;
 		if (reason?.response?.status === 429) return;
+		Logger.error(reason);
 	});
 
 	['SIGINT', 'SIGTERM'].forEach((signal) => {

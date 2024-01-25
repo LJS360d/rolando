@@ -18,11 +18,8 @@ export class ButtonsHandler extends Handler {
 			content: FETCH_CONFIRM_MSG(interaction.user.id),
 		});
 		const startTime = Date.now();
-		const dataFetchService = new DataFetchService(this.client!);
-		const chain = await this.chainsService.getChain(
-			interaction.guild.id,
-			interaction.guild.name
-		);
+		const dataFetchService = new DataFetchService(this.client, this.chainsService);
+		this.chainsService.updateChainProps(interaction.guild.id, { trained: true });
 		const messages = await dataFetchService.fetchAllGuildMessages(interaction.guild);
 		await interaction.channel?.send({
 			content: FETCH_COMPLETE_MSG(
@@ -31,7 +28,8 @@ export class ButtonsHandler extends Handler {
 				Date.now() - startTime
 			),
 		});
-		this.chainsService.updateChain(chain, messages);
+		// ? chain trained during fetch process
+		// this.chainsService.updateChainState(interaction.guild.id, messages);
 	}
 
 	@Button('cancel-train')

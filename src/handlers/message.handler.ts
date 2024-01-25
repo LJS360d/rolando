@@ -16,7 +16,7 @@ export class MessageHandler extends Handler {
 		if (author.id === this.client?.user?.id) return;
 
 		const guildId = guild.id;
-		const chain = await this.chainsService.getChain(guildId, guild.name);
+		const chain = await this.chainsService.getChain(guildId);
 		if (!chain) {
 			await this.chainsService.createChain(guildId, guild.name);
 			return;
@@ -24,7 +24,7 @@ export class MessageHandler extends Handler {
 		if (content.length > 3) {
 			// * Learning from message
 			chain.updateState(content);
-			this.chainsService.updateChain(chain, content);
+			this.chainsService.updateChainState(guildId, content);
 		}
 
 		const mention = message.mentions.users.some((value) => value === this.client?.user);

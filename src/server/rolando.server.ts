@@ -1,17 +1,17 @@
 import { ChannelType, Client, TextChannel } from 'discord.js';
 import express, { Request, Response } from 'express';
-import { Fonzi2Server, Fonzi2ServerData } from 'fonzi2';
+import { Fonzi2Server } from 'fonzi2';
 import { resolve } from 'path';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
 import { ChainsService } from '../domain/services/chains.service';
+import { env } from '../env';
 
 export class RolandoServer extends Fonzi2Server {
 	constructor(
-		client: Client,
-		data: Fonzi2ServerData,
+		client: Client<true>,
 		private chainsService: ChainsService
 	) {
-		super(client, data);
+		super(client);
 		this.app.use(express.static(resolve('public')));
 		this.app.set('views', [this.app.get('views'), resolve('views')]);
 	}
@@ -33,8 +33,8 @@ export class RolandoServer extends Fonzi2Server {
 			client: this.client,
 			guilds: this.client.guilds.cache,
 			startTime: this.startTime,
-			version: this.data.version,
-			inviteLink: this.data.inviteLink,
+			version: env.VERSION,
+			inviteLink: env.INVITE_LINK,
 			userInfo,
 			//? Rolando specific
 			chains: this.chainsService.chains,
