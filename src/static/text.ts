@@ -13,6 +13,10 @@ export const FETCH_CONFIRM_MSG = (id: string) => `
   This might take a while..
 `;
 
+export const FETCH_DENY_MSG = (guild: string) => `
+  This server: ${guild} has already performed this command.
+`;
+
 export const FETCH_COMPLETE_MSG = (id: string, amount: number, time: number) => `
   <@${id}> Finished Fetching messages.
   Messages fetched: \`${amount}\`

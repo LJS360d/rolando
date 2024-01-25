@@ -67,8 +67,9 @@
         </span>
       </div>
       <div class="chain-wrapper">
-        <% if (chains.get(guild.id)) { %>
-        <% const analytics = new MarkovChainAnalyzer(chains.get(guild.id)).getAnalytics() %>
+        <% const chain = chains.get(guild.id); %>
+        <% if (chain) { %>
+        <% const analytics = new MarkovChainAnalyzer(chain).getAnalytics() %>
         <a href="/chain?guildId=<%= guild.id %>"><i class="fa-solid fa-link"></i>Analytics</a>
         <span>Complexity: <b>
             <%= analytics.complexityScore %>
@@ -87,6 +88,9 @@
           </b></span>
         <span>Images: <b>
             <%= analytics.images %>
+          </b></span>
+        <span>Size: <b>
+            <%= chain.size %>
           </b></span>
         <% } else { %><i class="fa-solid fa-link-slash"></i>
         <% }; %>

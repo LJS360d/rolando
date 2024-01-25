@@ -4,6 +4,8 @@ import { ChainsRepository } from '../repositories/chains/chains.repository';
 import { Client } from 'discord.js';
 import { ChainDocumentFields } from '../repositories/chains/models/chain.model';
 import { Container } from 'typedi';
+import sizeof from 'object-sizeof';
+import { formatBytes } from '../../utils/formatting.utils';
 
 export class ChainsService {
 	private readonly chainsMap: Map<string, MarkovChain>;
@@ -23,6 +25,10 @@ export class ChainsService {
 			return await this.createChain(id, guild.name);
 		}
 		return chain;
+	}
+
+  async getChainDocument(id: string) {
+		return await this.chainsRepository.getOne(id);
 	}
 
 	async createChain(id: string, name: string): Promise<MarkovChain> {
@@ -68,8 +74,9 @@ export class ChainsService {
 		}
 
 		load.success(`Loaded ${this.chainsMap.size} Chains`);
-		this.chainsMap.forEach((chain) => {
-			Logger.info(`Chain ${chain.name} size: #green${chain.size}$`);
-		});
+		const chainsSize = Array.from(this.chainsMap.values())
+			.map((chain) => sizeof(chain))
+			.reduce((a, b) => a + b, 0);
+		Logger.info(`Chains total size: #green${formatBytes(chainsSize)}$`);
 	}
 }

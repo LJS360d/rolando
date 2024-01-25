@@ -1,7 +1,7 @@
 import { ButtonInteraction } from 'discord.js';
 import { ChainsService } from '../domain/services/chains.service';
 import { DataFetchService } from '../domain/services/data.fetch.service';
-import { FETCH_COMPLETE_MSG, FETCH_CONFIRM_MSG } from '../static/text';
+import { FETCH_COMPLETE_MSG, FETCH_CONFIRM_MSG, FETCH_DENY_MSG } from '../static/text';
 import { Button, Handler, HandlerType } from 'fonzi2';
 
 export class ButtonsHandler extends Handler {
@@ -14,6 +14,12 @@ export class ButtonsHandler extends Handler {
 	@Button('confirm-train')
 	async onConfirmTrain(interaction: ButtonInteraction<'cached'>) {
 		void interaction.deferUpdate();
+    if((await this.chainsService.getChainDocument(interaction.guildId))?.trained) {
+      await interaction.channel?.send({
+        content: FETCH_DENY_MSG(interaction.guild.name),
+      });
+      return;
+    }
 		await interaction.channel?.send({
 			content: FETCH_CONFIRM_MSG(interaction.user.id),
 		});
