@@ -1,0 +1,20 @@
+<% if (userInfo) { %>
+<div style="background-color: <%= userInfo.banner_color %>"
+    class="flex h-min rounded-lg p-1 items-center">
+  <img class="avatar rounded-full h-10" src="<%=userInfo.avatar%>" alt="avatar">
+  <div class="ml-2">
+    <h4
+        class="text-base [text-shadow:_2px_2px_2px_rgb(206_89_55)] text-white font-semibold">
+      <%=userInfo.global_name%>
+    </h4>
+    <h6 class="text-xs text-white [text-shadow:_2px_2px_2px_rgb(206_89_55)]">
+      <%=userInfo.username%>
+    </h6>
+  </div>
+</div>
+<% } else {%>
+<a href="/login" class="btn btn-primary">
+  <i class="fa-brands fa-discord"></i>
+  <span>Login</span>
+</a>
+<% } %>

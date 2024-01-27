@@ -35,7 +35,7 @@ async function main() {
 	process.on('unhandledRejection', (reason: any) => {
 		if (reason?.status === 429) return;
 		if (reason?.response?.status === 429) return;
-		Logger.error(reason);
+		Logger.error(`Unhandled Promise Rejection: ${JSON.stringify(reason, null, 2)}`);
 	});
 
 	['SIGINT', 'SIGTERM'].forEach((signal) => {

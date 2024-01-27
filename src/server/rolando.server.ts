@@ -5,6 +5,7 @@ import { resolve } from 'path';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
 import { ChainsService } from '../domain/services/chains.service';
 import { env } from '../env';
+import { render } from './render';
 
 export class RolandoServer extends Fonzi2Server {
 	constructor(
@@ -23,7 +24,7 @@ export class RolandoServer extends Fonzi2Server {
 	}
 
 	override async dashboard(req: Request, res: Response) {
-		const userInfo = req.session!['userInfo'];
+		const userInfo = this.getSessionUserInfo(req);
 		if (!userInfo) {
 			res.redirect('/unauthorized');
 			return;
@@ -33,15 +34,19 @@ export class RolandoServer extends Fonzi2Server {
 			client: this.client,
 			guilds: this.client.guilds.cache,
 			startTime: this.startTime,
-			version: env.VERSION,
 			inviteLink: env.INVITE_LINK,
-			userInfo,
 			//? Rolando specific
 			chains: this.chainsService.chains,
 			getGuildInvite: this.getGuildInvite.bind(this),
 			MarkovChainAnalyzer,
 		};
-		res.render('dashboard', props);
+
+		const options = {
+			version: env.VERSION,
+			userInfo,
+		};
+		render(res, 'pages/dashboard', props, options);
+		return;
 	}
 
 	private async getGuildInvite(
@@ -58,7 +63,9 @@ export class RolandoServer extends Fonzi2Server {
 		}
 		try {
 			const invite = await channel.createInvite();
-			res.render('invite', { invite: `https://discord.gg/${invite.code}` });
+			res.send(
+				`<a href="https://discord.gg/${invite.code}"><i class="fa-solid fa-door-open"></i></a>`
+			);
 		} catch (error) {
 			res.send('<a><i style="color: red;" class="fa-solid fa-door-closed"></i></a>');
 			return;
