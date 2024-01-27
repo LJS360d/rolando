@@ -1,4 +1,4 @@
-import { formatTime } from '../utils/formatting.utils';
+import { formatNumber, formatTime, md } from '../utils/formatting.utils';
 
 export const TRAIN_REPLY = `
   Are you sure you want to use **ALL SERVER MESSAGES** as training data for me?
@@ -19,7 +19,7 @@ export const FETCH_DENY_MSG = (guild: string) => `
 
 export const FETCH_COMPLETE_MSG = (id: string, amount: number, time: number) => `
   <@${id}> Finished Fetching messages.
-  Messages fetched: \`${amount}\`
+  Messages fetched: \`${formatNumber(amount)}\`
   Time elapsed: \`${formatTime(time)}\`
 `;
 
@@ -27,3 +27,14 @@ export const GUILD_CREATE_MSG = (name: string) => `
   Hello ${name},
   perform the command \`/train\` to use all the server's messages as training data
 `;
+
+export const ANALYTICS_DESCRIPTION = (maxSize: string) => `
+${md.bold('Complexity Score')}: indicates how ${md.italic('smart')} the bot is.
+A higher value means smarter
+To increase this value you may want to type in long sentences,
+with many different words,
+thats the fastest way to make the bot learn.\n
+${md.bold('Size')}: This server has a maximum storage size of ${md.bold(maxSize)}
+`;
+
+export const REPO_URL = 'https://github.com/LJS360d/rolando2';

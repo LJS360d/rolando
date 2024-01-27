@@ -7,10 +7,11 @@ import {
 
 import { env } from '../env';
 import { ChainsService } from '../domain/services/chains.service';
-import { TRAIN_REPLY } from '../static/text';
+import { ANALYTICS_DESCRIPTION, REPO_URL, TRAIN_REPLY } from '../static/text';
 import { getRandom } from '../utils/random.utils';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
 import { ActionRow, Buttons, Command, Handler, HandlerType } from 'fonzi2';
+import { formatTime, md } from '../utils/formatting.utils';
 
 export class CommandsHandler extends Handler {
 	public readonly type = HandlerType.commandInteraction;
@@ -59,26 +60,35 @@ export class CommandsHandler extends Handler {
 		const analytics = new MarkovChainAnalyzer(chain).getAnalytics();
 		const embed = new EmbedBuilder()
 			.setTitle('Analytics')
-			.setDescription(
-				'Complexity Score indicates how _smart_ the bot is.\n Higher value means smarter'
-			)
+			.setDescription(ANALYTICS_DESCRIPTION('25 MB\n(~2 Milion messages)'))
 			.setColor('Gold')
 			.addFields(
 				{
 					name: 'Complexity Score',
-					value: `\`${analytics.complexityScore}\``,
+					value: md.code(analytics.complexityScore),
 					inline: true,
 				},
 				{
 					name: 'Vocabulary',
-					value: `\`${analytics.words} words\` `,
+					value: md.code(`${analytics.words} words`),
 					inline: true,
 				},
 				{ name: '\t', value: '\t' },
-				{ name: 'Gifs', value: `\`${analytics.gifs}\``, inline: true },
-				{ name: 'Videos', value: `\`${analytics.videos}\``, inline: true },
-				{ name: 'Images', value: `\`${analytics.images}\``, inline: true }
-			);
+				{ name: 'Gifs', value: md.code(analytics.gifs), inline: true },
+				{ name: 'Videos', value: md.code(analytics.videos), inline: true },
+				{ name: 'Images', value: md.code(analytics.images), inline: true },
+				{ name: '\t', value: '\t' },
+				{
+					name: 'Processed messages',
+					value: md.code(analytics.messages),
+					inline: true,
+				},
+				{ name: 'Size', value: md.code(`${analytics.size} / 25.00 MB`), inline: true }
+			)
+			.setFooter({
+				iconURL: this.client.user.displayAvatarURL(),
+				text: `Version: ${env.VERSION}`,
+			});
 		void interaction.reply({
 			embeds: [embed],
 		});
@@ -92,7 +102,7 @@ export class CommandsHandler extends Handler {
 				name: 'rate',
 				description: 'the rate to set',
 				type: ApplicationCommandOptionType.Integer,
-        minValue: 0,
+				minValue: 0,
 				required: false,
 			},
 		],
@@ -149,6 +159,14 @@ export class CommandsHandler extends Handler {
 		chain.delete(data);
 		void interaction.reply({ content: `Deleted \`${data}\`` });
 		return;
+	}
+
+	@Command({
+		name: 'src',
+		description: 'Provides the URL to the repository with bot source code.',
+	})
+	public async info(interaction: ChatInputCommandInteraction<'cached'>) {
+		void interaction.reply({ content: REPO_URL });
 	}
 
 	private async checkAdmin(interaction: ChatInputCommandInteraction, msg?: string) {

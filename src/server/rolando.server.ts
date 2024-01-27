@@ -19,6 +19,7 @@ export class RolandoServer extends Fonzi2Server {
 
 	override async start() {
 		this.app.get('/chain', this.guildChain.bind(this));
+		this.app.get('/data', this.guildMessages.bind(this));
 		this.app.get('/invite', this.getGuildInvite.bind(this));
 		super.start();
 	}
@@ -76,8 +77,8 @@ export class RolandoServer extends Fonzi2Server {
 		req: Request<any, any, any, { guildId: string }>,
 		res: Response
 	) {
-		if (!req.session!['userInfo']) {
-			res.redirect('/unauthorized');
+		if (!this.getSessionUserInfo(req)) {
+			res.sendStatus(401);
 			return;
 		}
 		const { guildId } = req.query;
@@ -86,5 +87,21 @@ export class RolandoServer extends Fonzi2Server {
 			message: `chain ${guildId} not found`,
 		};
 		res.status(!!chain ? 200 : 404).json(chain);
+	}
+
+	private async guildMessages(
+		req: Request<any, any, any, { guildId: string }>,
+		res: Response
+	) {
+		if (!this.getSessionUserInfo(req)) {
+			res.sendStatus(401);
+			return;
+		}
+		const { guildId } = req.query;
+		const messages = { messages: this.chainsService.getChainMessages(guildId) } ?? {
+			code: 404,
+			message: `chain ${guildId} not found`,
+		};
+		res.status(!!messages ? 200 : 404).json(messages);
 	}
 }

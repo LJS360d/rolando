@@ -33,7 +33,7 @@ async function main() {
 	});
 
 	process.on('unhandledRejection', (reason: any) => {
-		if (reason?.status === 429) return;
+		if ([429, 403].includes(reason?.status)) return;
 		if (reason?.response?.status === 429) return;
 		Logger.error(`Unhandled Promise Rejection: ${JSON.stringify(reason, null, 2)}`);
 	});

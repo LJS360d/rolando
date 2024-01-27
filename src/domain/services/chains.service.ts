@@ -27,13 +27,13 @@ export class ChainsService {
 		return chain;
 	}
 
-  async getChainDocument(id: string) {
+	async getChainDocument(id: string) {
 		return await this.chainsRepository.getOne(id);
 	}
 
 	async createChain(id: string, name: string): Promise<MarkovChain> {
 		Logger.info(`Creating chain ${name}`);
-		const chain = new MarkovChain(id, name);
+		const chain = new MarkovChain(id);
 		this.chainsMap.set(id, chain);
 		await this.chainsRepository.create(id, { name });
 		return chain;
@@ -65,12 +65,9 @@ export class ChainsService {
 		const load = Logger.loading('Loading Chains...');
 		const chains = await this.chainsRepository.getAll();
 		for (const chain of chains) {
-			const messages = this.chainsRepository.getChainMessages(chain.id);
+			const messages = this.getChainMessages(chain.id);
 
-			this.chainsMap.set(
-				chain.id,
-				new MarkovChain(chain.id, chain.name, chain.replyRate, messages)
-			);
+			this.chainsMap.set(chain.id, new MarkovChain(chain.id, chain.replyRate, messages));
 		}
 
 		load.success(`Loaded ${this.chainsMap.size} Chains`);
@@ -78,5 +75,9 @@ export class ChainsService {
 			.map((chain) => sizeof(chain))
 			.reduce((a, b) => a + b, 0);
 		Logger.info(`Chains total size: #green${formatBytes(chainsSize)}$`);
+	}
+
+	getChainMessages(id: string) {
+		return this.chainsRepository.getChainMessages(id);
 	}
 }

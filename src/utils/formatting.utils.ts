@@ -31,6 +31,12 @@ export function formatBytes(bytes: number): string {
 	return `${formattedSize} ${sizes[i]}`;
 }
 
+export function formatNumber(number: number) {
+	const parts = number.toString().split('.');
+	parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+	return parts.join('.');
+}
+
 export function toLowerSnakeCase(str: string): string {
 	return str
 		.replace(/([A-Z])/g, '_$1')
@@ -40,4 +46,37 @@ export function toLowerSnakeCase(str: string): string {
 
 export function capitalize(str: string): string {
 	return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+export namespace md {
+	export function code(str: any): string {
+		return `\`${str}\``;
+	}
+	export function bold(str: any): string {
+		return `**${str}**`;
+	}
+	export function italic(str: any): string {
+		return `*${str}*`;
+	}
+	export function underline(str: any): string {
+		return `__${str}__`;
+	}
+	export function strikethrough(str: any): string {
+		return `~~${str}~~`;
+	}
+	export function spoiler(str: any): string {
+		return `||${str}||`;
+	}
+	export function quote(str: any): string {
+		return `> ${str}`;
+	}
+	export function link(str: any, url: any): string {
+		return `[${str}](${url})`;
+	}
+	export function image(str: any, url: any): string {
+		return `![${str}](${url})`;
+	}
+	export function codeBlock(str: any, lang?: string): string {
+		return `\`\`\`${lang}\n${str}\`\`\``;
+	}
 }
