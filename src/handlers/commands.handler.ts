@@ -1,17 +1,17 @@
 import {
-	ChatInputCommandInteraction,
-	PermissionsBitField,
-	EmbedBuilder,
 	ApplicationCommandOptionType,
+	ChatInputCommandInteraction,
+	EmbedBuilder,
+	PermissionsBitField,
 } from 'discord.js';
 
-import { env } from '../env';
-import { ChainsService } from '../domain/services/chains.service';
-import { ANALYTICS_DESCRIPTION, REPO_URL, TRAIN_REPLY } from '../static/text';
-import { getRandom } from '../utils/random.utils';
-import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
 import { ActionRow, Buttons, Command, Handler, HandlerType } from 'fonzi2';
-import { formatTime, md } from '../utils/formatting.utils';
+import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
+import { ChainsService } from '../domain/services/chains.service';
+import { env } from '../env';
+import { ANALYTICS_DESCRIPTION, REPO_URL, TRAIN_REPLY } from '../static/text';
+import { md } from '../utils/formatting.utils';
+import { getRandom } from '../utils/random.utils';
 
 export class CommandsHandler extends Handler {
 	public readonly type = HandlerType.commandInteraction;
@@ -60,7 +60,7 @@ export class CommandsHandler extends Handler {
 		const analytics = new MarkovChainAnalyzer(chain).getAnalytics();
 		const embed = new EmbedBuilder()
 			.setTitle('Analytics')
-			.setDescription(ANALYTICS_DESCRIPTION('25 MB\n(~2 Milion messages)'))
+			.setDescription(ANALYTICS_DESCRIPTION('25 MB'))
 			.setColor('Gold')
 			.addFields(
 				{
