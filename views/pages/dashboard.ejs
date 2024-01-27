@@ -1,7 +1,8 @@
 <header class="flex justify-center">
   <a class="btn btn-ghost h-min flex items-center" href="<%=inviteLink%>">
     <h1 class="flex items-center">
-      <img class="h-24 rounded-full mx-4" src="<%=client.user.avatarURL()%>" alt="User Avatar">
+      <img class="h-24 rounded-full mx-4" src="<%=client.user.avatarURL()%>"
+          alt="User Avatar">
       <h2 class="text-lg font-semibold"><%= client.user.tag %></h2>
     </h1>
   </a>
@@ -9,28 +10,36 @@
 <hr class="my-4">
 <div class="m-4">
   <header class="grid grid-flow-row">
-    <span class="text-sm">Uptime: <b id="uptime" start="<%=startTime%>"></b></span>
-    <span class="text-sm">Currently part of <b><%=guilds.size%></b> guilds</span>
+    <span class="text-sm">Uptime: <b id="uptime"
+          start="<%=startTime%>"></b></span>
+    <span class="text-sm">Currently part of <b><%=guilds.size%></b>
+      guilds</span>
   </header>
   <div class="flex flex-wrap justify-between">
-    <ul class="list-none w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+    <ul
+        class="list-none w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
       <% guilds.forEach((guild) => { %>
-      <li class="bg-neutral p-2 rounded-md shadow-2xl flex flex-row items-center justify-between">
+      <li
+          class="bg-neutral p-2 rounded-md shadow-2xl flex flex-row items-center justify-between">
         <div class="flex flex-col items-center gap-2">
-          <button class="btn btn-neutral text-xs overflow-clip" onclick="copyToClipboard('<%=guild.id%>', 'Guild ID')">
+          <button class="btn btn-neutral text-xs overflow-clip"
+              onclick="copyToClipboard('<%=guild.id%>', 'Guild ID')">
             <%= guild.name %>
           </button>
-          <img class="rounded-full w-16 shadow-around" src="<%=guild.iconURL() ?? 'assets/noimage.svg'%>"
-            alt="Guild Icon">
+          <img class="rounded-full w-16 shadow-around"
+              src="<%=guild.iconURL() ?? 'assets/noimage.svg'%>"
+              alt="Guild Icon">
           <div class="flex gap-4 items-center">
-            <a href="/invite?guildId=<%= guild.id %>" class="fa-solid fa-door-closed"></a>
+            <a class="cursor-pointer" hx-get="/invite?guildId=<%= guild.id %>"
+                hx-swap="outerHTML"><i class="fa-solid fa-door-closed"></i></a>
             <span class="overflow-clip text-ellipsis text-xs w-28">
               <%= guild.memberCount %> members
             </span>
           </div>
         </div>
         <div class="flex flex-col items-center">
-          <a href="/chain?guildId=<%= guild.id %>"><i class="fa-solid fa-link"></i>Analytics</a>
+          <a href="/chain?guildId=<%= guild.id %>"><i
+                class="fa-solid fa-link"></i>Analytics</a>
           <div class="grid mt-2 grid-cols-2 space-x-8">
             <% const chain = chains.get(guild.id); %>
             <% if (chain) { %>
