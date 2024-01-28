@@ -21,6 +21,7 @@ export class RolandoServer extends Fonzi2Server {
 		this.app.get('/chain', this.guildChain.bind(this));
 		this.app.get('/data', this.guildMessages.bind(this));
 		this.app.get('/invite', this.getGuildInvite.bind(this));
+		this.app.get('/chains/memUsage', this.memUsage.bind(this));
 		super.start();
 	}
 
@@ -38,8 +39,6 @@ export class RolandoServer extends Fonzi2Server {
 			inviteLink: env.INVITE_LINK,
 			//? Rolando specific
 			chains: this.chainsService.chains,
-			chainsMemUsage: this.chainsService.getChainsMemUsage(),
-			getGuildInvite: this.getGuildInvite.bind(this),
 			MarkovChainAnalyzer,
 		};
 
@@ -104,5 +103,12 @@ export class RolandoServer extends Fonzi2Server {
 			message: `chain ${guildId} not found`,
 		};
 		res.status(!!messages ? 200 : 404).json(messages);
+	}
+
+	private async memUsage(req: Request, res: Response) {
+		const chainsMemUsage = this.chainsService.getChainsMemUsage();
+		res
+			.status(200)
+			.send(`<span class="text-sm">Chains memory usage:<b>${chainsMemUsage}</b></span>`);
 	}
 }
