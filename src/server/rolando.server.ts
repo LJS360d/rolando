@@ -38,6 +38,7 @@ export class RolandoServer extends Fonzi2Server {
 			inviteLink: env.INVITE_LINK,
 			//? Rolando specific
 			chains: this.chainsService.chains,
+			chainsMemUsage: this.chainsService.getChainsMemUsage(),
 			getGuildInvite: this.getGuildInvite.bind(this),
 			MarkovChainAnalyzer,
 		};

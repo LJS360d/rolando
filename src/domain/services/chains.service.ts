@@ -69,15 +69,18 @@ export class ChainsService {
 
 			this.chainsMap.set(chain.id, new MarkovChain(chain.id, chain.replyRate, messages));
 		}
-
 		load.success(`Loaded ${this.chainsMap.size} Chains`);
-		const chainsSize = Array.from(this.chainsMap.values())
-			.map((chain) => sizeof(chain))
-			.reduce((a, b) => a + b, 0);
-		Logger.info(`Chains total size: #green${formatBytes(chainsSize)}$`);
+		Logger.info(`Chains total size: #green${this.getChainsMemUsage()}$`);
 	}
 
 	getChainMessages(id: string) {
 		return this.chainsRepository.getChainMessages(id);
+	}
+
+	getChainsMemUsage() {
+		const chainsSize = Array.from(this.chainsMap.values())
+			.map((chain) => sizeof(chain))
+			.reduce((a, b) => a + b, 0);
+		return formatBytes(chainsSize);
 	}
 }
