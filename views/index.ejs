@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme=<%= theme  %>>
+<html lang="en">
 <!-- <head> -->
 <%- include("common/head", { title }) -%>
 <!-- </head> -->
@@ -12,5 +12,10 @@
     <%- include(component, props) -%>
   </main>
 </body>
+<script>
+  document.documentElement
+    .setAttribute( 'data-theme',
+      localStorage.getItem( "theme" ) || "<%theme%>" )
+</script>
 
 </html>

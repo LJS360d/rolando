@@ -1,0 +1,60 @@
+<div
+    class="grid mx-auto grid-flow-row grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+
+  <div class="container flex flex-col items-start py-6 px-4">
+    <h1 class="text-4xl font-bold text-shadow-comic mb-4">Meet
+      <%=client.user.displayName%></h1>
+    <p class="text-lg text-gray-600 dark:text-gray-300">The learning AI that
+      makes your Discord server dangerously fun.</p>
+    <div class="w-52 h-52 my-8 flex">
+      <img src=<%=client.user.avatarURL()%> alt="AI Discord Bot"
+          class="mx-auto h-full w-full object-cover shadow-around rounded-full">
+    </div>
+    <p class="mb-8 text-gray-500">Warning: This AI bot learns from messages and
+      can generate NSFW content.<br>User discretion is advised.</p>
+    <h6 class="mb-4">Currently part of <%= guilds %> servers</h6>
+    <a href=<%=inviteLink%> class="btn btn-secondary shadow-comic font-bold">
+      <i class="fa-brands fa-discord fa-lg"></i>
+      <span>Add to Discord</span>
+    </a>
+
+  </div>
+
+  <div class="container py-6 px-4">
+    <div class="flex flex-row gap-2 items-center mb-4">
+      <h2 class="text-2xl font-semibold text-shadow-comic">Commands</h2>
+      <button class="btn btn-secondary btn-sm text-neutral shadow-comic"
+          onclick="shuffleList(commandsList)"
+          title="Shuffle the commands, why not?"><i
+            class="fa-solid fa-shuffle fa-lg"></i></button>
+    </div>
+    <ul id="commandsList" class="text-lg static">
+      <% for(const command of commands) { %>
+      <li class="block">
+        <h2 class="font-semibold text-secondary text-md">
+          /<%= command.name %></h2>
+        <p class="text-wrap m-2 text-sm">
+          <%= command.description %>
+        </p>
+      </li>
+      <% } %>
+    </ul>
+  </div>
+
+  <div class="container py-6 px-4">
+
+  </div>
+</div>
+
+<script type="module">
+  import autoAnimate from 'https://cdn.jsdelivr.net/npm/@formkit/auto-animate'
+  autoAnimate( document.getElementById( 'commandsList' ) )
+</script>
+
+<script>
+  function shuffleList( list ) {
+    for ( let i = list.children.length; i >= 0; i-- ) {
+      list.appendChild( list.children[ Math.random() * i | 0 ] );
+    }
+  }
+</script>

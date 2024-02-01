@@ -1,14 +1,17 @@
+<% const sidebarId = "sidebar-toggle"; %>
 <div class="drawer">
-  <input id="sidebar-toggle" type="checkbox" class="drawer-toggle" />
+  <input id=<%= sidebarId %> type="checkbox" class="drawer-toggle" />
   <div class="drawer-content">
-    <%- include('toolbar', { userInfo, title, sidebarId: "sidebar-toggle" }) %>
+    <%- include('toolbar', { userInfo, title, sidebarId }) %>
   </div>
   <div class="drawer-side">
-    <label for="sidebar-toggle" aria-label="close sidebar" class="drawer-overlay"></label>
-    <div class="bg-base-300 flex flex-col h-full w-60">
+    <label for=<%= sidebarId %> aria-label="close sidebar"
+        class="drawer-overlay"></label>
+    <div class="bg-base-300 flex flex-col h-full justify-between w-60">
       <header class="flex w-full">
-        <label for="sidebar-toggle" class="justify-start w-full btn btn-ghost"><i
-            class="fa-solid fa-xmark text-xl"></i></label>
+        <label for=<%= sidebarId %>
+            class="justify-start w-full btn btn-ghost"><i
+              class="fa-solid fa-xmark text-xl"></i></label>
       </header>
       <!-- TODO reroutes -->
       <footer class="flex flex-col items-center justify-center pb-2">
@@ -16,8 +19,9 @@
           <div class="label">
             <span class="label-text">Theme</span>
           </div>
-          <select class="select select-secondary capitalize w-full" name="theme"
-            onchange="document.documentElement.setAttribute('data-theme', this.value)">
+          <select id="theme-select"
+              class="select select-secondary capitalize w-full" name="theme"
+              onchange="document.documentElement.setAttribute('data-theme', this.value);localStorage.setItem('theme',this.value)">
             <% themes.forEach(theme => { %>
             <option class="capitalize" value=<%= theme %>><%= theme %></option>
             <% }) %>
@@ -31,3 +35,8 @@
 
   </div>
 </div>
+
+<script>
+  document.getElementById( 'theme-select' )
+    .value = localStorage.getItem( 'theme' ) || "<%=theme%>"
+</script>
