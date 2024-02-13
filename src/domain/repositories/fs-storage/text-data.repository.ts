@@ -26,7 +26,7 @@ export class TextDataRepository {
 		return join(this.dataFolder, `${filename}.${this.fileExtension}`);
 	}
 
-	createTextStorage(filename: string, override: boolean = false): void {
+	createTextStorage(filename: string, override = false): void {
 		this.ensureDataFolderExists();
 		const filepath = this.getFilePath(filename);
 		void closeSync(openSync(filepath, override ? 'w' : 'a'));
@@ -64,7 +64,7 @@ export class TextDataRepository {
 		if (!existsSync(messagesFilepath)) {
 			this.createTextStorage(filename);
 		}
-		const contentToAppend = typeof text === 'string' ? text + '\n' : text.join('\n');
+		const contentToAppend = typeof text === 'string' ? `${text}\n` : text.join('\n');
 		appendFileSync(messagesFilepath, contentToAppend, this.fileEncoding);
 	}
 

@@ -33,23 +33,14 @@ export function validateEnv(warn = true, Env = env) {
 	}
 
 	if (warn) {
-		for (const prop of [
-			'INVITE_LINK',
-			'LOG_WEBHOOK',
-			'OWNER_IDS',
-		] as (keyof typeof Env)[]) {
+		for (const prop of ['INVITE_LINK', 'LOG_WEBHOOK', 'OWNER_IDS'] as (keyof typeof Env)[]) {
 			const invalidString = typeof Env[prop] === 'string' && !Env[prop];
-			const invalidArray =
-				Array.isArray(Env[prop]) && !(Env[prop] as Array<string>).length;
+			const invalidArray = Array.isArray(Env[prop]) && !(Env[prop] as Array<string>).length;
 			if (invalidString) {
-				Logger.warn(
-					`Recommended property "${prop}" is missing a value in the env configuration.`
-				);
+				Logger.warn(`Recommended property "${prop}" is missing a value in the env configuration.`);
 			}
 			if (invalidArray) {
-				Logger.warn(
-					`Recommended property "${prop}" is missing values in the env configuration.`
-				);
+				Logger.warn(`Recommended property "${prop}" is missing values in the env configuration.`);
 			}
 		}
 	}

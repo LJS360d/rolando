@@ -3,7 +3,7 @@ import { MediaStorage } from './media.storage';
 export class MarkovChain {
 	public mediaStorage: MediaStorage;
 	state: MarkovState;
-	messageCounter: number = 0;
+	messageCounter = 0;
 
 	constructor(
 		public id: string,
@@ -50,7 +50,7 @@ export class MarkovChain {
 				(weight) => (weight + 1) / (this.messageCounter + nextWordArray.length)
 			);
 			currentWord = this.stochasticChoice(nextWordArray, smoothedWeights);
-			generatedText += ' ' + currentWord;
+			generatedText += ` ${currentWord}`;
 		}
 		return generatedText;
 	}
@@ -70,8 +70,8 @@ export class MarkovChain {
 		for (let i = 0; i < tokens.length - 1; i++) {
 			const currentWord = tokens[i];
 			const nextWord = tokens[i + 1];
-			if (this.state[currentWord] && this.state[currentWord][nextWord]) {
-				this.state[currentWord][nextWord]--;
+			if (this.state[currentWord]?.[nextWord]) {
+				delete this.state[currentWord][nextWord];
 			}
 		}
 	}

@@ -39,22 +39,37 @@ export class CommandsHandler extends Handler {
 	@Command({ name: 'gif', description: 'Returns a gif from the ones it knows' })
 	public async gif(interaction: ChatInputCommandInteraction<'cached'>) {
 		const chain = await this.chainsService.getChain(interaction.guild.id);
-		void interaction.reply({ content: await chain.mediaStorage.getMedia('gif') });
+		void interaction.reply({
+			content: await chain.mediaStorage.getMedia('gif'),
+		});
 	}
 
-	@Command({ name: 'image', description: 'Returns a image from the ones it knows' })
+	@Command({
+		name: 'image',
+		description: 'Returns a image from the ones it knows',
+	})
 	public async image(interaction: ChatInputCommandInteraction<'cached'>) {
 		const chain = await this.chainsService.getChain(interaction.guild.id);
-		void interaction.reply({ content: await chain.mediaStorage.getMedia('image') });
+		void interaction.reply({
+			content: await chain.mediaStorage.getMedia('image'),
+		});
 	}
 
-	@Command({ name: 'video', description: 'Returns a video from the ones it knows' })
+	@Command({
+		name: 'video',
+		description: 'Returns a video from the ones it knows',
+	})
 	public async video(interaction: ChatInputCommandInteraction<'cached'>) {
 		const chain = await this.chainsService.getChain(interaction.guild.id);
-		void interaction.reply({ content: await chain.mediaStorage.getMedia('video') });
+		void interaction.reply({
+			content: await chain.mediaStorage.getMedia('video'),
+		});
 	}
 
-	@Command({ name: 'analytics', description: 'Returns the analytics of the bot' })
+	@Command({
+		name: 'analytics',
+		description: 'Returns the analytics of the bot',
+	})
 	public async analytics(interaction: ChatInputCommandInteraction<'cached'>) {
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const analytics = new MarkovChainAnalyzer(chain).getAnalytics();
@@ -83,7 +98,11 @@ export class CommandsHandler extends Handler {
 					value: md.code(analytics.messages),
 					inline: true,
 				},
-				{ name: 'Size', value: md.code(`${analytics.size} / 25.00 MB`), inline: true }
+				{
+					name: 'Size',
+					value: md.code(`${analytics.size} / 25.00 MB`),
+					inline: true,
+				}
 			)
 			.setFooter({
 				iconURL: this.client.user.displayAvatarURL(),
@@ -118,7 +137,9 @@ export class CommandsHandler extends Handler {
 			void interaction.reply({ content: `Set reply rate to \`${rate}\`` });
 			return;
 		}
-		await interaction.reply({ content: `Current rate is \`${chain.replyRate}\`` });
+		await interaction.reply({
+			content: `Current rate is \`${chain.replyRate}\``,
+		});
 	}
 
 	@Command({
@@ -134,7 +155,10 @@ export class CommandsHandler extends Handler {
 		],
 	})
 	public async opinion(interaction: ChatInputCommandInteraction<'cached'>) {
-		const about = interaction.options.getString('about')!.split(' ').at(-1)!;
+		const about = interaction.options
+			.getString('about', true)
+			.split(' ')
+			.at(-1) as string;
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const msg = chain.generateText(about, getRandom(8, 40));
 		void interaction.reply({ content: msg });
@@ -154,7 +178,7 @@ export class CommandsHandler extends Handler {
 		],
 	})
 	public async wipe(interaction: ChatInputCommandInteraction<'cached'>) {
-		const data = interaction.options.getString('data')!;
+		const data = interaction.options.getString('data', true);
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		chain.delete(data);
 		void interaction.reply({ content: `Deleted \`${data}\`` });
@@ -169,11 +193,15 @@ export class CommandsHandler extends Handler {
 		void interaction.reply({ content: REPO_URL });
 	}
 
-	private async checkAdmin(interaction: ChatInputCommandInteraction, msg?: string) {
+	private async checkAdmin(
+		interaction: ChatInputCommandInteraction,
+		msg?: string
+	) {
 		if (env.OWNER_IDS.includes(interaction.user.id)) {
 			return true;
 		}
-		const perms = interaction.member?.permissions as Readonly<PermissionsBitField>;
+		const perms = interaction.member
+			?.permissions as Readonly<PermissionsBitField>;
 		if (perms.has('Administrator')) {
 			return true;
 		}

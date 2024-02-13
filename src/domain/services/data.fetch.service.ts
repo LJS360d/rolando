@@ -35,6 +35,7 @@ export class DataFetchService {
 	}
 
 	private async fetchChannelMessages(channel: GuildTextBasedChannel): Promise<string[]> {
+		// biome-ignore lint/suspicious/noAsyncPromiseExecutor: Old code, works, but should be refactored
 		return new Promise(async (resolve) => {
 			const load = Logger.loading(`Fetching messages in #${channel.name}...`);
 			const messages: string[] = [];

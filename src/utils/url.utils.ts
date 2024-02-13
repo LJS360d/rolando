@@ -20,7 +20,7 @@ export function containsURL(text: string): boolean {
 					return true;
 				}
 			} catch (error) {
-				continue;
+				// Ignore this url as it is not valid
 			}
 		}
 	}
@@ -66,8 +66,11 @@ export function isGifUrl(url: string) {
 	const supportedExtensions = ['.gif'];
 	const supportedDomains = ['tenor.com', 'giphy.com'];
 	if (domain && extension)
-		return supportedExtensions.includes(extension) || supportedDomains.includes(domain);
-	else return false;
+		return (
+			supportedExtensions.includes(extension) ||
+			supportedDomains.includes(domain)
+		);
+	return false;
 }
 
 export function isImageUrl(url: string) {
@@ -75,8 +78,11 @@ export function isImageUrl(url: string) {
 	const supportedExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
 	const supportedDomains = ['imgur.com'];
 	if (domain && extension)
-		return supportedExtensions.includes(extension) || supportedDomains.includes(domain);
-	else return false;
+		return (
+			supportedExtensions.includes(extension) ||
+			supportedDomains.includes(domain)
+		);
+	return false;
 }
 
 export function isVideoUrl(url: string) {
@@ -84,8 +90,11 @@ export function isVideoUrl(url: string) {
 	const supportedExtensions = ['.mp4', '.mov'];
 	const supportedDomains = ['www.youtube.com', 'youtu.be'];
 	if (domain && extension)
-		return supportedExtensions.includes(extension) || supportedDomains.includes(domain);
-	else return false;
+		return (
+			supportedExtensions.includes(extension) ||
+			supportedDomains.includes(domain)
+		);
+	return false;
 }
 
 export async function getValidUrl(

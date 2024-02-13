@@ -26,7 +26,7 @@ export function formatBytes(bytes: number): string {
 	if (bytes === 0) return '0 Byte';
 
 	const i = Math.floor(Math.log2(bytes) / 10);
-	const formattedSize = (bytes / Math.pow(1024, i)).toFixed(2);
+	const formattedSize = (bytes / 1024 ** i).toFixed(2);
 
 	return `${formattedSize} ${sizes[i]}`;
 }
