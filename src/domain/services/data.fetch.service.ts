@@ -1,13 +1,6 @@
-import {
-	Client,
-	Collection,
-	Guild,
-	GuildBasedChannel,
-	GuildTextBasedChannel,
-	Message,
-	PermissionFlagsBits,
-} from 'discord.js';
+import { Client, Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
 import { Logger } from 'fonzi2';
+import { hasChannelAccess } from '../../utils/permission.utils';
 import { containsURL } from '../../utils/url.utils';
 import { ChainsService } from './chains.service';
 
@@ -25,7 +18,7 @@ export class DataFetchService {
 			// ? Get all guild channels
 			Array.from(guild.channels.cache.values())
 				// ? Filter to only text channels with read/write access
-				.filter((channel) => this.hasChannelAccess(channel))
+				.filter((channel) => hasChannelAccess(this.client.user, channel))
 				// ? Start fetching in each channel
 				.map((channel) => this.fetchChannelMessages(channel as GuildTextBasedChannel));
 		const results = await Promise.all(fetchPromises);
@@ -87,20 +80,5 @@ export class DataFetchService {
 			(msg) => msg.content.split(' ').length > 1 || containsURL(msg.content)
 		);
 		return cleanMessages;
-	}
-
-	private hasChannelAccess(channel: GuildBasedChannel): channel is GuildTextBasedChannel {
-		const perms = channel.permissionsFor(this.client.user);
-		if (!perms) return false;
-		const canReadChannel = perms.has(PermissionFlagsBits.ReadMessageHistory);
-		const canAccessChannel = perms.has(PermissionFlagsBits.SendMessages);
-		const canViewChannel = perms.has(PermissionFlagsBits.ViewChannel);
-		return (
-			channel.isTextBased() &&
-			!channel.isVoiceBased() &&
-			canReadChannel &&
-			canAccessChannel &&
-			canViewChannel
-		);
 	}
 }

@@ -37,4 +37,12 @@ thats the fastest way to make the bot learn.\n
 ${md.bold('Size')}: This server has a maximum storage size of ${md.bold(maxSize)}
 `;
 
+export const CHANNELS_DESCRIPTION = (hasAccess: string, noAccess: string) => `
+channels the bot has access to are marked with: ${hasAccess}
+while channels with no access are marked with: ${noAccess}
+
+make a channel accessible by giving ${md.bold('ALL')} these permissions: 
+${md.code('View Channel')} ${md.code('Send Messages')} ${md.code('Read Message History')} 
+`;
+
 export const REPO_URL = 'https://github.com/LJS360d/rolando2';

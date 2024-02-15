@@ -1,17 +1,26 @@
 import {
 	ApplicationCommandOptionType,
 	ChatInputCommandInteraction,
+	Collection,
+	Embed,
 	EmbedBuilder,
+	GuildTextBasedChannel,
+	Message,
+	MessageReaction,
 	PermissionsBitField,
+	TextChannel,
+	User,
 } from 'discord.js';
 
 import { ActionRow, Buttons, Command, Handler, HandlerType } from 'fonzi2';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
 import { ChainsService } from '../domain/services/chains.service';
 import { env } from '../env';
-import { ANALYTICS_DESCRIPTION, REPO_URL, TRAIN_REPLY } from '../static/text';
+import { ANALYTICS_DESCRIPTION, CHANNELS_DESCRIPTION, REPO_URL, TRAIN_REPLY } from '../static/text';
 import { md } from '../utils/formatting.utils';
 import { getRandom } from '../utils/random.utils';
+import { hasChannelAccess } from '../utils/permission.utils';
+import { chunkArray, paginateInteraction } from '../utils/pagination.utils';
 
 export class CommandsHandler extends Handler {
 	public readonly type = HandlerType.commandInteraction;
@@ -21,8 +30,7 @@ export class CommandsHandler extends Handler {
 
 	@Command({
 		name: 'train',
-		description:
-			'Fetches all available messages in the server to be used as training data',
+		description: 'Fetches all available messages in the server to be used as training data',
 	})
 	public async train(interaction: ChatInputCommandInteraction) {
 		if (!(await this.checkAdmin(interaction))) return;
@@ -114,6 +122,35 @@ export class CommandsHandler extends Handler {
 	}
 
 	@Command({
+		name: 'channels',
+		description: 'View which channels are being used by the bot',
+	})
+	public async channels(interaction: ChatInputCommandInteraction<'cached'>) {
+		const guild = interaction.guild;
+		const channels = guild.channels.cache.filter((ch) => ch['nsfw'] !== undefined);
+		const accessEmote = (hasAccess: boolean) => (hasAccess ? ':green_circle:' : ':red_circle:');
+		const channelsPermissionMap = channels.map((ch) => ({
+			name: ch.name,
+			access: accessEmote(hasChannelAccess(this.client.user, ch)),
+			nsfw: (ch as TextChannel).nsfw,
+		}));
+		const channelFields = channelsPermissionMap.map((cp) => ({
+			name: ' ',
+			value: `${cp.access} #${cp.name}`,
+			inline: true,
+		}));
+		const embeds = chunkArray(channelFields, 15).map((channelFields) =>
+			new EmbedBuilder()
+				.setTitle('Available channels')
+				.setDescription(CHANNELS_DESCRIPTION(':green_circle:', ':red_circle:'))
+				.setColor('Gold')
+				.addFields({ name: '\t', value: '\t' })
+				.addFields(channelFields)
+		);
+		await paginateInteraction(interaction, embeds);
+	}
+
+	@Command({
 		name: 'replyrate',
 		description: 'check or set the reply rate',
 		options: [
@@ -155,10 +192,7 @@ export class CommandsHandler extends Handler {
 		],
 	})
 	public async opinion(interaction: ChatInputCommandInteraction<'cached'>) {
-		const about = interaction.options
-			.getString('about', true)
-			.split(' ')
-			.at(-1) as string;
+		const about = interaction.options.getString('about', true).split(' ').at(-1) as string;
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const msg = chain.generateText(about, getRandom(8, 40));
 		void interaction.reply({ content: msg });
@@ -193,15 +227,11 @@ export class CommandsHandler extends Handler {
 		void interaction.reply({ content: REPO_URL });
 	}
 
-	private async checkAdmin(
-		interaction: ChatInputCommandInteraction,
-		msg?: string
-	) {
+	private async checkAdmin(interaction: ChatInputCommandInteraction, msg?: string) {
 		if (env.OWNER_IDS.includes(interaction.user.id)) {
 			return true;
 		}
-		const perms = interaction.member
-			?.permissions as Readonly<PermissionsBitField>;
+		const perms = interaction.member?.permissions as Readonly<PermissionsBitField>;
 		if (perms.has('Administrator')) {
 			return true;
 		}
