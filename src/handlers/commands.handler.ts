@@ -1,15 +1,9 @@
 import {
 	ApplicationCommandOptionType,
+	ChannelType,
 	ChatInputCommandInteraction,
-	Collection,
-	Embed,
 	EmbedBuilder,
-	GuildTextBasedChannel,
-	Message,
-	MessageReaction,
 	PermissionsBitField,
-	TextChannel,
-	User,
 } from 'discord.js';
 
 import { ActionRow, Buttons, Command, Handler, HandlerType } from 'fonzi2';
@@ -18,9 +12,9 @@ import { ChainsService } from '../domain/services/chains.service';
 import { env } from '../env';
 import { ANALYTICS_DESCRIPTION, CHANNELS_DESCRIPTION, REPO_URL, TRAIN_REPLY } from '../static/text';
 import { md } from '../utils/formatting.utils';
-import { getRandom } from '../utils/random.utils';
-import { hasChannelAccess } from '../utils/permission.utils';
 import { chunkArray, paginateInteraction } from '../utils/pagination.utils';
+import { hasChannelAccess } from '../utils/permission.utils';
+import { getRandom } from '../utils/random.utils';
 
 export class CommandsHandler extends Handler {
 	public readonly type = HandlerType.commandInteraction;
@@ -128,13 +122,12 @@ export class CommandsHandler extends Handler {
 	public async channels(interaction: ChatInputCommandInteraction<'cached'>) {
 		const guild = interaction.guild;
 		const channels = guild.channels.cache.filter(
-			(ch) => ch['nsfw'] !== undefined && ch.isTextBased()
+			(ch) => ![ChannelType.GuildVoice, ChannelType.GuildCategory].includes(ch.type)
 		);
 		const accessEmote = (hasAccess: boolean) => (hasAccess ? ':green_circle:' : ':red_circle:');
 		const channelsPermissionMap = channels.map((ch) => ({
 			name: ch.name,
 			access: accessEmote(hasChannelAccess(this.client.user, ch)),
-			nsfw: (ch as TextChannel).nsfw,
 		}));
 		const channelFields = channelsPermissionMap.map((cp) => ({
 			name: ' ',
