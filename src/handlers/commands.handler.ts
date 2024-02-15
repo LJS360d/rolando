@@ -127,7 +127,9 @@ export class CommandsHandler extends Handler {
 	})
 	public async channels(interaction: ChatInputCommandInteraction<'cached'>) {
 		const guild = interaction.guild;
-		const channels = guild.channels.cache.filter((ch) => ch['nsfw'] !== undefined);
+		const channels = guild.channels.cache.filter(
+			(ch) => ch['nsfw'] !== undefined && ch.isTextBased()
+		);
 		const accessEmote = (hasAccess: boolean) => (hasAccess ? ':green_circle:' : ':red_circle:');
 		const channelsPermissionMap = channels.map((ch) => ({
 			name: ch.name,
