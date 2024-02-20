@@ -1,6 +1,6 @@
 {
   "name": "rolando2",
-  "version": "2.10.2",
+  "version": "2.10.3",
   "description": "Revamped rolando",
   "private": true,
   "type": "commonjs",
@@ -29,7 +29,7 @@
     "discord.js": "^14.14.1",
     "ejs": "^3.1.9",
     "express": "^4.18.2",
-    "fonzi2": "^1.2.0",
+    "fonzi2": "^1.3.0",
     "mongoose": "^8.0.4",
     "object-sizeof": "^2.6.4",
     "typedi": "^0.10.0"

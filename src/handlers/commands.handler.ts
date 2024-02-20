@@ -6,13 +6,13 @@ import {
 	PermissionsBitField,
 } from 'discord.js';
 
-import { ActionRow, Buttons, Command, Handler, HandlerType } from 'fonzi2';
+import { ActionRow, Buttons, Command, Handler, HandlerType, paginateInteraction } from 'fonzi2';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
 import { ChainsService } from '../domain/services/chains.service';
 import { env } from '../env';
 import { ANALYTICS_DESCRIPTION, CHANNELS_DESCRIPTION, REPO_URL, TRAIN_REPLY } from '../static/text';
 import { md } from '../utils/formatting.utils';
-import { chunkArray, paginateInteraction } from '../utils/pagination.utils';
+import { chunkArray } from '../utils/pagination.utils';
 import { hasChannelAccess } from '../utils/permission.utils';
 import { getRandom } from '../utils/random.utils';
 
