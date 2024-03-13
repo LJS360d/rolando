@@ -1,11 +1,11 @@
+import { Client } from 'discord.js';
 import { Logger } from 'fonzi2';
+import sizeof from 'object-sizeof';
+import { Container } from 'typedi';
+import { formatBytes } from '../../utils/formatting.utils';
 import { MarkovChain } from '../model/markov.chain';
 import { ChainsRepository } from '../repositories/chains/chains.repository';
-import { Client } from 'discord.js';
 import { ChainDocumentFields } from '../repositories/chains/models/chain.model';
-import { Container } from 'typedi';
-import sizeof from 'object-sizeof';
-import { formatBytes } from '../../utils/formatting.utils';
 
 export class ChainsService {
 	private readonly chainsMap: Map<string, MarkovChain>;

@@ -1,12 +1,24 @@
 version: '3'
 services:
   mongodb:
-    restart: always
-    image: mongo:latest
     container_name: $COMPOSE_PROJECT_NAME-mongo
+    image: mongo:latest
+    restart: always
     ports:
       - '127.0.0.1:$MONGO_EXTERNAL_PORT:$MONGO_INTERNAL_PORT'
     environment:
       MONGO_INITDB_ROOT_DATABASE: $MONGO_DATABASE
       MONGO_INITDB_ROOT_USERNAME: $MONGO_USERNAME
       MONGO_INITDB_ROOT_PASSWORD: $MONGO_PASSWORD
+  node:
+    container_name: $COMPOSE_PROJECT_NAME-node
+    image: node:${NODE_VERSION}-alpine
+    restart: always
+    ports:
+      - 127.0.0.1:$NODE_EXTERNAL_PORT:$NODE_INTERNAL_PORT
+    volumes:
+      - ../.env:/.env
+      - ../dist:/dist
+      - ../package.json:/package.json
+      - ../node_modules:/node_modules
+    command: npm run start
