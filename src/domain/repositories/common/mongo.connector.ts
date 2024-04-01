@@ -1,5 +1,5 @@
 import { Logger } from 'fonzi2';
-import mongoose, { Connection } from 'mongoose';
+import mongoose, { type Connection } from 'mongoose';
 
 export async function connectMongo(
 	uri: string,

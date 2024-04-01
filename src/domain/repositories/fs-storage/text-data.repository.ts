@@ -8,8 +8,8 @@ import {
 	readFileSync,
 	readdirSync,
 	writeFileSync,
-} from 'fs';
-import { join } from 'path';
+} from 'node:fs';
+import { join } from 'node:path';
 
 export class TextDataRepository {
 	protected readonly dataFolder = join(process.cwd(), '/data');
@@ -64,13 +64,18 @@ export class TextDataRepository {
 		if (!existsSync(messagesFilepath)) {
 			this.createTextStorage(filename);
 		}
-		const contentToAppend = typeof text === 'string' ? `${text}\n` : text.join('\n');
+		const contentToAppend =
+			typeof text === 'string' ? `${text}\n` : text.join('\n');
 		appendFileSync(messagesFilepath, contentToAppend, this.fileEncoding);
 	}
 
 	deleteTextData(filename: string, text: string) {
 		const textData = this.getTextData(filename).join('\n');
 		const cleanedTextData = textData.replace(new RegExp(text, 'g'), '');
-		writeFileSync(this.getFilePath(filename), cleanedTextData, this.fileEncoding);
+		writeFileSync(
+			this.getFilePath(filename),
+			cleanedTextData,
+			this.fileEncoding
+		);
 	}
 }

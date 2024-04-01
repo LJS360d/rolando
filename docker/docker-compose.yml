@@ -5,7 +5,7 @@ services:
     image: mongo:latest
     restart: always
     ports:
-      - '127.0.0.1:$MONGO_EXTERNAL_PORT:$MONGO_INTERNAL_PORT'
+      - '0.0.0.0:$MONGO_EXTERNAL_PORT:$MONGO_INTERNAL_PORT'
     environment:
       MONGO_INITDB_ROOT_DATABASE: $MONGO_DATABASE
       MONGO_INITDB_ROOT_USERNAME: $MONGO_USERNAME
@@ -15,10 +15,12 @@ services:
     image: node:${NODE_VERSION}-alpine
     restart: always
     ports:
-      - 127.0.0.1:$NODE_EXTERNAL_PORT:$NODE_INTERNAL_PORT
+      - 0.0.0.0:$NODE_EXTERNAL_PORT:$NODE_INTERNAL_PORT
     volumes:
       - ../.env:/.env
       - ../dist:/dist
+      - ../public:/public
       - ../package.json:/package.json
       - ../node_modules:/node_modules
+      - ../views:/views
     command: npm run start

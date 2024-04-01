@@ -1,4 +1,9 @@
-import { getValidUrl, isGifUrl, isImageUrl, isVideoUrl } from '../../utils/url.utils';
+import {
+	getValidUrl,
+	isGifUrl,
+	isImageUrl,
+	isVideoUrl,
+} from '../../utils/url.utils';
 
 export class MediaStorage {
 	gifs: Set<string>;

@@ -1,6 +1,6 @@
-import { DiscordUserInfo } from 'fonzi2';
+import type { DiscordUserInfo } from 'fonzi2';
 import { env } from '../env';
-import { Response } from 'express';
+import type { Response } from 'express';
 
 export type RenderOptions = Readonly<{
 	themes: string[];

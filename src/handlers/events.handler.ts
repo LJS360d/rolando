@@ -1,6 +1,6 @@
-import { ApplicationCommandData, Guild } from 'discord.js';
+import type { ApplicationCommandData, Guild } from 'discord.js';
 import { ClientEvent, Handler, HandlerType, Logger } from 'fonzi2';
-import { ChainsService } from '../domain/services/chains.service';
+import type { ChainsService } from '../domain/services/chains.service';
 import { RolandoServer } from '../server/rolando.server';
 import { GUILD_CREATE_MSG } from '../static/text';
 
@@ -33,7 +33,9 @@ export class EventsHandler extends Handler {
 	@ClientEvent('guildUpdate')
 	async onGuildUpdate(oldGuild: Guild, newGuild: Guild) {
 		Logger.info(`Guild ${oldGuild.name} updated`);
-		void this.chainsService.updateChainProps(oldGuild.id, { name: newGuild.name });
+		void this.chainsService.updateChainProps(oldGuild.id, {
+			name: newGuild.name,
+		});
 	}
 
 	@ClientEvent('guildCreate')

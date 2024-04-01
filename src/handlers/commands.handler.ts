@@ -1,16 +1,28 @@
 import {
 	ApplicationCommandOptionType,
 	ChannelType,
-	ChatInputCommandInteraction,
+	type ChatInputCommandInteraction,
 	EmbedBuilder,
-	PermissionsBitField,
+	type PermissionsBitField,
 } from 'discord.js';
 
-import { ActionRow, Buttons, Command, Handler, HandlerType, paginateInteraction } from 'fonzi2';
+import {
+	ActionRow,
+	Buttons,
+	Command,
+	Handler,
+	HandlerType,
+	paginateInteraction,
+} from 'fonzi2';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
-import { ChainsService } from '../domain/services/chains.service';
+import type { ChainsService } from '../domain/services/chains.service';
 import { env } from '../env';
-import { ANALYTICS_DESCRIPTION, CHANNELS_DESCRIPTION, REPO_URL, TRAIN_REPLY } from '../static/text';
+import {
+	ANALYTICS_DESCRIPTION,
+	CHANNELS_DESCRIPTION,
+	REPO_URL,
+	TRAIN_REPLY,
+} from '../static/text';
 import { md } from '../utils/formatting.utils';
 import { chunkArray } from '../utils/pagination.utils';
 import { hasChannelAccess } from '../utils/permission.utils';
@@ -24,7 +36,8 @@ export class CommandsHandler extends Handler {
 
 	@Command({
 		name: 'train',
-		description: 'Fetches all available messages in the server to be used as training data',
+		description:
+			'Fetches all available messages in the server to be used as training data',
 	})
 	public async train(interaction: ChatInputCommandInteraction) {
 		if (!(await this.checkAdmin(interaction))) return;
@@ -122,9 +135,11 @@ export class CommandsHandler extends Handler {
 	public async channels(interaction: ChatInputCommandInteraction<'cached'>) {
 		const guild = interaction.guild;
 		const channels = guild.channels.cache.filter(
-			(ch) => ![ChannelType.GuildVoice, ChannelType.GuildCategory].includes(ch.type)
+			(ch) =>
+				![ChannelType.GuildVoice, ChannelType.GuildCategory].includes(ch.type)
 		);
-		const accessEmote = (hasAccess: boolean) => (hasAccess ? ':green_circle:' : ':red_circle:');
+		const accessEmote = (hasAccess: boolean) =>
+			hasAccess ? ':green_circle:' : ':red_circle:';
 		const channelsPermissionMap = channels.map((ch) => ({
 			name: ch.name,
 			access: accessEmote(hasChannelAccess(this.client.user, ch)),
@@ -187,7 +202,10 @@ export class CommandsHandler extends Handler {
 		],
 	})
 	public async opinion(interaction: ChatInputCommandInteraction<'cached'>) {
-		const about = interaction.options.getString('about', true).split(' ').at(-1) as string;
+		const about = interaction.options
+			.getString('about', true)
+			.split(' ')
+			.at(-1) as string;
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const msg = chain.generateText(about, getRandom(8, 40));
 		void interaction.reply({ content: msg });
@@ -222,11 +240,15 @@ export class CommandsHandler extends Handler {
 		void interaction.reply({ content: REPO_URL });
 	}
 
-	private async checkAdmin(interaction: ChatInputCommandInteraction, msg?: string) {
+	private async checkAdmin(
+		interaction: ChatInputCommandInteraction,
+		msg?: string
+	) {
 		if (env.OWNER_IDS.includes(interaction.user.id)) {
 			return true;
 		}
-		const perms = interaction.member?.permissions as Readonly<PermissionsBitField>;
+		const perms = interaction.member
+			?.permissions as Readonly<PermissionsBitField>;
 		if (perms.has('Administrator')) {
 			return true;
 		}

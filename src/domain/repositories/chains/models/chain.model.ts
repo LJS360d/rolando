@@ -1,8 +1,8 @@
 import { Schema, model, now } from 'mongoose';
-import { BaseDocument } from '../../common/base.document.model';
+import type { BaseDocument } from '../../common/base.document.model';
 
 export interface ChainDocumentFields {
-  name: string;
+	name: string;
 	replyRate?: number;
 	trained?: boolean;
 }
@@ -14,10 +14,7 @@ const ChainSchema = new Schema<ChainDocument>({
 	name: { type: String, required: true },
 	replyRate: { type: Number, default: 10 },
 	trained: { type: Boolean, default: false },
-  updatedAt: { type: Date, default: now() },
+	updatedAt: { type: Date, default: now() },
 });
 
-export const ChainModel = model<ChainDocument>(
-	'chain',
-	ChainSchema
-);
+export const ChainModel = model<ChainDocument>('chain', ChainSchema);

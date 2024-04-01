@@ -1,6 +1,6 @@
 import { now } from 'mongoose';
-import { TextDataRepository } from '../fs-storage/text-data.repository';
-import { ChainDocumentFields, ChainModel } from './models/chain.model';
+import type { TextDataRepository } from '../fs-storage/text-data.repository';
+import { type ChainDocumentFields, ChainModel } from './models/chain.model';
 
 export class ChainsRepository {
 	private readonly entity = ChainModel;
@@ -24,10 +24,7 @@ export class ChainsRepository {
 	}
 
 	async update(id: string, fields: Partial<ChainDocumentFields>) {
-		return await this.entity.updateOne(
-			{ id },
-			{ ...fields, updatedAt: now() }
-		);
+		return await this.entity.updateOne({ id }, { ...fields, updatedAt: now() });
 	}
 
 	async delete(id: string) {

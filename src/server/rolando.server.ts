@@ -1,9 +1,9 @@
-import { ChannelType, Client, TextChannel } from 'discord.js';
-import express, { Request, Response } from 'express';
+import { ChannelType, type Client, type TextChannel } from 'discord.js';
+import express, { type Request, type Response } from 'express';
 import { Fonzi2Server, getRegisteredCommands } from 'fonzi2';
-import { resolve } from 'path';
+import { resolve } from 'node:path';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
-import { ChainsService } from '../domain/services/chains.service';
+import type { ChainsService } from '../domain/services/chains.service';
 import { env } from '../env';
 import { render } from './render';
 
@@ -71,27 +71,37 @@ export class RolandoServer extends Fonzi2Server {
 		return;
 	}
 
-	private async getGuildInvite(req: Request<any, any, any, { guildId: string }>, res: Response) {
+	private async getGuildInvite(
+		req: Request<any, any, any, { guildId: string }>,
+		res: Response
+	) {
 		const guild = this.client.guilds.cache.get(req.query.guildId)!;
 		const channel = guild.channels.cache.find(
 			(channel) => channel && channel.type === ChannelType.GuildText
 		) as TextChannel | undefined;
 		if (!channel) {
-			res.send('<a><i style="color: red;" class="fa-solid fa-door-closed"></i></a>');
+			res.send(
+				'<a><i style="color: red;" class="fa-solid fa-door-closed"></i></a>'
+			);
 			return;
 		}
 		try {
 			const invite = await channel.createInvite();
 			res.send(
-				`<a href="https://discord.gg/${invite.code}"><i class="fa-solid fa-door-open"></i></a>`
+				`<a href="https://discord.gg/${invite.code}"><i style="color: lime;" class="fa-solid fa-door-open"></i></a>`
 			);
 		} catch (error) {
-			res.send('<a><i style="color: red;" class="fa-solid fa-door-closed"></i></a>');
+			res.send(
+				'<a><i style="color: red;" class="fa-solid fa-door-closed"></i></a>'
+			);
 			return;
 		}
 	}
 
-	private async guildChain(req: Request<any, any, any, { guildId: string }>, res: Response) {
+	private async guildChain(
+		req: Request<any, any, any, { guildId: string }>,
+		res: Response
+	) {
 		if (!this.getSessionUserInfo(req)) {
 			res.sendStatus(401);
 			return;
@@ -101,10 +111,13 @@ export class RolandoServer extends Fonzi2Server {
 			code: 404,
 			message: `chain ${guildId} not found`,
 		};
-		res.status(!!chain ? 200 : 404).json(chain);
+		res.status(chain ? 200 : 404).json(chain);
 	}
 
-	private async guildMessages(req: Request<any, any, any, { guildId: string }>, res: Response) {
+	private async guildMessages(
+		req: Request<any, any, any, { guildId: string }>,
+		res: Response
+	) {
 		if (!this.getSessionUserInfo(req)) {
 			res.sendStatus(401);
 			return;
@@ -116,13 +129,15 @@ export class RolandoServer extends Fonzi2Server {
 			code: 404,
 			message: `chain ${guildId} not found`,
 		};
-		res.status(!!messages ? 200 : 404).json(messages);
+		res.status(messages ? 200 : 404).json(messages);
 	}
 
 	private async memUsage(req: Request, res: Response) {
 		const chainsMemUsage = this.chainsService.getChainsMemUsage();
 		res
 			.status(200)
-			.send(`<span class="text-sm">Chains memory usage:<b>${chainsMemUsage}</b></span>`);
+			.send(
+				`<span class="text-sm">Chains memory usage:<b>${chainsMemUsage}</b></span>`
+			);
 	}
 }

@@ -1,6 +1,6 @@
-import { Message } from 'discord.js';
-import { MarkovChain } from '../domain/model/markov.chain';
-import { ChainsService } from '../domain/services/chains.service';
+import type { Message } from 'discord.js';
+import type { MarkovChain } from '../domain/model/markov.chain';
+import type { ChainsService } from '../domain/services/chains.service';
 import { getRandom } from '../utils/random.utils';
 import { Handler, HandlerType, MessageEvent } from 'fonzi2';
 
@@ -27,7 +27,9 @@ export class MessageHandler extends Handler {
 			this.chainsService.updateChainState(guildId, content);
 		}
 
-		const mention = message.mentions.users.some((value) => value === this.client?.user);
+		const mention = message.mentions.users.some(
+			(value) => value === this.client?.user
+		);
 		if (mention) {
 			await message.channel.sendTyping();
 			void message.reply(await this.getMessage(chain));
@@ -49,15 +51,15 @@ export class MessageHandler extends Handler {
 		const reply =
 			random <= 21
 				? // ? 84% chance for text
-					chain.talk(random)
+				  chain.talk(random)
 				: random <= 23
-					? // ? 10% chance for gif
-						await chain.mediaStorage.getMedia('gif')
-					: random <= 24
-						? // ? 5% chance for image
-							await chain.mediaStorage.getMedia('image')
-						: // ? 1% chance for video
-							await chain.mediaStorage.getMedia('video');
+				  ? // ? 10% chance for gif
+					  await chain.mediaStorage.getMedia('gif')
+				  : random <= 24
+					  ? // ? 5% chance for image
+						  await chain.mediaStorage.getMedia('image')
+					  : // ? 1% chance for video
+						  await chain.mediaStorage.getMedia('video');
 		return reply;
 	}
 }

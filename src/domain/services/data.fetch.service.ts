@@ -1,8 +1,14 @@
-import { Client, Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
+import type {
+	Client,
+	Collection,
+	Guild,
+	GuildTextBasedChannel,
+	Message,
+} from 'discord.js';
 import { Logger } from 'fonzi2';
 import { hasChannelAccess } from '../../utils/permission.utils';
 import { containsURL } from '../../utils/url.utils';
-import { ChainsService } from './chains.service';
+import type { ChainsService } from './chains.service';
 
 export class DataFetchService {
 	private readonly MSG_LIMIT = 750000;
@@ -20,14 +26,20 @@ export class DataFetchService {
 				// ? Filter to only text channels with read/write access
 				.filter((channel) => hasChannelAccess(this.client.user, channel))
 				// ? Start fetching in each channel
-				.map((channel) => this.fetchChannelMessages(channel as GuildTextBasedChannel));
+				.map((channel) =>
+					this.fetchChannelMessages(channel as GuildTextBasedChannel)
+				);
 		const results = await Promise.all(fetchPromises);
 		const messages = results.flat();
-		Logger.info(`Fetched #green${messages.length}$ messages in guild: ${guild.name}`);
+		Logger.info(
+			`Fetched #green${messages.length}$ messages in guild: ${guild.name}`
+		);
 		return messages;
 	}
 
-	private async fetchChannelMessages(channel: GuildTextBasedChannel): Promise<string[]> {
+	private async fetchChannelMessages(
+		channel: GuildTextBasedChannel
+	): Promise<string[]> {
 		// biome-ignore lint/suspicious/noAsyncPromiseExecutor: Old code, works, but should be refactored
 		return new Promise(async (resolve) => {
 			const load = Logger.loading(`Fetching messages in #${channel.name}...`);
@@ -38,7 +50,10 @@ export class DataFetchService {
 			let errorCount = 0;
 			while (remaining && messages.length < this.MSG_LIMIT) {
 				try {
-					const messageBatch = await this.getMessageBatch(channel, lastMessageId);
+					const messageBatch = await this.getMessageBatch(
+						channel,
+						lastMessageId
+					);
 					if (lastMessageId === undefined && !firstFetch) {
 						remaining = false;
 						continue;
@@ -47,8 +62,13 @@ export class DataFetchService {
 					if (firstFetch) firstFetch = false;
 					const textMessages = messageBatch.map((msg) => msg.content);
 					messages.push.apply(messages, textMessages);
-					void this.chainService.updateChainState(channel.guildId, textMessages);
-					load.update(`Fetched #green${messages.length}$ messages in #${channel.name}`);
+					void this.chainService.updateChainState(
+						channel.guildId,
+						textMessages
+					);
+					load.update(
+						`Fetched #green${messages.length}$ messages in #${channel.name}`
+					);
 				} catch (error) {
 					errorCount++;
 					Logger.warn(
@@ -63,7 +83,9 @@ export class DataFetchService {
 					}
 				}
 			}
-			load.success(`Fetched #green${messages.length}$ messages in #${channel.name}`);
+			load.success(
+				`Fetched #green${messages.length}$ messages in #${channel.name}`
+			);
 			resolve(messages);
 		});
 	}

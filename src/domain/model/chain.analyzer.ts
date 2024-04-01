@@ -1,5 +1,5 @@
 import { formatBytes, formatNumber } from '../../utils/formatting.utils';
-import { MarkovChain } from './markov.chain';
+import type { MarkovChain } from './markov.chain';
 import sizeof from 'object-sizeof';
 
 type ChainAnalytics = {

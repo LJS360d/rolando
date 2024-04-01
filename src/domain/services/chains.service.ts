@@ -4,8 +4,8 @@ import sizeof from 'object-sizeof';
 import { Container } from 'typedi';
 import { formatBytes } from '../../utils/formatting.utils';
 import { MarkovChain } from '../model/markov.chain';
-import { ChainsRepository } from '../repositories/chains/chains.repository';
-import { ChainDocumentFields } from '../repositories/chains/models/chain.model';
+import type { ChainsRepository } from '../repositories/chains/chains.repository';
+import type { ChainDocumentFields } from '../repositories/chains/models/chain.model';
 
 export class ChainsService {
 	private readonly chainsMap: Map<string, MarkovChain>;
@@ -39,7 +39,10 @@ export class ChainsService {
 		return chain;
 	}
 
-	async updateChainState(id: string, text: string | string[]): Promise<MarkovChain> {
+	async updateChainState(
+		id: string,
+		text: string | string[]
+	): Promise<MarkovChain> {
 		const chain = await this.getChain(id);
 		if (typeof text === 'string') {
 			chain.updateState(text);
@@ -67,7 +70,10 @@ export class ChainsService {
 		for (const chain of chains) {
 			const messages = this.getChainMessages(chain.id);
 
-			this.chainsMap.set(chain.id, new MarkovChain(chain.id, chain.replyRate, messages));
+			this.chainsMap.set(
+				chain.id,
+				new MarkovChain(chain.id, chain.replyRate, messages)
+			);
 		}
 		load.success(`Loaded ${this.chainsMap.size} Chains`);
 		Logger.info(`Chains total size: #green${this.getChainsMemUsage()}$`);

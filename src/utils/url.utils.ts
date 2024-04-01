@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 function extractUrlInfo(url: string): { domain?: string; extension?: string } {
 	const extension = getUrlExtension(url);

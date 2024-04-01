@@ -1,7 +1,7 @@
 import {
-	ClientUser,
-	GuildBasedChannel,
-	GuildTextBasedChannel,
+	type ClientUser,
+	type GuildBasedChannel,
+	type GuildTextBasedChannel,
 	PermissionFlagsBits,
 } from 'discord.js';
 

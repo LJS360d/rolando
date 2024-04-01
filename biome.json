@@ -18,17 +18,12 @@
   },
   "json": {
     "parser": {
-      "allowComments": false,
-      "allowTrailingCommas": false
+      "allowComments": true,
+      "allowTrailingCommas": true
     },
     "formatter": {
       "enabled": true,
       "indentWidth": 1
-    }
-  },
-  "css": {
-    "formatter": {
-      "enabled": false
     }
   },
   "formatter": {
@@ -36,7 +31,7 @@
     "formatWithErrors": true,
     "indentStyle": "tab",
     "indentWidth": 2,
-    "lineWidth": 100,
+    "lineWidth": 80,
     "lineEnding": "lf"
   },
   "linter": {
@@ -44,8 +39,9 @@
     "rules": {
       "recommended": true,
       "style": {
-        "noParameterAssign": "off",
-        "noNonNullAssertion": "off"
+        "recommended": true,
+        "noNonNullAssertion": "off",
+        "noParameterAssign": "off"
       },
       "suspicious": {
         "noArrayIndexKey": "off",
@@ -54,7 +50,10 @@
       "complexity": {
         "useLiteralKeys": "off",
         "noForEach": "off",
-        "noExtraBooleanCast": "off"
+        "noStaticOnlyClass": "off"
+      },
+      "security": {
+        "recommended": true
       }
     }
   }
