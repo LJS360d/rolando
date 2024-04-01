@@ -1,0 +1,24 @@
+<form hx-post="/broadcast" hx-trigger="submit" hx-swap="none" class="w-full">
+  <div class="grid grid-flow-col">
+    <ol class="grid grid-flow-row grid-cols-5 p-2 gap-2">
+      <% guilds.forEach((guild) => { %>
+      <li title="<%= guild.name %>"
+        class="bg-base-300 w-full rounded-lg p-4 flex justify-start h-min items-center form-control">
+        <span class="whitespace-nowrap overflow-hidden w-28 overflow-ellipsis"><%= guild.name %></span>
+        <div class="flex items-center h-min justify-start gap-2">
+          <input name="<%=guild.id%>" type="checkbox" class="toggle toggle-primary" checked />
+          <img class="rounded-full w-12 shadow-around" src="<%=guild.iconURL() ?? 'assets/noimage.svg'%>"
+            alt="Guild Icon">
+        </div>
+      </li>
+      <% }); %>
+    </ol>
+    <div class="w-full max-w-sm form-control gap-4 p-2">
+      <div class="form-control gap-2">
+        <span class="label-text">Message</span>
+        <textarea type="text" placeholder="Message" class="textarea textarea-primary" name="msg"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Sumbit</button>
+    </div>
+  </div>
+</form>

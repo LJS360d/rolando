@@ -13,6 +13,7 @@ export class RolandoServer extends Fonzi2Server {
 		private chainsService: ChainsService
 	) {
 		super(client);
+		this.app.use(express.urlencoded({ extended: true }));
 		this.app.use(express.static(resolve('public')));
 		this.app.set('views', [this.app.get('views'), resolve('views')]);
 	}
@@ -22,6 +23,8 @@ export class RolandoServer extends Fonzi2Server {
 		this.app.get('/data', this.guildMessages.bind(this));
 		this.app.get('/invite', this.getGuildInvite.bind(this));
 		this.app.get('/home', this.home.bind(this));
+		this.app.get('/broadcast', this.broadcast.bind(this));
+		this.app.post('/broadcast', this.sendBroadcast.bind(this));
 		this.app.get('/chains/memUsage', this.memUsage.bind(this));
 		super.start();
 	}
@@ -52,6 +55,30 @@ export class RolandoServer extends Fonzi2Server {
 			userInfo,
 		};
 		render(res, 'pages/backoffice/dashboard', props, options);
+		return;
+	}
+
+	async broadcast(req: Request, res: Response) {
+		const userInfo = this.getSessionUserInfo(req);
+		if (!userInfo) {
+			res.redirect('/');
+			return;
+		}
+		if (userInfo.role !== 'owner') {
+			res.redirect('/home');
+			return;
+		}
+
+		const props = {
+			client: this.client,
+			guilds: this.client.guilds.cache,
+		};
+
+		const options = {
+			version: env.VERSION,
+			userInfo,
+		};
+		render(res, 'pages/backoffice/broadcast', props, options);
 		return;
 	}
 
@@ -139,5 +166,27 @@ export class RolandoServer extends Fonzi2Server {
 			.send(
 				`<span class="text-sm">Chains memory usage:<b>${chainsMemUsage}</b></span>`
 			);
+	}
+
+	private async sendBroadcast(req: Request, res: Response) {
+		const userInfo = this.getSessionUserInfo(req);
+		if (!userInfo || userInfo.role !== 'owner') {
+			res.sendStatus(403);
+			return;
+		}
+		const msg = req.body.msg as string;
+		if (!msg) {
+			res.sendStatus(400);
+			return;
+		}
+		const guildIds = Object.entries(req.body)
+			.filter(([key, value]) => value === 'on' && key !== 'msg')
+			.map(([key, _]) => key);
+		this.client.guilds.cache.forEach((guild) => {
+			if (guildIds.includes(guild.id)) {
+				guild.systemChannel?.send(msg);
+			}
+		});
+		res.sendStatus(200);
 	}
 }
