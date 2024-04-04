@@ -13,7 +13,21 @@
             class="justify-start w-full btn btn-ghost"><i
               class="fa-solid fa-xmark text-xl"></i></label>
       </header>
-      <!-- TODO reroutes -->
+      <ul class="menu h-full text-base-content">
+        <% for(const route of routes) {%>
+        <li>
+          <a href="<%= route.path %>" class="capitalize">
+            <i class="<%= route.iconClass %>"></i>
+            <span>
+              <%= route.label %>
+            </span>
+            <% if (route.admin) { %>
+            <i class="fa-solid fa-lock"></i>
+            <% } %>
+          </a>
+        </li>
+        <% };%>
+      </ul>
       <footer class="flex flex-col items-center justify-center pb-2">
         <div class="w-1/2">
           <div class="label">

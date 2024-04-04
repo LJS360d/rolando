@@ -1,14 +1,17 @@
 import type { DiscordUserInfo } from 'fonzi2';
 import { env } from '../env';
 import type { Response } from 'express';
+import type { OfficeRoute } from './routes/route.type';
+import { adminRoutes, guestUserRoutes } from './routes/route.definitions';
 
-export type RenderOptions = Readonly<{
+export type RenderOptions = {
 	themes: string[];
 	theme: string;
 	title: string;
 	version: string;
 	userInfo?: DiscordUserInfo;
-}>;
+	routes: OfficeRoute[];
+};
 
 export interface Props {
 	[x: string]: any;
@@ -21,6 +24,7 @@ export const baseRenderOptions: RenderOptions = {
 	theme: ThemesIterator[0],
 	title: 'Rolando',
 	version: env.VERSION,
+	routes: guestUserRoutes,
 };
 
 export function render(
@@ -30,6 +34,9 @@ export function render(
 	options?: Partial<RenderOptions>
 ) {
 	options = { ...baseRenderOptions, ...options };
+	if (options?.userInfo?.role === 'owner') {
+		options.routes = adminRoutes;
+	}
 	res.render('index', {
 		component,
 		props,

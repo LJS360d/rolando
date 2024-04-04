@@ -134,3 +134,4 @@ dist
 .pnp.*
 messages/
 data/
+public/css/styles.css

@@ -1,6 +1,6 @@
 import { ChannelType, type Client, type TextChannel } from 'discord.js';
 import express, { type Request, type Response } from 'express';
-import { Fonzi2Server, getRegisteredCommands } from 'fonzi2';
+import { Fonzi2Server, Logger, getRegisteredCommands } from 'fonzi2';
 import { resolve } from 'node:path';
 import { MarkovChainAnalyzer } from '../domain/model/chain.analyzer';
 import type { ChainsService } from '../domain/services/chains.service';
@@ -182,6 +182,7 @@ export class RolandoServer extends Fonzi2Server {
 		const guildIds = Object.entries(req.body)
 			.filter(([key, value]) => value === 'on' && key !== 'msg')
 			.map(([key, _]) => key);
+		Logger.info(`Sending Broadcast message: ${msg}`);
 		this.client.guilds.cache.forEach((guild) => {
 			if (guildIds.includes(guild.id)) {
 				guild.systemChannel?.send(msg);
