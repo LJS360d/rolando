@@ -1,17 +1,20 @@
 <form hx-post="/broadcast" hx-trigger="submit" hx-swap="none" class="w-full">
   <div class="grid grid-flow-col">
+    <button click="deselectAll()" class="btn btn-primary w-min">Deselect all</button>
     <ol class="grid grid-flow-row grid-cols-5 p-2 gap-2">
-      <% guilds.forEach((guild) => { %>
-      <li title="<%= guild.name %>"
-        class="bg-base-300 w-full rounded-lg p-4 flex justify-start h-min items-center form-control">
-        <span class="whitespace-nowrap overflow-hidden w-28 overflow-ellipsis"><%= guild.name %></span>
-        <div class="flex items-center h-min justify-start gap-2">
-          <input name="<%=guild.id%>" type="checkbox" class="toggle toggle-primary" checked />
-          <img class="rounded-full w-12 shadow-around" src="<%=guild.iconURL() ?? 'assets/noimage.svg'%>"
-            alt="Guild Icon">
-        </div>
-      </li>
-      <% }); %>
+      <% guilds.forEach((guild)=> { %>
+        <li title="<%= guild.name %>"
+          class="bg-base-300 w-full rounded-lg p-4 flex justify-start h-min items-center form-control">
+          <span class="whitespace-nowrap overflow-hidden w-28 overflow-ellipsis">
+            <%= guild.name %>
+          </span>
+          <div class="flex items-center h-min justify-start gap-2">
+            <input name="<%=guild.id%>" type="checkbox" class="toggle toggle-primary" checked />
+            <img class="rounded-full w-12 shadow-around" src="<%=guild.iconURL() ?? 'assets/noimage.svg'%>"
+              alt="Guild Icon">
+          </div>
+        </li>
+        <% }); %>
     </ol>
     <div class="w-full max-w-sm form-control gap-4 p-2">
       <div class="form-control gap-2">
@@ -22,3 +25,11 @@
     </div>
   </div>
 </form>
+
+<script>
+  function deselectAll() {
+    document.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.checked = false;
+    });
+  }
+</script>
