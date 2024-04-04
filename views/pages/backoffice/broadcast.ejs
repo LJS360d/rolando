@@ -1,6 +1,6 @@
+<button onclick="deselectAll()" class="btn btn-primary w-min">Deselect all</button>
 <form hx-post="/broadcast" hx-trigger="submit" hx-swap="none" class="w-full">
   <div class="grid grid-flow-col">
-    <button click="deselectAll()" class="btn btn-primary w-min">Deselect all</button>
     <ol class="grid grid-flow-row grid-cols-5 p-2 gap-2">
       <% guilds.forEach((guild)=> { %>
         <li title="<%= guild.name %>"
