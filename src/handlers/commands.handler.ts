@@ -55,7 +55,8 @@ export class CommandsHandler extends Handler {
 	public async gif(interaction: ChatInputCommandInteraction<'cached'>) {
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		void interaction.reply({
-			content: await chain.mediaStorage.getMedia('gif'),
+			content:
+				(await chain.mediaStorage.getMedia('gif')) ?? 'no valid gif found',
 		});
 	}
 
@@ -66,7 +67,8 @@ export class CommandsHandler extends Handler {
 	public async image(interaction: ChatInputCommandInteraction<'cached'>) {
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		void interaction.reply({
-			content: await chain.mediaStorage.getMedia('image'),
+			content:
+				(await chain.mediaStorage.getMedia('image')) ?? 'no valid image found',
 		});
 	}
 
@@ -77,7 +79,8 @@ export class CommandsHandler extends Handler {
 	public async video(interaction: ChatInputCommandInteraction<'cached'>) {
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		void interaction.reply({
-			content: await chain.mediaStorage.getMedia('video'),
+			content:
+				(await chain.mediaStorage.getMedia('video')) ?? 'no valid video found',
 		});
 	}
 

@@ -3,6 +3,10 @@ import {
 	type GuildBasedChannel,
 	type GuildTextBasedChannel,
 	PermissionFlagsBits,
+	type Message,
+	type User,
+	Collection,
+	type Role,
 } from 'discord.js';
 
 export function hasChannelAccess(
@@ -20,5 +24,16 @@ export function hasChannelAccess(
 		canReadChannel &&
 		canAccessChannel &&
 		canViewChannel
+	);
+}
+
+export function mentionsUser(message: Message, user: User) {
+	const { guild, mentions } = message;
+	const botRoles =
+		guild?.members.cache.find((m) => m.id === user.id)?.roles.cache ??
+		new Collection<string, Role>();
+	return (
+		message.mentions.users.has(user.id) ||
+		mentions.roles.some((role) => botRoles.hasAny(role.id))
 	);
 }

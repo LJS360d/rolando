@@ -1,5 +1,5 @@
 import {
-	getValidUrl,
+	getValidUrlFromSet,
 	isGifUrl,
 	isImageUrl,
 	isVideoUrl,
@@ -27,14 +27,14 @@ export class MediaStorage {
 		return;
 	}
 
-	async getMedia(type: 'gif' | 'video' | 'image'): Promise<string> {
+	async getMedia(type: 'gif' | 'video' | 'image'): Promise<string | null> {
 		switch (type) {
 			case 'gif':
-				return getValidUrl(this.gifs, this.chainId, type);
+				return getValidUrlFromSet(this.gifs, this.chainId);
 			case 'video':
-				return getValidUrl(this.videos, this.chainId, type);
+				return getValidUrlFromSet(this.videos, this.chainId);
 			case 'image':
-				return getValidUrl(this.images, this.chainId, type);
+				return getValidUrlFromSet(this.images, this.chainId);
 		}
 	}
 

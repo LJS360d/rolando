@@ -97,11 +97,10 @@ export function isVideoUrl(url: string) {
 	return false;
 }
 
-export async function getValidUrl(
+export async function getValidUrlFromSet(
 	urlsSet: Set<string>,
-	id: string,
-	type?: string
-): Promise<string> {
+	id: string
+): Promise<string | null> {
 	const urls = Array.from(urlsSet);
 	while (urls.length > 0) {
 		const randomIndex = Math.floor(Math.random() * urls.length);
@@ -116,5 +115,5 @@ export async function getValidUrl(
 		urlsSet.delete(media);
 	}
 
-	return `No valid ${type ?? 'URL'} found`;
+	return null;
 }
