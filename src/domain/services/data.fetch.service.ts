@@ -40,54 +40,44 @@ export class DataFetchService {
 	private async fetchChannelMessages(
 		channel: GuildTextBasedChannel
 	): Promise<string[]> {
-		// biome-ignore lint/suspicious/noAsyncPromiseExecutor: Old code, works, but should be refactored
-		return new Promise(async (resolve) => {
-			const load = Logger.loading(`Fetching messages in #${channel.name}...`);
-			const messages: string[] = [];
-			let lastMessageId: string | undefined = undefined;
-			let remaining = true;
-			let firstFetch = true;
-			let errorCount = 0;
-			while (remaining && messages.length < this.MSG_LIMIT) {
-				try {
-					const messageBatch = await this.getMessageBatch(
-						channel,
-						lastMessageId
-					);
-					if (lastMessageId === undefined && !firstFetch) {
-						remaining = false;
-						continue;
-					}
-					lastMessageId = messageBatch.at(-1)?.id;
-					if (firstFetch) firstFetch = false;
-					const textMessages = messageBatch.map((msg) => msg.content);
-					messages.push.apply(messages, textMessages);
-					void this.chainService.updateChainState(
-						channel.guildId,
-						textMessages
-					);
-					load.update(
-						`Fetched #green${messages.length}$ messages in #${channel.name}`
-					);
-				} catch (error) {
-					errorCount++;
+		const load = Logger.loading(`Fetching messages in #${channel.name}...`);
+		const messages: string[] = [];
+		let lastMessageId: string | undefined;
+		let errorCount = 0;
+
+		while (messages.length < this.MSG_LIMIT) {
+			try {
+				const messageBatch = await this.getMessageBatch(channel, lastMessageId);
+				if (messageBatch.length === 0) break;
+
+				const messagesContent = messageBatch.map((msg) => msg.content);
+				messages.push(...messagesContent);
+
+				void this.chainService.updateChainState(
+					channel.guildId,
+					messagesContent
+				);
+				lastMessageId = messageBatch.at(-1)?.id;
+
+				load.update(
+					`Fetched #green${messages.length}$ messages in #${channel.name}`
+				);
+			} catch (error) {
+				Logger.warn(
+					`Message fetching error in ${channel.name} at #green${messages.length}$ messages, current error count: ${errorCount}`
+				);
+				if (++errorCount > this.MSG_FETCH_MAXERRORS) {
 					Logger.warn(
-						`Message fetching error in ${channel.name} at #green${messages.length}$ messages, current error count: ${errorCount}`
+						`Fetching error limit reached in ${channel.name} at #green${messages.length}$ messages, Error ${error}`
 					);
-					if (errorCount > this.MSG_FETCH_MAXERRORS) {
-						load.fail(
-							`Fetching error limit reached in ${channel.name} at #green${messages.length}$ messages, Error ${error}`
-						);
-						resolve(messages);
-						return;
-					}
+					break;
 				}
 			}
-			load.success(
-				`Fetched #green${messages.length}$ messages in #${channel.name}`
-			);
-			resolve(messages);
-		});
+		}
+		load.success(
+			`Fetched #green${messages.length}$ messages in #${channel.name}`
+		);
+		return messages;
 	}
 
 	private async getMessageBatch(

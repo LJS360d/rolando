@@ -26,7 +26,7 @@ import {
 import { md } from '../utils/formatting.utils';
 import { chunkArray } from '../utils/pagination.utils';
 import { hasChannelAccess } from '../utils/permission.utils';
-import { getRandom } from '../utils/random.utils';
+import { getRandom } from '../utils/math.utils';
 
 export class CommandsHandler extends DiscordHandler {
 	public readonly type = HandlerType.commandInteraction;

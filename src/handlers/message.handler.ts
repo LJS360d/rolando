@@ -1,7 +1,7 @@
 import type { Message } from 'discord.js';
 import type { MarkovChain } from '../domain/model/markov.chain';
 import type { ChainsService } from '../domain/services/chains.service';
-import { getRandom } from '../utils/random.utils';
+import { getRandom } from '../utils/math.utils';
 import { DiscordHandler, HandlerType, MessageEvent } from 'fonzi2';
 import { mentionsUser } from '../utils/permission.utils';
 

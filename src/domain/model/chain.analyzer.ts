@@ -2,7 +2,7 @@ import { formatBytes, formatNumber } from '../../utils/formatting.utils';
 import type { MarkovChain } from './markov.chain';
 import sizeof from 'object-sizeof';
 
-type ChainAnalytics = {
+export type ChainAnalytics = {
 	complexityScore: string;
 	gifs: string;
 	images: string;
@@ -11,6 +11,17 @@ type ChainAnalytics = {
 	words: string;
 	messages: string;
 	size: string;
+};
+
+export type NumericChainAnalytics = {
+	complexityScore: number;
+	gifs: number;
+	images: number;
+	videos: number;
+	replyRate: number;
+	words: number;
+	messages: number;
+	size: number;
 };
 
 export class MarkovChainAnalyzer {
@@ -45,6 +56,19 @@ export class MarkovChainAnalyzer {
 			words: formatNumber(Object.keys(this.chain.state).length),
 			messages: formatNumber(this.chain.messageCounter),
 			size: formatBytes(sizeof(this.chain)),
+		};
+	}
+
+	getRawAnalytics(): NumericChainAnalytics {
+		return {
+			complexityScore: this.getComplexity(),
+			gifs: this.chain.mediaStorage.gifs.size,
+			images: this.chain.mediaStorage.images.size,
+			videos: this.chain.mediaStorage.videos.size,
+			replyRate: this.chain.replyRate,
+			words: Object.keys(this.chain.state).length,
+			messages: this.chain.messageCounter,
+			size: sizeof(this.chain),
 		};
 	}
 }

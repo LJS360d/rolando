@@ -1,4 +1,5 @@
 import type { ButtonInteraction } from 'discord.js';
+import { Button, DiscordHandler, HandlerType } from 'fonzi2';
 import type { ChainsService } from '../domain/services/chains.service';
 import { DataFetchService } from '../domain/services/data.fetch.service';
 import {
@@ -6,7 +7,6 @@ import {
 	FETCH_CONFIRM_MSG,
 	FETCH_DENY_MSG,
 } from '../static/text';
-import { Button, DiscordHandler, HandlerType } from 'fonzi2';
 
 export class ButtonsHandler extends DiscordHandler {
 	public readonly type = HandlerType.buttonInteraction;
