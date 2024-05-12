@@ -2,10 +2,10 @@ import type { Message } from 'discord.js';
 import type { MarkovChain } from '../domain/model/markov.chain';
 import type { ChainsService } from '../domain/services/chains.service';
 import { getRandom } from '../utils/random.utils';
-import { Handler, HandlerType, MessageEvent } from 'fonzi2';
+import { DiscordHandler, HandlerType, MessageEvent } from 'fonzi2';
 import { mentionsUser } from '../utils/permission.utils';
 
-export class MessageHandler extends Handler {
+export class MessageHandler extends DiscordHandler {
 	public readonly type = HandlerType.messageEvent;
 	constructor(private chainsService: ChainsService) {
 		super();

@@ -6,9 +6,9 @@ import {
 	FETCH_CONFIRM_MSG,
 	FETCH_DENY_MSG,
 } from '../static/text';
-import { Button, Handler, HandlerType } from 'fonzi2';
+import { Button, DiscordHandler, HandlerType } from 'fonzi2';
 
-export class ButtonsHandler extends Handler {
+export class ButtonsHandler extends DiscordHandler {
 	public readonly type = HandlerType.buttonInteraction;
 
 	constructor(private chainsService: ChainsService) {

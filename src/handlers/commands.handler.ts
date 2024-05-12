@@ -10,7 +10,7 @@ import {
 	ActionRow,
 	Buttons,
 	Command,
-	Handler,
+	DiscordHandler,
 	HandlerType,
 	paginateInteraction,
 } from 'fonzi2';
@@ -28,7 +28,7 @@ import { chunkArray } from '../utils/pagination.utils';
 import { hasChannelAccess } from '../utils/permission.utils';
 import { getRandom } from '../utils/random.utils';
 
-export class CommandsHandler extends Handler {
+export class CommandsHandler extends DiscordHandler {
 	public readonly type = HandlerType.commandInteraction;
 	constructor(private chainsService: ChainsService) {
 		super();

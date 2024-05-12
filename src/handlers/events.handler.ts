@@ -1,10 +1,10 @@
 import type { ApplicationCommandData, Guild } from 'discord.js';
-import { ClientEvent, Handler, HandlerType, Logger } from 'fonzi2';
+import { ClientEvent, DiscordHandler, HandlerType, Logger } from 'fonzi2';
 import type { ChainsService } from '../domain/services/chains.service';
 import { RolandoServer } from '../server/rolando.server';
 import { GUILD_CREATE_MSG } from '../static/text';
 
-export class EventsHandler extends Handler {
+export class EventsHandler extends DiscordHandler {
 	public readonly type = HandlerType.clientEvent;
 
 	constructor(
@@ -23,7 +23,7 @@ export class EventsHandler extends Handler {
 			await this.client?.application?.commands.set(this.commands);
 			load.success('Reloaded application (/) commands.');
 			await this.chainsService.loadChains();
-			new RolandoServer(this.client, this.chainsService).start();
+			new RolandoServer(this.client, this.chainsService, []).start();
 		} catch (err: any) {
 			load.fail('Failed to refresh application (/) commands.');
 			Logger.error(err);
