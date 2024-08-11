@@ -29,6 +29,8 @@ export class RolandoServer extends Fonzi2Server {
 		this.app.get('/data', this.guildMessages.bind(this));
 		this.app.get('/invite', this.getGuildInvite.bind(this));
 		this.app.get('/home', this.home.bind(this));
+		this.app.get('/tos', this.tos.bind(this));
+		this.app.get('/privacy', this.privacy.bind(this));
 		this.app.get('/broadcast', this.broadcast.bind(this));
 		this.app.post('/broadcast', this.sendBroadcast.bind(this));
 		this.app.get('/chains/memUsage', this.memUsage.bind(this));
@@ -101,6 +103,32 @@ export class RolandoServer extends Fonzi2Server {
 			userInfo: this.getSessionUserInfo(req),
 		};
 		render(res, 'pages/frontoffice/home', props, options);
+		return;
+	}
+
+	async tos(req: Request, res: Response) {
+		const props = {
+			client: this.client,
+		};
+
+		const options = {
+			version: env.VERSION,
+			userInfo: this.getSessionUserInfo(req),
+		};
+		render(res, 'pages/frontoffice/tos', props, options);
+		return;
+	}
+
+	async privacy(req: Request, res: Response) {
+		const props = {
+			client: this.client,
+		};
+
+		const options = {
+			version: env.VERSION,
+			userInfo: this.getSessionUserInfo(req),
+		};
+		render(res, 'pages/frontoffice/privacy', props, options);
 		return;
 	}
 

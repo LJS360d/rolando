@@ -1,0 +1,101 @@
+<style>
+  .container {
+    max-width: 800px;
+    margin: 20px auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  ol {
+    counter-reset: item;
+    padding-left: 0;
+  }
+
+  ol>li {
+    list-style: none;
+    margin: 20px 0;
+  }
+
+  ol>li::before {
+    content: counters(item, ".") " ";
+    counter-increment: item;
+    font-weight: bold;
+    color: #333;
+    display: block;
+    font-size: 1.2em;
+  }
+
+  h2 {
+    margin: 0 0 10px;
+    color: #333;
+  }
+</style>
+<div class="container">
+  <h1 class="text-xl font-bold text-center text-gray-500">Terms of Service</h1>
+  <ol>
+    <li>
+      <h2>Acceptance of Terms</h2>
+      <p>By using <%= client.user.displayName %>, you agree to comply with and be bound by these Terms of Service. If
+        you do
+        not agree, do not use the application.</p>
+    </li>
+    <li>
+      <h2>Description of Service</h2>
+      <p><%= client.user.displayName %> is a Discord bot that learns from messages sent by users in the Discord
+        server. It
+        collects message content data from channels it has access to and uses that data to train a lightweight Markov
+        chain for text generation. Users have commands to manage the data <%= client.user.displayName %> learns and
+        must
+        use the /train command to let <%= client.user.displayName %> fetch all messages in the server. By default,
+        <%= client.user.displayName %> only saves messages from channels it has access and permissions to.</p>
+    </li>
+    <li>
+      <h2>Data Collection</h2>
+      <p><%= client.user.displayName %> collects message content data but does not collect user data or timestamps.
+        <%= client.user.displayName %> saves media URLs, including images, GIFs, and videos, even NSFW ones.</p>
+    </li>
+    <li>
+      <h2>User Responsibilities</h2>
+      <p>You are responsible for ensuring <%= client.user.displayName %> has the correct permissions to access
+        channels. You
+        agree not to misuse <%= client.user.displayName %> or use it for any illegal activities.</p>
+    </li>
+    <li>
+      <h2>Prohibited Conduct</h2>
+      <p>No spamming, phishing, or other malicious activities. No harassment, hate speech, or any other behavior that
+        is
+        harmful or offensive. Do not use bots or automated scripts to interact with <%= client.user.displayName %>
+        inappropriately.</p>
+    </li>
+    <li>
+      <h2>Open Source and Usage</h2>
+      <p><%= client.user.displayName %>'s code is open source, and there are no restrictions on how people use it. We
+        encourage free and open use.</p>
+    </li>
+    <li>
+      <h2>Termination</h2>
+      <p>We reserve the right to terminate or suspend your access to the application at any time, without notice, for
+        conduct that we believe violates these Terms of Service or is otherwise harmful to others.</p>
+    </li>
+    <li>
+      <h2>Limitation of Liability</h2>
+      <p><%= client.user.displayName %> is provided "as is" without warranties of any kind. We are not liable for any
+        direct,
+        indirect, incidental, special, consequential, or exemplary damages, including but not limited to damages for
+        loss of profits, goodwill, use, data, or other intangible losses.</p>
+    </li>
+    <li>
+      <h2>Amendments</h2>
+      <p>We reserve the right to modify these Terms of Service at any time. Any changes will be effective immediately
+        upon
+        posting. Your continued use of the application constitutes your acceptance of the modified terms.</p>
+    </li>
+    <li>
+      <h2>Contact Information</h2>
+      <p>For any questions about these Terms of Service, please contact the owner <b>zlejon</b> on discord
+        through the <a class="text-blue-500" href="https://discord.gg/tyrj7wte5b">official Discord server</a>.</p>
+    </li>
+  </ol>
+</div>

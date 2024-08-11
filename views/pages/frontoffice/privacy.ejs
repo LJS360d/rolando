@@ -1,0 +1,95 @@
+<style>
+  .container {
+    max-width: 800px;
+    margin: 20px auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  ol {
+    counter-reset: item;
+    padding-left: 0;
+  }
+
+  ol>li {
+    list-style: none;
+    margin: 20px 0;
+  }
+
+  ol>li::before {
+    content: counters(item, ".") " ";
+    counter-increment: item;
+    font-weight: bold;
+    color: #333;
+    display: block;
+    font-size: 1.2em;
+  }
+
+  h2 {
+    margin: 0 0 10px;
+    color: #333;
+  }
+
+  p {
+    margin: 10px 0;
+  }
+</style>
+<div class="container">
+  <h1 class="text-xl font-bold text-center text-gray-500">Privacy Policy</h1>
+  <ol>
+    <li>
+      <h2>Introduction</h2>
+      <p>Welcome to the <%= client.user.displayName %> Privacy Policy. Your privacy is important to us. This policy
+        explains what
+        information we collect, how we use it, and your rights regarding that information.</p>
+    </li>
+    <li>
+      <h2>Information We Collect</h2>
+      <p><%= client.user.displayName %> collects message content data from the Discord channels it has access to.
+        We do not collect any personal user data, such as usernames or timestamps. We also save media URLs, including
+        images, GIFs, and videos, even NSFW ones.</p>
+    </li>
+    <li>
+      <h2>How We Use Collected Information</h2>
+      <p>The collected message content data is used to train a lightweight Markov chain for text generation tied to the
+        server.
+        The media URLs are stored for the bot's operational purposes. We do not share this data with third
+        parties.</p>
+    </li>
+    <li>
+      <h2>Data Storage and Security</h2>
+      <p>We implement reasonable security measures to protect the data collected by <%= client.user.displayName %>.
+        However, no
+        method of transmission over the Internet or electronic storage is 100% secure, so we cannot guarantee
+        its absolute security.</p>
+    </li>
+    <li>
+      <h2>User Controls and Data Deletion</h2>
+      <p>Users can manage what data <%= client.user.displayName %> learns via commands. By using the /train command,
+        users
+        allow <%= client.user.displayName %> to fetch messages. Users can also request the deletion of collected data
+        by
+        contacting the owner <b>zlejon</b> on discord through the <a class="text-blue-500"
+          href="https://discord.gg/tyrj7wte5b">official Discord server</a>.</p>
+    </li>
+    <li>
+      <h2>Children's Privacy</h2>
+      <p><%= client.user.displayName %> is not intended for use by individuals under the age of 13. We do not
+        knowingly collect
+        personal data from children under 13. If we become aware that we have collected such data, we will
+        delete it.</p>
+    </li>
+    <li>
+      <h2>Changes to This Privacy Policy</h2>
+      <p>We may update this Privacy Policy from time to time. We will notify users of any changes by posting
+        the new Privacy Policy on this page. Your continued use of <%= client.user.displayName %> after any changes
+        constitutes your acceptance of the new terms.</p>
+    </li>
+    <li>
+      <h2>Contact Us</h2>
+      <p>If you have any questions about this Privacy Policy, please contact the owner <b>zlejon</b> on discord</p>
+    </li>
+  </ol>
+</div>

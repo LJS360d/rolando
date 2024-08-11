@@ -6,6 +6,16 @@ export const guestUserRoutes: OfficeRoute[] = [
 		iconClass: 'fa-solid fa-house',
 		label: 'Landing page',
 	},
+	{
+		path: '/tos',
+		iconClass: 'fa-solid fa-file-contract',
+		label: 'Terms of Service',
+	},
+	{
+		path: '/privacy',
+		iconClass: 'fa-solid fa-shield',
+		label: 'Privacy Policy',
+	},
 ];
 
 export const loggedUserRoutes: OfficeRoute[] = [...guestUserRoutes, ...[]];
