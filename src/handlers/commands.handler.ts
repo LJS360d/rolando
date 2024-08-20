@@ -44,7 +44,7 @@ export class CommandsHandler extends DiscordHandler {
 		const confirm = Buttons.confirm('confirm-train');
 		const cancel = Buttons.cancel('cancel-train');
 
-		void interaction.reply({
+		await interaction.reply({
 			content: TRAIN_REPLY,
 			components: [ActionRow.actionRowData(cancel, confirm)],
 			ephemeral: true,
@@ -53,8 +53,9 @@ export class CommandsHandler extends DiscordHandler {
 
 	@Command({ name: 'gif', description: 'Returns a gif from the ones it knows' })
 	public async gif(interaction: ChatInputCommandInteraction<'cached'>) {
+		await interaction.deferReply();
 		const chain = await this.chainsService.getChain(interaction.guild.id);
-		void interaction.reply({
+		await interaction.reply({
 			content:
 				(await chain.mediaStorage.getMedia('gif')) ?? 'no valid gif found',
 		});
@@ -65,8 +66,9 @@ export class CommandsHandler extends DiscordHandler {
 		description: 'Returns a image from the ones it knows',
 	})
 	public async image(interaction: ChatInputCommandInteraction<'cached'>) {
+		await interaction.deferReply();
 		const chain = await this.chainsService.getChain(interaction.guild.id);
-		void interaction.reply({
+		await interaction.reply({
 			content:
 				(await chain.mediaStorage.getMedia('image')) ?? 'no valid image found',
 		});
@@ -77,8 +79,9 @@ export class CommandsHandler extends DiscordHandler {
 		description: 'Returns a video from the ones it knows',
 	})
 	public async video(interaction: ChatInputCommandInteraction<'cached'>) {
+		await interaction.deferReply();
 		const chain = await this.chainsService.getChain(interaction.guild.id);
-		void interaction.reply({
+		await interaction.reply({
 			content:
 				(await chain.mediaStorage.getMedia('video')) ?? 'no valid video found',
 		});
@@ -89,6 +92,7 @@ export class CommandsHandler extends DiscordHandler {
 		description: 'Returns the analytics of the bot',
 	})
 	public async analytics(interaction: ChatInputCommandInteraction<'cached'>) {
+		await interaction.deferReply();
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const analytics = new MarkovChainAnalyzer(chain).getAnalytics();
 		const embed = new EmbedBuilder()
@@ -126,7 +130,7 @@ export class CommandsHandler extends DiscordHandler {
 				iconURL: this.client.user.displayAvatarURL(),
 				text: `Version: ${env.VERSION}`,
 			});
-		void interaction.reply({
+		await interaction.reply({
 			embeds: [embed],
 		});
 	}
@@ -184,7 +188,7 @@ export class CommandsHandler extends DiscordHandler {
 			if (!(await this.checkAdmin(interaction, msg))) return;
 			chain.replyRate = rate;
 			await this.chainsService.updateChainProps(chain.id, { replyRate: rate });
-			void interaction.reply({ content: `Set reply rate to \`${rate}\`` });
+			await interaction.reply({ content: `Set reply rate to \`${rate}\`` });
 			return;
 		}
 		await interaction.reply({
@@ -211,7 +215,7 @@ export class CommandsHandler extends DiscordHandler {
 			.at(-1) as string;
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const msg = chain.generateText(about, getRandom(8, 40));
-		void interaction.reply({ content: msg });
+		await interaction.reply({ content: msg });
 		return;
 	}
 
@@ -231,7 +235,7 @@ export class CommandsHandler extends DiscordHandler {
 		const data = interaction.options.getString('data', true);
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		chain.delete(data);
-		void interaction.reply({ content: `Deleted \`${data}\`` });
+		await interaction.reply({ content: `Deleted \`${data}\`` });
 		return;
 	}
 
@@ -240,7 +244,7 @@ export class CommandsHandler extends DiscordHandler {
 		description: 'Provides the URL to the repository with bot source code.',
 	})
 	public async info(interaction: ChatInputCommandInteraction<'cached'>) {
-		void interaction.reply({ content: REPO_URL });
+		await interaction.reply({ content: REPO_URL });
 	}
 
 	private async checkAdmin(
