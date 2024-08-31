@@ -53,7 +53,6 @@ export class CommandsHandler extends DiscordHandler {
 
 	@Command({ name: 'gif', description: 'Returns a gif from the ones it knows' })
 	public async gif(interaction: ChatInputCommandInteraction<'cached'>) {
-		await interaction.deferReply();
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		await interaction.reply({
 			content:
@@ -66,7 +65,6 @@ export class CommandsHandler extends DiscordHandler {
 		description: 'Returns a image from the ones it knows',
 	})
 	public async image(interaction: ChatInputCommandInteraction<'cached'>) {
-		await interaction.deferReply();
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		await interaction.reply({
 			content:
@@ -79,7 +77,6 @@ export class CommandsHandler extends DiscordHandler {
 		description: 'Returns a video from the ones it knows',
 	})
 	public async video(interaction: ChatInputCommandInteraction<'cached'>) {
-		await interaction.deferReply();
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		await interaction.reply({
 			content:
@@ -92,7 +89,6 @@ export class CommandsHandler extends DiscordHandler {
 		description: 'Returns the analytics of the bot',
 	})
 	public async analytics(interaction: ChatInputCommandInteraction<'cached'>) {
-		await interaction.deferReply();
 		const chain = await this.chainsService.getChain(interaction.guild.id);
 		const analytics = new MarkovChainAnalyzer(chain).getAnalytics();
 		const embed = new EmbedBuilder()
