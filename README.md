@@ -1,6 +1,6 @@
 # Rolando#7135
 
-![Status](https://img.shields.io/website?url=http%3A%2F%2F136.243.177.154%3A25576)
+![Status](https://img.shields.io/website?url=http%3A%2F%2F188.245.46.41%3A25576)
 ![Discord](https://img.shields.io/discord/1122938014637756486)
 
 Discord Bot implementation of a MarkovChain to learn how to type like a user of the guild.<br>
