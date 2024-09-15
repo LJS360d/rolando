@@ -72,7 +72,7 @@ export class ChainsService {
 
 			this.chainsMap.set(
 				chain.id,
-				new MarkovChain(chain.id, chain.replyRate, messages)
+				new MarkovChain(chain.id, chain.replyRate, chain.pings, messages)
 			);
 		}
 		load.success(`Loaded ${this.chainsMap.size} Chains`);

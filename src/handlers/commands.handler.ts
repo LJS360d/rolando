@@ -193,6 +193,23 @@ export class CommandsHandler extends DiscordHandler {
 	}
 
 	@Command({
+		name: 'togglepings',
+		description: 'toggles wether pings are enabled or not',
+	})
+	public async togglePings(interaction: ChatInputCommandInteraction<'cached'>) {
+		if (!(await this.checkAdmin(interaction))) return;
+		const chain = await this.chainsService.getChain(interaction.guild.id);
+		chain.pings = !chain.pings;
+		await this.chainsService.updateChainProps(chain.id, {
+			pings: chain.pings,
+		});
+		await interaction.reply({
+			content: `Pings are now \`${chain.pings ? 'enabled' : 'disabled'}\``,
+		});
+		return;
+	}
+
+	@Command({
 		name: 'opinion',
 		description: 'Get a reply with a specific word as the seed',
 		options: [

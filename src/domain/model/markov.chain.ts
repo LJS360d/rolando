@@ -8,6 +8,7 @@ export class MarkovChain {
 	constructor(
 		public id: string,
 		public replyRate = 10,
+		public pings = true,
 		messages: string[] = []
 	) {
 		this.mediaStorage = new MediaStorage(this.id);
@@ -51,6 +52,9 @@ export class MarkovChain {
 			);
 			currentWord = this.stochasticChoice(nextWordArray, smoothedWeights);
 			generatedText += ` ${currentWord}`;
+		}
+		if (!this.pings) {
+			generatedText = generatedText.replace(/<@\w+>/g, '');
 		}
 		return generatedText;
 	}
