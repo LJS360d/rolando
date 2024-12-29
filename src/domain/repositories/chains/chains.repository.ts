@@ -36,6 +36,10 @@ export class ChainsRepository {
 		this.textDataRepository.saveTextData(id, text);
 	}
 
+	deleteTextData(id: string, text: string): void {
+		this.textDataRepository.deleteTextData(id, text);
+	}
+
 	getChainMessages(id: string) {
 		return this.textDataRepository.getTextData(id);
 	}

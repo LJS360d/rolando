@@ -247,6 +247,8 @@ export class CommandsHandler extends DiscordHandler {
 	public async wipe(interaction: ChatInputCommandInteraction<'cached'>) {
 		const data = interaction.options.getString('data', true);
 		const chain = await this.chainsService.getChain(interaction.guild.id);
+		// Scary
+		await this.chainsService.deleteTextData(interaction.guild.id, data);
 		chain.delete(data);
 		await interaction.reply({ content: `Deleted \`${data}\`` });
 		return;

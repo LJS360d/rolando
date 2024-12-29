@@ -54,7 +54,7 @@ export class MarkovChain {
 			generatedText += ` ${currentWord}`;
 		}
 		if (!this.pings) {
-			generatedText = generatedText.replace(/<@\w+>/g, '');
+			generatedText = generatedText.replace(/<(@&?\w+)>/g, '$1');
 		}
 		return generatedText;
 	}

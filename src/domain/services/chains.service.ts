@@ -54,6 +54,10 @@ export class ChainsService {
 		return chain;
 	}
 
+	async deleteTextData(id: string, data: string) {
+		this.chainsRepository.deleteTextData(id, data);
+	}
+
 	async updateChainProps(id: string, fields: Partial<ChainDocumentFields>) {
 		return this.chainsRepository.update(id, fields);
 	}
