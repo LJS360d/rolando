@@ -13,9 +13,9 @@ endif
 VERSION         := 3.0.0
 BUILD_DIR       := bin
 MAIN_PACKAGE    := ./cmd
-BUILD						:= $(shell git rev-parse --short HEAD)
+BUILD						:= $(shell date +%s )
 ENV 						?= production
-BINARY_NAME   	:= rolando
+BINARY_NAME   	:= main
 
 BUILDPATH       = $(BUILD_DIR)/$(BINARY_NAME)$(EXE)
 LDFLAGS 				= -ldflags "-w -s -X main.Version=$(VERSION) -X main.Build=$(BUILD) -X main.Env=$(ENV)"
