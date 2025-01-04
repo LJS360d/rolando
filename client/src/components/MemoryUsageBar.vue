@@ -70,7 +70,7 @@ export default defineComponent({
   },
   computed: {
     isDataAvailable(): boolean {
-      return !!this.max && !!this.peak && !!this.blocks?.length;
+      return !!this.max && !!this.peak && !!this.blocks;
     },
   },
   methods: {

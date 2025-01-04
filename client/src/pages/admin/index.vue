@@ -24,22 +24,24 @@
         <template v-slot:subtitle>
           <span class="text-sm"><b>{{ guild.approximate_member_count }}</b> members</span>
         </template>
-        <template v-slot:text v-if="!!getChain(guild.id)">
-          <v-row justify="center" class="pa-3 pb-0">
-            <span>{{ formatBytes(getChain(guild.id)?.bytes ?? 0) }} / {{ formatBytes(1024 ** 2 *
-              (getChain(guild.id)?.max_size_mb ?? 0)) }}</span>
-          </v-row>
-          <v-row justify="space-between" class="pa-3">
-            <v-col cols="12">
-              <v-row v-for="(field, key) in getAnalyticsForGuild(guild.id)" :key="key" justify="space-between">
-                <span class="text-xs">{{ key }}</span>
-                <span class="text-xs">{{ formatNumber(field) }}</span>
-              </v-row>
-            </v-col>
-          </v-row>
-        </template>
-        <template v-slot:text v-else>
-          <v-row justify="center" class="h-100 align-center">
+        <template v-slot:text>
+          <div v-if="getChain(guild.id)">
+            <v-row justify="center" class="pa-3 pb-0">
+              <span>
+                {{ formatBytes(getChain(guild.id)?.bytes ?? 0) }} /
+                {{ formatBytes(1024 ** 2 * (getChain(guild.id)?.max_size_mb ?? 0)) }}
+              </span>
+            </v-row>
+            <v-row justify="space-between" class="pa-3">
+              <v-col cols="12">
+                <v-row v-for="(field, key) in getAnalyticsForGuild(guild.id)" :key="key" justify="space-between">
+                  <span class="text-xs">{{ key }}</span>
+                  <span class="text-xs">{{ formatNumber(field) }}</span>
+                </v-row>
+              </v-col>
+            </v-row>
+          </div>
+          <v-row v-else justify="center" class="h-100 align-center">
             No data available
           </v-row>
         </template>
