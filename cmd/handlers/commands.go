@@ -161,10 +161,10 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 	registeredCommandsMap := make(map[string]*discordgo.ApplicationCommand)
 	for _, cmd := range registeredCommands {
 		registeredCommandsMap[cmd.Name] = cmd
-		isOldCommand := slices.ContainsFunc(commands, func(c SlashCommand) bool {
-			return c.Command.Name != cmd.Name
+		isOutdated := !slices.ContainsFunc(commands, func(c SlashCommand) bool {
+			return shouldRefreshCommand(*cmd, *c.Command)
 		})
-		if isOldCommand {
+		if isOutdated {
 			log.Log.Warnf("Removing outdated slash command: %s", cmd.Name)
 			h.Client.ApplicationCommandDelete(h.Client.State.User.ID, "", cmd.ID)
 		}
