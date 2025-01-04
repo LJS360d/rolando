@@ -1,50 +1,61 @@
 <template>
-  <v-btn v-bind="props" :icon="buttonIcon" :color="buttonColor" :href="inviteLink" target="_blank" size="small"
+  <v-btn :icon="buttonIcon" :color="buttonColor" :href="inviteLink" target="_blank" size="small"
     @click="getInvite"></v-btn>
 </template>
 
-<script setup>
+<script lang="ts">
 import { useAuthStore } from '@/stores/auth';
-import { ref, defineProps } from 'vue';
+import { ref } from 'vue';
 
-const props = defineProps({
-  guildId: {
-    type: String,
-    required: true,
+const buttonIcon = ref('fas fa-door-closed');
+const buttonColor = ref('');
+const inviteLink = ref('');
+
+export default defineComponent({
+  name: 'GuildInviteBtn',
+  props: {
+    guildId: {
+      type: String,
+      required: true,
+    },
   },
-});
-const auth = useAuthStore();
-const buttonIcon = ref('fas fa-door-closed'); // Initially the door-closed icon
-const buttonColor = ref(''); // Default color (no color)
-const inviteLink = ref(''); // Initially no invite link
+  data() {
+    const auth = useAuthStore();
+    return {
+      token: auth.token!,
+      inviteLink,
+      buttonIcon,
+      buttonColor
+    }
+  },
+  methods: {
+    getInvite: async function () {
+      try {
+        const response = await fetch(`/api/bot/guilds/${this.guildId}/invite`,
+          {
+            headers: {
+              Authorization: this.token
+            }
+          }
+        );
 
-const getInvite = async () => {
-  try {
-    // Construct the API URL using the passed guildId prop
-    const response = await fetch(`/api/bot/guilds/${props.guildId}/invite`,
-      {
-        headers: {
-          Authorization: auth.token
+        if (!response.ok) {
+          throw new Error('Failed to fetch invite');
         }
+
+        const data = await response.json();
+
+        if (data && data.invite) {
+          buttonIcon.value = 'fas fa-door-open';
+          buttonColor.value = 'green';
+          inviteLink.value = data.invite;
+        }
+      } catch (error) {
+        console.error('Error fetching invite:', error);
+        buttonColor.value = 'red';
       }
-    );
-
-    // Check if the response is successful
-    if (!response.ok) {
-      throw new Error('Failed to fetch invite');
-    }
-
-    const data = await response.json();
-
-    if (data && data.invite) {
-      // Update button to reflect the invite
-      buttonIcon.value = 'fas fa-door-open';
-      buttonColor.value = 'green'; // Set color to green
-      inviteLink.value = data.invite; // Set the href to the invite link
-    }
-  } catch (error) {
-    console.error('Error fetching invite:', error);
-    buttonColor.value = 'red';
+    },
   }
-};
+})
+
 </script>
