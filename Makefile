@@ -1,4 +1,4 @@
-.PHONY: all gen build test lint clean dev build-dev run
+.PHONY: all run-docker gen build test lint clean dev build-dev run
 
 ifeq ($(OS),Windows_NT)
   EXE 	:= .exe
@@ -46,3 +46,5 @@ build-dev: ENV=development
 build-dev:
 	go build $(LDFLAGS) -o $(BUILDPATH) $(MAIN_PACKAGE)
 
+run-docker:
+	docker compose -p rolando3 up -d --build --force-recreate
