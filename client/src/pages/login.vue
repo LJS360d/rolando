@@ -28,7 +28,7 @@ if (accessToken) {
     .then(async (res) => {
       if (res.ok) {
         const body = await res.json();
-        authStore.setAuth(accessToken, { ...body.user, is_owner: body.is_owner });
+        authStore.setAuth(accessToken, { ...body.user, is_owner: body.is_owner, guilds: body.guilds });
         router.replace('/'); // Redirect after login
       } else {
         router.replace('/'); // Redirect on error

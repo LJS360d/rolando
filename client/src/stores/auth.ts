@@ -19,6 +19,7 @@ export interface User {
   locale: string;
   premium_type: number;
   is_owner: boolean;
+  guilds: string[];
 }
 
 export const useAuthStore = defineStore('auth', {

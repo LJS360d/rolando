@@ -15,9 +15,11 @@
       </template>
     </v-card>
     <v-divider class="my-4"></v-divider>
-    <div class="d-flex flex-wrap ga-4">
-      <v-card width="250" flat v-for="guild in guilds" :key="guild.id"
+    <div class="d-flex flex-wrap ga-3">
+      <v-card flat v-for="guild in guilds" :key="guild.id" class="max-w-card"
         :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
+        <v-icon class="position-absolute" v-if="userGuilds.includes(guild.id)" icon="fas fa-star" size="12"
+          style="top: 4px; left: 4px;" title="You are a member of this server" />
         <template v-slot:title>
           <span class="font-weight-light" :title="guild.name">{{ guild.name }}</span>
         </template>
@@ -59,7 +61,7 @@
                   icon="far fa-file-lines" size="small"></v-btn>
               </v-tooltip>
             </v-col>
-            <v-col cols="3">
+            <v-col cols="2" class="d-flex justify-end">
               <v-tooltip v-slot:activator="{ props }" text="Leave" location="bottom">
                 <v-btn v-bind="props" @click="() => openConfirmLeaveGuild(guild.name, guild.id)"
                   class="justify-self-end" color="red" icon="fas fa-right-from-bracket" size="small"></v-btn>
@@ -135,7 +137,8 @@ export default {
       dialog,
       token: auth.token!,
       botGuildsQuery,
-      windowOpen: window.open
+      windowOpen: window.open,
+      userGuilds: auth.user?.guilds ?? [],
     };
   },
   computed: {
@@ -210,5 +213,19 @@ export default {
   .v-card-actions {
     justify-self: end;
   }
+}
+
+.max-w-card {
+  width: 24%;
+}
+
+@media (max-width: 1024px) {
+  .max-w-card {
+    width: 100%;
+  }
+}
+
+.w-fit {
+  width: fit-content;
 }
 </style>
