@@ -1,12 +1,10 @@
 <template>
   <template v-if="isDataAvailable">
-    <div class="position-relative pt-5">
-      <!-- Max label -->
-      <span class="position-absolute top-0 w-max-content text-caption" :style="{ left: '96%' }">
+    <div style="height: 20px;" class="position-relative d-flex justify-end pa-0 ma-0 w-full">
+      <span class="text-caption">
         {{ formatBytes(max) }}
       </span>
-      <!-- Current label -->
-      <span class="position-absolute top-0 w-max-content text-caption"
+      <span class="position-absolute bottom-0 w-max-content text-caption"
         :style="{ left: ((current / max) * (100) - 1.5) + '%' }">
         {{ formatBytes(current) }}
       </span>
@@ -26,7 +24,7 @@
       }">
       </div>
     </v-progress-linear>
-    <div class="position-relative pb-5">
+    <div style="height: 20px;" class="position-relative d-flex justify-end pa-0 ma-0 w-full">
       <!-- Peak label -->
       <span class="position-absolute w-max-content text-caption" :style="{ left: ((peak / max) * (100) - 1.5) + '%' }">
         {{ formatBytes(peak) }}
