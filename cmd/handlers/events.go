@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"rolando/cmd/log"
 	"rolando/cmd/services"
+	"strconv"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -64,7 +65,7 @@ func (h *EventsHandler) onGuildCreate(s *discordgo.Session, e *discordgo.Event) 
 	log.Log.Infof("Joined guild %s", guildCreate.Name)
 	h.ChainsService.CreateChain(guildCreate.ID, guildCreate.Name)
 	s.ChannelMessage(guildCreate.SystemChannelID, fmt.Sprintf("Hello %s.\nperform the command `/train` to use all the server's messages as training data", guildCreate.Name))
-
+	UpdatePresence(s)
 }
 
 func (h *EventsHandler) onGuildDelete(s *discordgo.Session, e *discordgo.Event) {
@@ -74,4 +75,26 @@ func (h *EventsHandler) onGuildDelete(s *discordgo.Session, e *discordgo.Event) 
 	}
 	log.Log.Infof("Left guild %s", guildDelete.Name)
 	h.ChainsService.DeleteChain(guildDelete.ID)
+	UpdatePresence(s)
+}
+
+// ---------------------- Helpers ---------------------------
+
+func UpdatePresence(ds *discordgo.Session) {
+	log.Log.Infoln("Updating presence...")
+	err := ds.UpdateStatusComplex(discordgo.UpdateStatusData{
+		Activities: []*discordgo.Activity{
+			{
+				Type: discordgo.ActivityTypeWatching,
+				Name: strconv.Itoa(len(ds.State.Guilds)) + " servers",
+			},
+		},
+		Status:    "online",
+		AFK:       false,
+		IdleSince: nil,
+	})
+	if err != nil {
+		log.Log.Fatalf("error setting bot presence: %v", err)
+	}
+	log.Log.Infoln("Presence updated")
 }
