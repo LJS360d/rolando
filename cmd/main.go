@@ -6,7 +6,6 @@ import (
 	"os/signal"
 	"rolando/config"
 	"rolando/server"
-	"strconv"
 	"syscall"
 
 	"rolando/cmd/handlers"
@@ -42,22 +41,7 @@ func main() {
 		log.Log.Fatalln("error opening connection,", err)
 	}
 	log.Log.Infoln("Discord session created")
-	log.Log.Infoln("Updating presence...")
-	err = ds.UpdateStatusComplex(discordgo.UpdateStatusData{
-		Activities: []*discordgo.Activity{
-			{
-				Type: discordgo.ActivityTypeWatching,
-				Name: strconv.Itoa(len(ds.State.Guilds)) + " servers",
-			},
-		},
-		Status:    "online",
-		AFK:       false,
-		IdleSince: nil,
-	})
-	if err != nil {
-		log.Log.Fatalf("error setting bot presence: %v", err)
-	}
-	log.Log.Infoln("Presence updated")
+	handlers.UpdatePresence(ds)
 	log.Log.Infoln("Initializing services...")
 	// DI
 	messagesRepo, err := repositories.NewMessagesRepository(config.DatabasePath)
