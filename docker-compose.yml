@@ -11,6 +11,8 @@ services:
       - DATABASE_PATH=/root/data/${COMPOSE_PROJECT_NAME}.db
     depends_on:
       - frontend
+    networks:
+      - default
 
   frontend:
     build:
@@ -18,6 +20,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:80"
+    networks:
+      - default
+
 
 volumes:
   data:
