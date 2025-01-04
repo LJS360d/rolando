@@ -16,7 +16,6 @@ var (
 	OwnerIDs      []string
 	Version       string
 	InviteUrl     string
-	Build         string
 	Env           string
 	DatabasePath  string
 	ServerAddress string
