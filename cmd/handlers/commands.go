@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"golang.org/x/exp/slices"
 )
 
 type SlashCommandsHandler struct {
@@ -160,6 +161,13 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 	registeredCommandsMap := make(map[string]*discordgo.ApplicationCommand)
 	for _, cmd := range registeredCommands {
 		registeredCommandsMap[cmd.Name] = cmd
+		isOldCommand := slices.ContainsFunc(commands, func(c SlashCommand) bool {
+			return c.Command.Name != cmd.Name
+		})
+		if isOldCommand {
+			log.Log.Warnf("Removing outdated slash command: %s", cmd.Name)
+			h.Client.ApplicationCommandDelete(h.Client.State.User.ID, "", cmd.ID)
+		}
 	}
 
 	// Iterate through new commands and check if they are already registered
