@@ -1,12 +1,11 @@
 <template>
   <v-container class="pa-2" min-width="100%">
     <v-form ref="broadcastForm" @submit.prevent="onFormSubmit" class="d-flex justify-around">
-      <v-row>
+      <v-row justify="space-between">
         <v-col cols="6">
           <div class="d-flex flex-wrap ga-3">
-
             <v-card v-for="guild in guilds" :id="`guild:${guild.id}`" :key="guild.id" :data-name="guild.name"
-              width="250" :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
+              max-width="180" width="100%" :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
               <template v-slot:title>
                 <span class="font-weight-light">{{ guild.name }}</span>
               </template>
@@ -27,8 +26,7 @@
             </v-card>
           </div>
         </v-col>
-
-        <v-col cols="5" class="ma-5">
+        <v-col cols="5" class="ma-2 h-min sticky top-0" id="right-col">
           <v-row>
             <span>Guilds: <b>{{ selectedGuildsCount }}</b> / <b>{{ guilds?.length }}</b></span>
           </v-row>
@@ -139,5 +137,13 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.h-min {
+  height: min-content;
+}
+
+.sticky {
+  position: sticky;
 }
 </style>
