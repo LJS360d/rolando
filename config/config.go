@@ -53,7 +53,7 @@ func init() {
 	ServerAddress = os.Getenv("SERVER_ADDRESS")
 	if ServerAddress == "" {
 		log.Println("SERVER_ADDRESS not set in the environment")
-		ServerAddress = "127.0.0.1:8080"
+		ServerAddress = "0.0.0.0:8080"
 	}
 	StartupTime = time.Now()
 
