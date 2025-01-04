@@ -21,15 +21,12 @@ import (
 var (
 	Version string
 	Env     string
-	Build   string
 )
 
 func main() {
 	config.Version = Version
-	config.Build = Build
 	config.Env = Env
 	fmt.Println("Version: ", config.Version)
-	fmt.Println("Build: ", config.Build)
 	fmt.Println("Env: ", config.Env)
 	log.Log.Infoln("Creating discord session...")
 	ds, err := discordgo.New("Bot " + config.Token)
