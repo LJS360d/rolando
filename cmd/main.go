@@ -66,8 +66,10 @@ func main() {
 	ds.AddHandler(buttonsHandler.OnButtonInteraction)
 	ds.AddHandler(eventsHandler.OnEventCreate)
 	log.Log.Infof("Logged in as %s", ds.State.User.String())
-	srv := server.NewHttpServer(ds, chainsService, messagesRepo)
-	srv.Start()
+	if config.RunHttpServer {
+		srv := server.NewHttpServer(ds, chainsService, messagesRepo)
+		srv.Start()
+	}
 
 	// Wait here until SIGINT or other term signal is received.
 	sc := make(chan os.Signal, 1)
