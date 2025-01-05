@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/vue-query";
 
 export interface ChainAnalytics {
-  bytes: bigint;
+  bytes: number;
   complexity_score: number;
   gifs: number;
   id: string;
@@ -9,7 +9,9 @@ export interface ChainAnalytics {
   max_size_mb: number;
   messages: number;
   name: string;
+  pings_enabled: boolean;
   reply_rate: number;
+  trained: boolean;
   videos: number;
   words: number;
 }

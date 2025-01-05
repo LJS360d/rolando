@@ -10,6 +10,7 @@ declare module 'vue' {
     AppDialog: typeof import('./components/AppDialog.vue')['default']
     AppFooter: typeof import('./components/AppFooter.vue')['default']
     AppHeader: typeof import('./components/AppHeader.vue')['default']
+    AppPaginator: typeof import('./components/AppPaginator.vue')['default']
     GuildInviteBtn: typeof import('./components/GuildInviteBtn.vue')['default']
     MemoryUsageBar: typeof import('./components/MemoryUsageBar.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

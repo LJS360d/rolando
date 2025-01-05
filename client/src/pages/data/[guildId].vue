@@ -1,12 +1,12 @@
 <template>
   <v-container>
-    <template v-if="!isLoading && !isError && data">
-      <v-card flat :prepend-avatar="guildIconUrl(data.guild.id, data.guild.icon)">
+    <template v-if="!isLoadingGuild && !isErrorGuild && guild">
+      <v-card flat :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
         <template v-slot:title>
-          <span class="font-weight-light">{{ data.guild.name }}</span>
+          <span class="font-weight-light">{{ guild.name }}</span>
         </template>
         <template v-slot:subtitle>
-          <span class="text-sm"><b>{{ data.guild.members }}</b> members</span>
+          <span class="text-sm"><b>{{ guild.approximate_member_count }}</b> members</span>
         </template>
         <template v-slot:text v-if="!!chain">
           <v-row justify="center" class="pa-3 pb-0">
@@ -23,20 +23,34 @@
           </v-row>
         </template>
       </v-card>
-      <v-divider class="my-4" />
-      <h2 class="mb-4">All the learned messages</h2>
+    </template>
+    <v-skeleton-loader v-else-if="!isErrorGuild" type="card-avatar" />
+    <v-alert v-else type="error" class="text-body-2">
+      Oops, big error occured, please report it to the creator on <a :href="discordServerInvite">the discord</a>
+    </v-alert>
+    <v-divider class="my-4" />
+    <template v-if="pagination.totalPages > 1">
+      <h2>Learned messages</h2>
+      <app-paginator :pagination="pagination" />
+    </template>
+    <template v-if="!isLoadingMessages && !isErrorMessages && messages">
       <v-list density="compact">
-        <v-list-item v-for="(text, i) in data.messages" :key="i" :class="{ 'bg-dark': i % 2 !== 0 }">
+        <v-list-item v-for="(_, i) of messages?.data" :key="i" :class="{ 'bg-dark': i % 2 !== 0 }">
           <template v-slot:title>
-            <p class="message-content" v-html="renderedMessages[i]" />
+            <p class="message-content" v-html="renderedMessages[i]"></p>
           </template>
         </v-list-item>
       </v-list>
     </template>
-    <v-skeleton-loader v-else-if="!isError" type="card-avatar" />
+    <v-skeleton-loader v-else-if="!isErrorMessages" type="list-item-three-line" />
     <v-alert v-else type="error" class="text-body-2">
-      Oops, big error occured, please report it to the creator on <a :href="discordServerInvite">the discord</a>
+      There was an error loading the messages
     </v-alert>
+    <template v-if="pagination.totalPages > 1">
+      <app-paginator :pagination="pagination" />
+    </template>
+
+
   </v-container>
 </template>
 
@@ -53,34 +67,62 @@
 </style>
 
 <script lang="ts">
-import { useGetChainAnalytics } from '@/api/analytics';
-import { useGetGuildData } from '@/api/data';
-import { useAuthStore } from '@/stores/auth';
-import { formatBytes, formatNumber, guildIconUrl } from '@/utils/format';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
-import { defineComponent, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useGetChainAnalytics } from "@/api/analytics";
+import { useGetBotGuild } from "@/api/bot";
+import { useGetGuildData, type PageMeta } from "@/api/data";
+import { useAuthStore } from "@/stores/auth";
+import { formatBytes, formatNumber, guildIconUrl } from "@/utils/format";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
+import { computed, defineComponent, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 
 export default defineComponent({
   setup() {
-    const route = useRoute();
     const auth = useAuthStore();
-    const guildId = (route.params as { guildId: string }).guildId;
-    const guildDataQuery = useGetGuildData(auth.token!, guildId);
+    const guildId = (useRoute().params as { guildId: string }).guildId;
+    const pagination = ref<PageMeta>({
+      page: 1,
+      pageSize: 100,
+      totalPages: 0,
+      totalItems: 0,
+    });
+
     const chainQuery = useGetChainAnalytics(auth.token!, guildId);
-    const renderMarkdown = (text: string) => {
+    const guildQuery = useGetBotGuild(auth.token!, guildId);
+    const messagesQuery = useGetGuildData(auth.token!, guildId, pagination);
+
+    const renderedMessages = computed(() => messagesQuery.data.value?.data?.map((text: string) => {
       const rawHtml = marked(text, { async: false });
       return DOMPurify.sanitize(rawHtml);
-    };
+    }) ?? []);
+
+    watch(() => pagination.value.page,
+      () => {
+        messagesQuery.refetch();
+      },
+      { immediate: true }
+    );
+    watch(() => pagination.value.pageSize,
+      () => {
+        messagesQuery.refetch();
+      },
+      { immediate: true }
+    );
 
     return {
-      discordServerInvite: import.meta.env.VITE_DISCORD_SERVER_INVITE,
-      data: guildDataQuery.data,
       chain: chainQuery.data,
-      isLoading: guildDataQuery.isLoading,
-      isError: guildDataQuery.isError,
-      renderedMessages: computed(() => guildDataQuery.data?.value?.messages.map(renderMarkdown) ?? []),
+      isLoadingChain: chainQuery.isLoading,
+      isErrorChain: chainQuery.isError,
+      guild: guildQuery.data,
+      isLoadingGuild: guildQuery.isLoading,
+      isErrorGuild: guildQuery.isError,
+      messages: messagesQuery.data,
+      isLoadingMessages: messagesQuery.isLoading,
+      isErrorMessages: messagesQuery.isError,
+      pagination,
+      renderedMessages,
+      discordServerInvite: import.meta.env.VITE_DISCORD_SERVER_INVITE,
     };
   },
   methods: {
@@ -99,6 +141,6 @@ export default defineComponent({
         Complexity: chain.complexity_score,
       };
     },
-  }
+  },
 });
 </script>
