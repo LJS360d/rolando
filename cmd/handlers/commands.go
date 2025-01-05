@@ -479,6 +479,7 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Failed to retrieve chain data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -489,11 +490,12 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 			return
 		}
 		chain.ReplyRate = *rate
-		if _, err := h.ChainsService.UpdateChainDocument(chain.ID, map[string]interface{}{"replyRate": *rate}); err != nil {
+		if _, err := h.ChainsService.UpdateChainDocument(chain.ID, map[string]interface{}{"reply_rate": *rate}); err != nil {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
 					Content: "Failed to update reply rate.",
+					Flags:   discordgo.MessageFlagsEphemeral,
 				},
 			})
 			return
@@ -531,6 +533,7 @@ func (h *SlashCommandsHandler) opinionCommand(s *discordgo.Session, i *discordgo
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "You must provide a word as the seed.",
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -545,6 +548,7 @@ func (h *SlashCommandsHandler) opinionCommand(s *discordgo.Session, i *discordgo
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Failed to retrieve chain data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -575,6 +579,7 @@ func (h *SlashCommandsHandler) wipeCommand(s *discordgo.Session, i *discordgo.In
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "You must provide the data to be erased.",
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -586,6 +591,7 @@ func (h *SlashCommandsHandler) wipeCommand(s *discordgo.Session, i *discordgo.In
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Failed to retrieve chain data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -597,6 +603,7 @@ func (h *SlashCommandsHandler) wipeCommand(s *discordgo.Session, i *discordgo.In
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Failed to delete the specified data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -619,6 +626,7 @@ func (h *SlashCommandsHandler) channelsCommand(s *discordgo.Session, i *discordg
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Failed to retrieve guild information.",
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
@@ -666,7 +674,7 @@ func (h *SlashCommandsHandler) channelsCommand(s *discordgo.Session, i *discordg
 
 // implementation of /src command
 func (h *SlashCommandsHandler) srcCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	repoURL := "YOUR_REPO_URL_HERE"
+	repoURL := "https://github.com/LJS360d/rolando2"
 	err := h.Client.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
