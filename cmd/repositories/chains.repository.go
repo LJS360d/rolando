@@ -8,13 +8,13 @@ import (
 )
 
 type Chain struct {
-	ID        string    `gorm:"primaryKey"`
-	Name      string    `gorm:"unique;not null"`
-	ReplyRate int       `gorm:"default:10"`
-	Pings     bool      `gorm:"default:true"`
-	MaxSizeMb int       `gorm:"default:25"`
-	Trained   bool      `gorm:"default:false"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+	ID        string    `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"unique;not null" json:"name"`
+	ReplyRate int       `gorm:"default:10" json:"reply_rate"`
+	Pings     bool      `gorm:"default:true" json:"pings"`
+	MaxSizeMb int       `gorm:"default:25" json:"max_size_mb"`
+	Trained   bool      `gorm:"default:false" json:"trained"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type ChainsRepository struct {

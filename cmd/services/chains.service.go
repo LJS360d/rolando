@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"rolando/cmd/log"
 	"rolando/cmd/model"
 	"rolando/cmd/repositories"
@@ -95,6 +96,9 @@ func (cs *ChainsService) DeleteTextData(id, data string) error {
 
 // UpdateChainDocument updates the chain's properties in the repository.
 func (cs *ChainsService) UpdateChainDocument(id string, fields map[string]any) (*repositories.Chain, error) {
+	if _, ok := fields["id"]; ok {
+		return nil, errors.New("cannot update field 'id'")
+	}
 	return cs.chainsRepo.UpdateChain(id, fields)
 }
 

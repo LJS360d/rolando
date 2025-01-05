@@ -134,6 +134,29 @@ func (s *BotController) GetGuild(c *gin.Context) {
 	c.JSON(200, userGuild)
 }
 
+// PUT /bot/guilds/:guildId, requires owner authorization
+func (s *BotController) UpdateChainDoc(c *gin.Context) {
+	errCode, err := auth.EnsureOwner(c, s.ds)
+	if err != nil {
+		c.JSON(errCode, gin.H{"error": err.Error()})
+		return
+	}
+	guildId := c.Param("guildId")
+
+	var fields map[string]any
+	err = c.ShouldBindJSON(&fields)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	chainDoc, err := s.chainsService.UpdateChainDocument(guildId, fields)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, chainDoc)
+}
+
 // GET /bot/guilds/:guildId/invite, requires owner authorization
 func (s *BotController) GetGuildInvite(c *gin.Context) {
 	errCode, err := auth.EnsureOwner(c, s.ds)
