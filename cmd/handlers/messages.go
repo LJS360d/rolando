@@ -52,7 +52,6 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 
 	// Update chain state if message content is valid
 	if len(content) > 3 {
-		chain.UpdateState(content)
 		if _, err := h.ChainsService.UpdateChainState(guild.ID, []string{content}); err != nil {
 			log.Log.Errorf("Failed to update chain state for guild %s: %v", guild.ID, err)
 		}
