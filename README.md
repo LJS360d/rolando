@@ -16,18 +16,31 @@ The concept is inspired by [`Fioriktos`](https://github.com/FiorixF1/fioriktos-b
 
 ## How to Startup Your Own Rolando
 
+### Locally
 - Prerequisites:
   - Go 1.23.0+
-- Reccomended:
   - Make 4.4.1+
+- Step by Step guide:
+  - Starting up the Backend
+  1. Copy the `.env.example` file to `.env` and follow the instructions written on it for the value of each needed environment variable
+  2. Run `go mod download` to download dependencies
+  3. Run `make run` to start the application in production mode or `make dev` to start the application in development mode
+      - Optionally you can also run `air` to start a the application in dev mode with Hot reloading (you may need to edit the `air.toml` file depending on the OS you are using)
+  - Starting up the Frontend (optional)
+  1. Run `cd client` to enter the client directory
+  2. Run `npm install` to install the required dependencies
+  3. Run `npm run dev` to start the development server
+  4. Open your browser and navigate to `http://localhost:3000`
 
-### Development:
+### Production
 
-1. Rename the file `example.env` in `.env` and follow the instructions written on it for the value of each needed enviroment variable
-2. Run `go mod tidy` to download dependencies
-2. Run `air` (`make dev` or `make` also work) to start a development server with hot reloading
-   - Run `make build` to build the project
-   - Run `make run` to start the application in development mode
+- Prerequisites:
+  - Make
+  - Docker w/ Docker Compose
+- Step by Step guide:
+  1. Copy the `.env.example` file to `.env` and follow the instructions written on it for the value of each needed environment variable
+      - Optionally you can add a `client/.env` file to set the environment variables for the frontend, refer to the `client/.env.development` file for more information
+  2. Run `make run-docker` to build the docker compose file and start the application (both backend and frontend) in production mode
 
 ### Troubleshooting:
 
