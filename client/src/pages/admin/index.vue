@@ -38,7 +38,7 @@
               <v-col cols="12">
                 <v-row v-for="(field, key) in getAnalyticsForGuild(guild.id)" :key="key" justify="space-between">
                   <span class="text-xs">{{ key }}</span>
-                  <span class="text-xs">{{ formatNumber(field) }}</span>
+                  <span class="text-xs">{{ field }}</span>
                 </v-row>
               </v-col>
             </v-row>
@@ -60,6 +60,9 @@
                 <v-btn v-if="!!getChain(guild.id)" v-bind="props" :href="`/data/${guild.id}`" target="_blank"
                   icon="far fa-file-lines" size="small"></v-btn>
               </v-tooltip>
+              <template v-if="!!getChain(guild.id)">
+                <guild-edit-btn :guild="guild" :chain="getChain(guild.id)!" @confirm="updateChain"></guild-edit-btn>
+              </template>
             </v-col>
             <v-col cols="2" class="d-flex justify-end">
               <v-tooltip v-slot:activator="{ props }" text="Leave" location="bottom">
@@ -81,8 +84,8 @@
 </template>
 
 <script lang="ts">
-import { useGetAllChainsAnalytics } from '@/api/analytics';
-import { leaveGuild, useGetBotGuilds, useGetBotResources, useGetBotUser } from '@/api/bot';
+import { useGetAllChainsAnalytics, type ChainAnalytics } from '@/api/analytics';
+import { leaveGuild, updateChainDocument, useGetBotGuilds, useGetBotResources, useGetBotUser } from '@/api/bot';
 import { useAuthStore } from '@/stores/auth';
 import { formatBytes, formatNumber, formatTime, guildIconUrl } from '@/utils/format';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -131,6 +134,7 @@ export default {
       inviteLink: import.meta.env.VITE_DISCORD_SERVER_INVITE,
       guilds: botGuildsQuery.data,
       chains: chainsQuery.data,
+      chainsRefetch: chainsQuery.refetch,
       resources: botResourcesQuery.data,
       uptime,
       snackbar,
@@ -148,7 +152,6 @@ export default {
   },
   methods: {
     formatBytes,
-    formatNumber,
     guildIconUrl,
     copyToClipboard(text: string) {
       navigator.clipboard.writeText(text)
@@ -186,6 +189,28 @@ export default {
         }
       };
     },
+    updateChain: async function (chain: globalThis.Ref<ChainAnalytics>) {
+      try {
+        const res = await updateChainDocument(this.token, chain.value.id, {
+          pings: chain.value.pings_enabled,
+          trained: chain.value.trained,
+          reply_rate: chain.value.reply_rate,
+          max_size_mb: chain.value.max_size_mb,
+        });
+        if (!res.ok) {
+          throw new Error("Failed to update chain");
+        }
+        this.snackbar.visible = true;
+        this.snackbar.message = `Successfully updated chain '${chain.value.name}'`;
+        this.snackbar.color = "success";
+        this.chainsRefetch();
+      } catch (error) {
+        this.snackbar.visible = true;
+        this.snackbar.message = `Failed to update chain '${chain.value.name}': ${error}`;
+        this.snackbar.color = "error";
+      }
+
+    },
     getChain(guildId: string) {
       return this.chains?.find(c => c.id === guildId);
     },
@@ -193,12 +218,13 @@ export default {
       const chain = this.chains?.find(c => c.id === guildId);
       if (!chain) return null;
       return {
-        Gifs: chain.gifs,
-        Images: chain.images,
-        Videos: chain.videos,
-        Messages: chain.messages,
-        Words: chain.words,
-        Complexity: chain.complexity_score,
+        Gifs: formatNumber(chain.gifs),
+        Images: formatNumber(chain.images),
+        Videos: formatNumber(chain.videos),
+        Messages: formatNumber(chain.messages),
+        Words: formatNumber(chain.words),
+        Complexity: formatNumber(chain.complexity_score),
+        "Reply Rate": !chain.reply_rate ? "0%" : `${chain.reply_rate} | ${(1 / chain.reply_rate * 100).toPrecision(3)}% `,
       };
     },
   },
