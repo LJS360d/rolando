@@ -46,7 +46,8 @@ func (s *HttpServer) Start() {
 	r.GET("/analytics/:chain", analyticsController.GetChainAnalytics)
 	r.GET("/analytics", analyticsController.GetAllChainsAnalytics)
 
-	r.GET("/data/:chain", dataController.GetData)
+	r.GET("/data/:chain/all", dataController.GetData)
+	r.GET("/data/:chain", dataController.GetDataPaginated)
 
 	r.GET("/bot/user", botController.GetBotUser)
 	r.GET("/bot/guilds", botController.GetBotGuilds)

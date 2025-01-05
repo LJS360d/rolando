@@ -112,6 +112,28 @@ func (repo *MessagesRepository) GetAllGuildMessages(guildID string) ([]Message, 
 	return messages, nil
 }
 
+// GetGuildMessagesPage fetches messages with pagination and returns metadata
+func (repo *MessagesRepository) GetGuildMessagesPage(guildID string, limit, offset int) ([]Message, int64, error) {
+	var messages []Message
+	var total int64
+
+	// Count total messages
+	if err := repo.DB.Model(&Message{}).Where("guild_id = ?", guildID).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Fetch paginated messages
+	if err := repo.DB.Where("guild_id = ?", guildID).
+		Order("created_at").
+		Limit(limit).
+		Offset(offset).
+		Find(&messages).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return messages, total, nil
+}
+
 // DeleteAllGuildMessages removes all messages for a specific guild
 func (repo *MessagesRepository) DeleteAllGuildMessages(guildID string) error {
 	if err := repo.DB.Where("guild_id = ?", guildID).Delete(&Message{}).Error; err != nil {
