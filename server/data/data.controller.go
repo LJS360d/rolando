@@ -67,7 +67,7 @@ func (s *DataController) GetDataPaginated(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"data": content,
 		"meta": gin.H{
-			"currentPage": page,
+			"page": page,
 			"pageSize":    pageSize,
 			"totalItems":  total,
 			"totalPages":  (total + int64(pageSize) - 1) / int64(pageSize),

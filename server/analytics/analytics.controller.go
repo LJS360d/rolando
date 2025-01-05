@@ -2,7 +2,9 @@ package analytics
 
 import (
 	"rolando/cmd/model"
+	"rolando/cmd/repositories"
 	"rolando/cmd/services"
+	"rolando/server/auth"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gin-gonic/gin"
@@ -20,8 +22,14 @@ func NewController(chainsService *services.ChainsService, ds *discordgo.Session)
 	}
 }
 
+// GET /analytics/:chain, requires member authorization
 func (s *AnalyticsController) GetChainAnalytics(c *gin.Context) {
 	chainId := c.Param("chain")
+	errCode, err := auth.EnsureGuildMember(c, s.ds, chainId)
+	if err != nil {
+		c.JSON(errCode, gin.H{"error": err.Error()})
+		return
+	}
 	chainDoc, err := s.chainsService.GetChainDocument(chainId)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -35,23 +43,16 @@ func (s *AnalyticsController) GetChainAnalytics(c *gin.Context) {
 	analyzer := model.NewMarkovChainAnalyzer(chain)
 	rawAnalytics := analyzer.GetRawAnalytics()
 
-	c.JSON(200, gin.H{
-		"complexity_score": rawAnalytics.ComplexityScore,
-		"gifs":             rawAnalytics.Gifs,
-		"images":           rawAnalytics.Images,
-		"videos":           rawAnalytics.Videos,
-		"reply_rate":       rawAnalytics.ReplyRate,
-		"words":            rawAnalytics.Words,
-		"messages":         rawAnalytics.Messages,
-		"bytes":            rawAnalytics.Size,
-		"id":               chain.ID,
-		"name":             chainDoc.Name,
-		"max_size_mb":      chainDoc.MaxSizeMb,
-	})
+	c.JSON(200, getSerializableAnalytics(&rawAnalytics, chainDoc))
 }
 
+// GET /analytics, requires owner authorization
 func (s *AnalyticsController) GetAllChainsAnalytics(c *gin.Context) {
-	// Retrieve chains
+	errCode, err := auth.EnsureOwner(c, s.ds)
+	if err != nil {
+		c.JSON(errCode, gin.H{"error": err.Error()})
+		return
+	}
 	chains, err := s.chainsService.GetAllChains()
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -68,20 +69,28 @@ func (s *AnalyticsController) GetAllChainsAnalytics(c *gin.Context) {
 
 		// Get the analytics data
 		rawAnalytics := analyzer.GetRawAnalytics()
-		chainAnalytics := gin.H{
-			"complexity_score": rawAnalytics.ComplexityScore,
-			"gifs":             rawAnalytics.Gifs,
-			"images":           rawAnalytics.Images,
-			"videos":           rawAnalytics.Videos,
-			"reply_rate":       rawAnalytics.ReplyRate,
-			"words":            rawAnalytics.Words,
-			"messages":         rawAnalytics.Messages,
-			"bytes":            rawAnalytics.Size,
-			"id":               chain.ID,
-			"name":             chainDoc.Name,
-			"max_size_mb":      chainDoc.MaxSizeMb,
-		}
+		chainAnalytics := getSerializableAnalytics(&rawAnalytics, chainDoc)
 		allAnalytics = append(allAnalytics, chainAnalytics)
 	}
 	c.JSON(200, allAnalytics)
+}
+
+// ------------ Helpers ---------------
+
+func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDoc *repositories.Chain) gin.H {
+	return gin.H{
+		"complexity_score": rawAnalytics.ComplexityScore,
+		"gifs":             rawAnalytics.Gifs,
+		"images":           rawAnalytics.Images,
+		"videos":           rawAnalytics.Videos,
+		"reply_rate":       rawAnalytics.ReplyRate,
+		"words":            rawAnalytics.Words,
+		"messages":         rawAnalytics.Messages,
+		"bytes":            rawAnalytics.Size,
+		"id":               chainDoc.ID,
+		"name":             chainDoc.Name,
+		"max_size_mb":      chainDoc.MaxSizeMb,
+		"pings_enabled":    chainDoc.Pings,
+		"trained":          chainDoc.Trained,
+	}
 }
