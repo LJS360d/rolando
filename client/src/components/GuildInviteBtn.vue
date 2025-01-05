@@ -7,9 +7,7 @@
 import { useAuthStore } from '@/stores/auth';
 import { ref } from 'vue';
 
-const buttonIcon = ref('fas fa-door-closed');
-const buttonColor = ref('');
-const inviteLink = ref('');
+
 
 export default defineComponent({
   name: 'GuildInviteBtn',
@@ -21,6 +19,9 @@ export default defineComponent({
   },
   data() {
     const auth = useAuthStore();
+    const buttonIcon = ref('fas fa-door-closed');
+    const buttonColor = ref('');
+    const inviteLink = ref('');
     return {
       token: auth.token!,
       inviteLink,
@@ -46,13 +47,13 @@ export default defineComponent({
         const data = await response.json();
 
         if (data && data.invite) {
-          buttonIcon.value = 'fas fa-door-open';
-          buttonColor.value = 'green';
-          inviteLink.value = data.invite;
+          this.buttonIcon = 'fas fa-door-open';
+          this.buttonColor = 'green';
+          this.inviteLink = data.invite;
         }
       } catch (error) {
         console.error('Error fetching invite:', error);
-        buttonColor.value = 'red';
+        this.buttonColor = 'red';
       }
     },
   }

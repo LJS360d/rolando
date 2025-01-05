@@ -139,3 +139,14 @@ export function broadcastMessage(token: string, content: string, guilds: Record<
     }
   })
 }
+
+export function updateChainDocument(token: string, chainId: string, fields: Record<string, any>) {
+  return fetch(`/api/bot/guilds/${chainId}`, {
+    method: "PUT",
+    body: JSON.stringify(fields),
+    headers: {
+      Authorization: token
+    }
+  })
+
+}
