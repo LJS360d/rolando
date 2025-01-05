@@ -29,7 +29,7 @@ func IsImage(url string) bool {
 
 func IsVideo(url string) bool {
 	supportedExtensions := []string{"mp4", "mov"}
-	supportedDomains := []string{"youtube.com", "youtu.be"}
+	supportedDomains := []string{"www.youtube.com", "youtube.com", "youtu.be"}
 	return isSupportedUrl(strings.TrimSpace(url), supportedExtensions, supportedDomains)
 }
 
