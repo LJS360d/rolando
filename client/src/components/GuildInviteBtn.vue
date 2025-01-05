@@ -1,6 +1,12 @@
 <template>
-  <v-btn :icon="buttonIcon" :color="buttonColor" :href="inviteLink" target="_blank" size="small"
-    @click="getInvite"></v-btn>
+  <v-btn
+    :icon="buttonIcon"
+    :color="buttonColor"
+    :href="inviteLink"
+    target="_blank"
+    size="small"
+    @click="getInvite"
+  />
 </template>
 
 <script lang="ts">

@@ -1,10 +1,10 @@
 <template>
   <v-col cols="12" centered>
-    <v-progress-circular color="primary" indeterminate :size="64" :width="6"></v-progress-circular>
+    <v-progress-circular color="primary" indeterminate :size="64" :width="6" />
   </v-col>
 </template>
 
-<script setup>
+<script setup lang="js">
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 
