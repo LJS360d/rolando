@@ -24,7 +24,7 @@ type NumericChainAnalytics struct {
 	Videos          int
 	ReplyRate       int
 	Words           int
-	Messages        int
+	Messages        uint32
 	Size            uint64
 }
 
