@@ -1,38 +1,75 @@
 <template>
   <template v-if="isDataAvailable">
-    <div style="height: 20px;" class="position-relative d-flex justify-end pa-0 ma-0 w-full">
+    <div
+      style="height: 20px;"
+      class="position-relative d-flex justify-end pa-0 ma-0 w-full"
+    >
       <span class="text-caption">
         {{ formatBytes(max) }}
       </span>
-      <span class="position-absolute bottom-0 w-max-content text-caption"
-        :style="{ left: ((current / max) * (100) - 1.5) + '%' }">
+      <span
+        class="position-absolute bottom-0 w-max-content text-caption"
+        :style="{ left: ((current / max) * (100) - 1.5) + '%' }"
+      >
         {{ formatBytes(current) }}
       </span>
     </div>
-    <v-progress-linear :value="max" height="20" color="grey lighten-2" class="rounded-lg overflow-visible" :max="max">
-      <div class="mem-breakpoint bg-light-blue" :style="{ left: (current / max) * (100) + '%' }">
-      </div>
+    <v-progress-linear
+      :value="max"
+      height="20"
+      color="grey lighten-2"
+      class="rounded-lg overflow-visible"
+      :max="max"
+    >
+      <div
+        class="mem-breakpoint bg-light-blue"
+        :style="{ left: (current / max) * (100) + '%' }"
+      />
       <!-- Peak line -->
-      <v-tooltip v-slot:activator="{ props }" :text="formatBytes(peak)" location="top center">
-        <div v-bind="props" class="mem-breakpoint bg-red" :style="{ left: (peak / max) * (100) + '%' }">
-        </div>
+      <v-tooltip
+        #activator="{ props }"
+        :text="formatBytes(peak)"
+        location="top center"
+      >
+        <div
+          v-bind="props"
+          class="mem-breakpoint bg-red"
+          :style="{ left: (peak / max) * (100) + '%' }"
+        />
       </v-tooltip>
       <!-- Memory blocks -->
-      <div v-for="(block, index) in blocks" :v-if="!!block" :key="index" class="memory-block" :style="{
-        width: ((block) / max) * (100) + '%',
-        backgroundColor: getBlockColor(index),
-      }">
-      </div>
+      <div
+        v-for="(block, index) in blocks"
+        :key="index"
+        :v-if="!!block"
+        class="memory-block"
+        :style="{
+          width: ((block) / max) * (100) + '%',
+          backgroundColor: getBlockColor(index),
+        }"
+      />
     </v-progress-linear>
-    <div style="height: 20px;" class="position-relative d-flex justify-end pa-0 ma-0 w-full">
+    <div
+      style="height: 20px;"
+      class="position-relative d-flex justify-end pa-0 ma-0 w-full"
+    >
       <!-- Peak label -->
-      <span class="position-absolute w-max-content text-caption" :style="{ left: ((peak / max) * (100) - 1.5) + '%' }">
+      <span
+        class="position-absolute w-max-content text-caption"
+        :style="{ left: ((peak / max) * (100) - 1.5) + '%' }"
+      >
         {{ formatBytes(peak) }}
       </span>
     </div>
   </template>
   <!-- Skeleton loader when data is unavailable -->
-  <v-progress-linear v-else indeterminate height="20" color="grey lighten-3" class="rounded-lg" />
+  <v-progress-linear
+    v-else
+    indeterminate
+    height="20"
+    color="grey lighten-3"
+    class="rounded-lg"
+  />
 </template>
 
 <script lang="ts">

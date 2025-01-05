@@ -1,10 +1,19 @@
 <template>
   <v-app-bar app>
-    <v-app-bar-nav-icon icon="fas fa-bars" @click="drawer = !drawer" />
+    <v-app-bar-nav-icon
+      icon="fas fa-bars"
+      @click="drawer = !drawer"
+    />
 
-    <v-tooltip text="Join the discord" location="bottom">
-      <template v-slot:activator="{ props }">
-        <a v-bind="props" :href="DISCORD_SERVER_INVITE">
+    <v-tooltip
+      text="Join the discord"
+      location="bottom"
+    >
+      <template #activator="{ props }">
+        <a
+          v-bind="props"
+          :href="DISCORD_SERVER_INVITE"
+        >
           <v-app-bar-nav-icon icon="fa-brands fa-discord" />
         </a>
       </template>
@@ -12,35 +21,79 @@
 
     <v-spacer />
 
-    <v-tooltip v-if="isLoggedIn" text="Click to Logout" location="bottom">
-      <template v-slot:activator="{ props }">
-        <div v-bind="props" class="cursor-pointer pa-1 mr-2 rounded" @click="logout">
-          <v-avatar class="mr-3" :size="40">
-            <img :src="userAvatarUrl" alt="User Avatar" />
+    <v-tooltip
+      v-if="isLoggedIn"
+      text="Click to Logout"
+      location="bottom"
+    >
+      <template #activator="{ props }">
+        <div
+          v-bind="props"
+          class="cursor-pointer pa-1 mr-2 rounded"
+          @click="logout"
+        >
+          <v-avatar
+            class="mr-3"
+            :size="40"
+          >
+            <img
+              :src="userAvatarUrl"
+              alt="User Avatar"
+            >
           </v-avatar>
           <span>{{ userDisplayName }}</span>
         </div>
       </template>
     </v-tooltip>
-    <v-btn v-else class="ml-3 bg-discord" :href="OAUTH2_URL" target="_self">
-      <v-icon class="mr-2" icon="fa-brands fa-discord"></v-icon>
+    <v-btn
+      v-else
+      class="ml-3 bg-discord"
+      :href="OAUTH2_URL"
+      target="_self"
+    >
+      <v-icon
+        class="mr-2"
+        icon="fa-brands fa-discord"
+      />
       Login with Discord
     </v-btn>
   </v-app-bar>
 
-  <v-navigation-drawer v-model="drawer" app width="250">
+  <v-navigation-drawer
+    v-model="drawer"
+    app
+    width="250"
+  >
     <v-list>
-      <v-list-item @click="$router.push(item.href)" v-for="(item, index) in links" :key="index">
+      <v-list-item
+        v-for="(item, index) in links"
+        :key="index"
+        @click="$router.push(item.href)"
+      >
         <span>
-          <v-icon :v-if="item.icon" class="mx-2" size="16" :icon="item.icon"></v-icon>
+          <v-icon
+            :v-if="item.icon"
+            class="mx-2"
+            size="16"
+            :icon="item.icon"
+          />
           <span class="text-body-2">{{ item.name }}</span>
         </span>
       </v-list-item>
       <template v-if="isOwner">
-        <v-divider></v-divider>
-        <v-list-item @click="$router.push(item.href)" v-for="(item, index) in adminLinks" :key="index">
+        <v-divider />
+        <v-list-item
+          v-for="(item, index) in adminLinks"
+          :key="index"
+          @click="$router.push(item.href)"
+        >
           <span>
-            <v-icon :v-if="item.icon" class="mx-2" size="16" :icon="item.icon"></v-icon>
+            <v-icon
+              :v-if="item.icon"
+              class="mx-2"
+              size="16"
+              :icon="item.icon"
+            />
             <span class="text-body-2">{{ item.name }}</span>
           </span>
         </v-list-item>

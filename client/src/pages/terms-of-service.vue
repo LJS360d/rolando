@@ -9,7 +9,9 @@
           <v-list-item-group v-for="(section, index) in sections" :key="index">
             <v-list-item class="mt-5">
               <div>
-                <h3 class="headline font-weight-bold">{{ section.title }}</h3>
+                <h3 class="headline font-weight-bold">
+                  {{ section.title }}
+                </h3>
                 <p>{{ section.content }}</p>
               </div>
             </v-list-item>
@@ -20,7 +22,7 @@
   </v-container>
 </template>
 
-<script>
+<script lang="js">
 export default {
   data() {
     return {
