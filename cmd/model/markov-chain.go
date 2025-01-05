@@ -12,7 +12,7 @@ type MarkovChain struct {
 	ReplyRate      int
 	Pings          bool
 	State          map[string]map[string]int
-	MessageCounter int
+	MessageCounter uint32
 	MediaStorage   *MediaStorage
 	mu             sync.RWMutex
 }
@@ -79,7 +79,7 @@ func (mc *MarkovChain) GenerateText(startWord string, length int) string {
 
 		smoothedWeights := make([]float64, len(nextWordWeights))
 		for i, weight := range nextWordWeights {
-			smoothedWeights[i] = float64(weight+1) / float64(mc.MessageCounter+len(nextWordArray))
+			smoothedWeights[i] = float64(weight+1) / float64(int(mc.MessageCounter)+len(nextWordArray))
 		}
 
 		nextWord := mc.StochasticChoice(nextWordArray, smoothedWeights)
