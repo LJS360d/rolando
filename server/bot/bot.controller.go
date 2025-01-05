@@ -7,6 +7,7 @@ import (
 	"rolando/config"
 	"rolando/server/auth"
 	"runtime"
+	"strconv"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -149,6 +150,31 @@ func (s *BotController) UpdateChainDoc(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	chain, err := s.chainsService.GetChain(guildId)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	// Reply Rate immediate update
+	if replyRateRaw, ok := fields["reply_rate"]; ok {
+		replyRateStr, _ := replyRateRaw.(string)
+		replyRate, err := strconv.Atoi(replyRateStr)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "reply_rate must be an integer"})
+			return
+		}
+		chain.ReplyRate = replyRate
+	}
+	// Pings immediate update
+	if pingsRaw, ok := fields["pings"]; ok {
+		pings, ok := pingsRaw.(bool)
+		if !ok {
+			c.JSON(400, gin.H{"error": "pings must be a boolean"})
+			return
+		}
+		chain.Pings = pings
+	}
+	// DB fields update
 	chainDoc, err := s.chainsService.UpdateChainDocument(guildId, fields)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
