@@ -105,6 +105,35 @@ func (s *BotController) GetBotGuilds(c *gin.Context) {
 	c.JSON(200, guilds)
 }
 
+// GET /bot/guilds/:guildId, requires member authorization
+func (s *BotController) GetGuild(c *gin.Context) {
+	guildId := c.Param("guildId")
+	errCode, err := auth.EnsureGuildMember(c, s.ds, guildId)
+	if err != nil {
+		c.JSON(errCode, gin.H{"error": err.Error()})
+		return
+	}
+
+	guild, err := s.ds.State.Guild(guildId)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	userGuild := discordgo.UserGuild{
+		ID:                       guild.ID,
+		Name:                     guild.Name,
+		Icon:                     guild.Icon,
+		ApproximateMemberCount:   guild.MemberCount,
+		ApproximatePresenceCount: guild.ApproximatePresenceCount,
+		Features:                 guild.Features,
+		Owner:                    guild.Owner,
+		Permissions:              guild.Permissions,
+	}
+
+	c.JSON(200, userGuild)
+}
+
 // GET /bot/guilds/:guildId/invite, requires owner authorization
 func (s *BotController) GetGuildInvite(c *gin.Context) {
 	errCode, err := auth.EnsureOwner(c, s.ds)

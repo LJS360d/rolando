@@ -29,11 +29,6 @@ func (s *DataController) GetData(c *gin.Context) {
 		c.JSON(errCode, gin.H{"error": err.Error()})
 		return
 	}
-	guild, err := s.ds.State.Guild(chainId)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
 	messages, err := s.messagesRepo.GetAllGuildMessages(chainId)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -42,15 +37,7 @@ func (s *DataController) GetData(c *gin.Context) {
 	for i, message := range messages {
 		content[i] = message.Content
 	}
-	c.JSON(200, gin.H{
-		"guild": gin.H{
-			"name":    guild.Name,
-			"id":      guild.ID,
-			"icon":    guild.Icon,
-			"members": guild.MemberCount,
-		},
-		"messages": content,
-	})
+	c.JSON(200, content)
 }
 
 // GET /data/:chain, requires guild member authorization
@@ -63,12 +50,6 @@ func (s *DataController) GetDataPaginated(c *gin.Context) {
 	page, err := strconv.Atoi(c.Query("page"))
 	if err != nil || page < 1 {
 		page = 1 // default to first page
-	}
-
-	guild, err := s.ds.State.Guild(chainId)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
 	}
 
 	offset := (page - 1) * pageSize
@@ -84,15 +65,7 @@ func (s *DataController) GetDataPaginated(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
-		"data": gin.H{
-			"guild": gin.H{
-				"name":    guild.Name,
-				"id":      guild.ID,
-				"icon":    guild.Icon,
-				"members": guild.MemberCount,
-			},
-			"messages": content,
-		},
+		"data": content,
 		"meta": gin.H{
 			"currentPage": page,
 			"pageSize":    pageSize,
