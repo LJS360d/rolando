@@ -73,6 +73,21 @@ export function useGetBotGuilds(token: string) {
   });
 }
 
+export function useGetBotGuild(token: string, guildId: string) {
+  return useQuery({
+    queryKey: [`/bot/guilds/${guildId}`],
+    queryFn: async () => {
+      const response = await fetch(`/api/bot/guilds/${guildId}`, {
+        headers: {
+          Authorization: token
+        }
+      });
+      if (!response.ok) throw new Error(`Failed to fetch bot guild ${guildId}`);
+      return response.json() as Promise<BotGuild>;
+    },
+  });
+}
+
 export interface BotResources {
   cpu_cores: number;
   memory: BotMemory;
