@@ -59,13 +59,6 @@ export default defineComponent({
       required: false,
     },
   },
-  data() {
-    return {
-      max: this.max,
-      peak: this.peak,
-      current: this.current
-    };
-  },
   computed: {
     isDataAvailable(): boolean {
       return !!this.max && !!this.peak && !!this.blocks;
