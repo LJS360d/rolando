@@ -1,21 +1,37 @@
 <template>
   <v-container>
     <template v-if="!isLoadingGuild && !isErrorGuild && guild">
-      <v-card flat :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
-        <template v-slot:title>
+      <v-card
+        flat
+        :prepend-avatar="guildIconUrl(guild.id, guild.icon)"
+      >
+        <template #title>
           <span class="font-weight-light">{{ guild.name }}</span>
         </template>
-        <template v-slot:subtitle>
+        <template #subtitle>
           <span class="text-sm"><b>{{ guild.approximate_member_count }}</b> members</span>
         </template>
-        <template v-slot:text v-if="!!chain">
-          <v-row justify="center" class="pa-3 pb-0">
+        <template
+          v-if="!!chain"
+          #text
+        >
+          <v-row
+            justify="center"
+            class="pa-3 pb-0"
+          >
             <span>{{ formatBytes(chain?.bytes ?? 0) }} / {{ formatBytes(1024 ** 2 *
               (chain?.max_size_mb ?? 0)) }}</span>
           </v-row>
-          <v-row justify="space-between" class="pa-3">
+          <v-row
+            justify="space-between"
+            class="pa-3"
+          >
             <v-col cols="12">
-              <v-row v-for="(field, key) in getChainAnalytics()" :key="key" justify="space-between">
+              <v-row
+                v-for="(field, key) in getChainAnalytics()"
+                :key="key"
+                justify="space-between"
+              >
                 <span class="text-xs">{{ key }}</span>
                 <span class="text-xs">{{ formatNumber(field) }}</span>
               </v-row>
@@ -24,8 +40,15 @@
         </template>
       </v-card>
     </template>
-    <v-skeleton-loader v-else-if="!isErrorGuild" type="card-avatar" />
-    <v-alert v-else type="error" class="text-body-2">
+    <v-skeleton-loader
+      v-else-if="!isErrorGuild"
+      type="card-avatar"
+    />
+    <v-alert
+      v-else
+      type="error"
+      class="text-body-2"
+    >
       Oops, big error occured, please report it to the creator on <a :href="discordServerInvite">the discord</a>
     </v-alert>
     <v-divider class="my-4" />
@@ -35,36 +58,36 @@
     </template>
     <template v-if="!isLoadingMessages && !isErrorMessages && messages">
       <v-list density="compact">
-        <v-list-item v-for="(_, i) of messages?.data" :key="i" :class="{ 'bg-dark': i % 2 !== 0 }">
-          <template v-slot:title>
-            <p class="message-content" v-html="renderedMessages[i]"></p>
+        <v-list-item
+          v-for="(_, i) of messages?.data"
+          :key="i"
+          :class="{ 'bg-dark': i % 2 !== 0 }"
+        >
+          <template #title>
+            <p
+              class="message-content"
+              v-html="renderedMessages[i]"
+            />
           </template>
         </v-list-item>
       </v-list>
     </template>
-    <v-skeleton-loader v-else-if="!isErrorMessages" type="list-item-three-line" />
-    <v-alert v-else type="error" class="text-body-2">
+    <v-skeleton-loader
+      v-else-if="!isErrorMessages"
+      type="list-item-three-line"
+    />
+    <v-alert
+      v-else
+      type="error"
+      class="text-body-2"
+    >
       There was an error loading the messages
     </v-alert>
     <template v-if="pagination.totalPages > 1">
       <app-paginator :pagination="pagination" />
     </template>
-
-
   </v-container>
 </template>
-
-<style scoped>
-.message-content {
-  white-space: normal;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
-
-.bg-dark {
-  background-color: #09090989;
-}
-</style>
 
 <script lang="ts">
 import { useGetChainAnalytics } from "@/api/analytics";
@@ -144,3 +167,15 @@ export default defineComponent({
   },
 });
 </script>
+
+<style scoped>
+.message-content {
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.bg-dark {
+  background-color: #09090989;
+}
+</style>

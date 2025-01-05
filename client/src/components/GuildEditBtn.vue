@@ -1,25 +1,63 @@
 <template>
-  <v-btn icon="fas fa-edit" size="small" @click="open = true"></v-btn>
-  <v-dialog v-model="open" :max-width="425">
+  <v-btn
+    icon="fas fa-edit"
+    size="small"
+    @click="open = true"
+  />
+  <v-dialog
+    v-model="open"
+    :max-width="425"
+  >
     <v-card :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
-      <template v-slot:title>
+      <template #title>
         <span class="font-weight-light">Edit Guild</span>
       </template>
-      <template v-slot:subtitle>
+      <template #subtitle>
         <span class="text-sm">{{ guild.name }} | <b>{{ guild.approximate_member_count }}</b> members</span>
       </template>
-      <template v-slot:text>
+      <template #text>
         <v-col>
-          <v-switch v-model="fields.pings_enabled" label="Enable pings" inset dense color="primary"></v-switch>
-          <v-switch v-model="fields.trained" label="Trained" inset dense color="primary"></v-switch>
-          <v-text-field v-model="fields.reply_rate" type="number" label="Reply Rate" outlined dense></v-text-field>
-          <v-text-field v-model="fields.max_size_mb" type="number" label="Max Size (MB)" outlined dense></v-text-field>
+          <v-switch
+            v-model="fields.pings_enabled"
+            label="Enable pings"
+            inset
+            dense
+            color="primary"
+          />
+          <v-switch
+            v-model="fields.trained"
+            label="Trained"
+            inset
+            dense
+            color="primary"
+          />
+          <v-text-field
+            v-model="fields.reply_rate"
+            type="number"
+            label="Reply Rate"
+            outlined
+            dense
+          />
+          <v-text-field
+            v-model="fields.max_size_mb"
+            type="number"
+            label="Max Size (MB)"
+            outlined
+            dense
+          />
         </v-col>
       </template>
       <v-card-actions>
         <v-spacer />
-        <v-btn @click="open = false">Cancel</v-btn>
-        <v-btn color="primary" @click="confirm">Confirm</v-btn>
+        <v-btn @click="open = false">
+          Cancel
+        </v-btn>
+        <v-btn
+          color="primary"
+          @click="confirm"
+        >
+          Confirm
+        </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

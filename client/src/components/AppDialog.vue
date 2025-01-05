@@ -1,12 +1,24 @@
 <template>
-  <v-dialog v-model="visible" :max-width="425">
+  <v-dialog
+    v-model="visible"
+    :max-width="425"
+  >
     <v-card>
-      <v-card-title class="text-h6">{{ title }}</v-card-title>
+      <v-card-title class="text-h6">
+        {{ title }}
+      </v-card-title>
       <v-card-text>{{ message }}</v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn @click="cancel">Cancel</v-btn>
-        <v-btn color="primary" @click="confirm">Confirm</v-btn>
+        <v-btn @click="cancel">
+          Cancel
+        </v-btn>
+        <v-btn
+          color="primary"
+          @click="confirm"
+        >
+          Confirm
+        </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
