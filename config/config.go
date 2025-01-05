@@ -20,6 +20,7 @@ var (
 	DatabasePath  string
 	ServerAddress string
 	StartupTime   time.Time
+	RunHttpServer bool
 )
 
 func init() {
@@ -52,9 +53,9 @@ func init() {
 	}
 	ServerAddress = os.Getenv("SERVER_ADDRESS")
 	if ServerAddress == "" {
-		log.Println("SERVER_ADDRESS not set in the environment")
-		ServerAddress = "0.0.0.0:8080"
+		ServerAddress = "127.0.0.1:8080"
 	}
+	RunHttpServer = os.Getenv("RUN_HTTP_SERVER") == "true" || os.Getenv("RUN_HTTP_SERVER") == "1" || os.Getenv("RUN_HTTP_SERVER") == ""
 	StartupTime = time.Now()
 
 	Intents = (discordgo.IntentDirectMessageReactions |
