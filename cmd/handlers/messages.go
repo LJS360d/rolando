@@ -35,18 +35,10 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 		return
 	}
 
-	// Fetch chain for the guild
+	// Fetch/Create chain for the guild
 	chain, err := h.ChainsService.GetChain(guild.ID)
 	if err != nil {
 		log.Log.Errorf("Failed to fetch chain for guild %s: %v", guild.ID, err)
-		return
-	}
-
-	// Create a new chain if none exists
-	if chain == nil {
-		if _, err := h.ChainsService.CreateChain(guild.ID, guild.Name); err != nil {
-			log.Log.Errorf("Failed to create chain for guild %s: %v", guild.ID, err)
-		}
 		return
 	}
 
@@ -61,36 +53,46 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 	if utils.MentionsUser(m.Message, s.State.User.ID, guild) {
 		// Reply when mentioned
 		go func() {
-			if err := h.sendReply(m.ChannelID, chain); err != nil {
-				log.Log.Errorf("Failed to send reply: %v", err)
+			message, err := h.getMessage(chain)
+			if err != nil {
+				log.Log.Errorf("Failed to generate text for mention reply: %v", err)
+				return
+			}
+
+			if _, err = h.Client.ChannelMessageSendComplex(m.ChannelID, &discord.MessageSend{
+				Content: message,
+				Reference: &discord.MessageReference{
+					MessageID: m.ID,
+					ChannelID: m.ChannelID,
+					GuildID:   m.GuildID,
+				},
+			}); err != nil {
+				log.Log.Errorf("Failed to send mention reply: %v", err)
 			}
 		}()
 		return
 	}
 
 	// Randomly decide if bot should reply
-	if shouldReply(chain.ReplyRate) {
+	if shouldSendRandomMessage(chain.ReplyRate) {
 		go func() {
-			if err := h.sendReply(m.ChannelID, chain); err != nil {
-				log.Log.Errorf("Failed to send reply: %v", err)
+			message, err := h.getMessage(chain)
+			if err != nil {
+				log.Log.Errorf("Failed to generate text for random message: %v", err)
+				return
+			}
+			if _, err = h.Client.ChannelMessageSend(m.ChannelID, message); err != nil {
+				log.Log.Errorf("Failed to send random message: %v", err)
 			}
 		}()
 	}
 }
 
-// Helper method to determine if bot should reply
-func shouldReply(replyRate int) bool {
-	return replyRate == 1 || (replyRate > 1 && utils.GetRandom(1, replyRate) == 1)
-}
+// --------------------- Helpers ---------------------------
 
-// Helper method to send a reply
-func (h *MessageHandler) sendReply(channelID string, chain *model.MarkovChain) error {
-	message, err := h.getMessage(chain)
-	if err != nil {
-		return err
-	}
-	_, err = h.Client.ChannelMessageSend(channelID, message)
-	return err
+// Helper method to determine if bot should send a random message
+func shouldSendRandomMessage(replyRate int) bool {
+	return replyRate == 1 || (replyRate > 1 && utils.GetRandom(1, replyRate) == 1)
 }
 
 // Generate a message based on chain probabilities
