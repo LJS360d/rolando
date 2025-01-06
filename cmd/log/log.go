@@ -3,10 +3,13 @@ package log
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"regexp"
+	"rolando/config"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -28,55 +31,58 @@ const (
 )
 
 type WebhookSyncer struct {
-	url string
+	zapcore.WriteSyncer
+	url   string
+	mutex sync.Mutex
 }
 
-// Write sends the log entry to the webhook asynchronously.
+// Write appends log messages to the buffer.
 func (ws *WebhookSyncer) Write(p []byte) (n int, err error) {
-	go func() {
-		payload := map[string]string{
-			"content": removeANSICodes(string(p)),
-		}
-		body, _ := json.Marshal(payload)
-		_, _ = http.Post(ws.url, "application/json", bytes.NewBuffer(body))
-	}()
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+
+	content := removeANSICodes(string(p))
+	payload := map[string]string{
+		"content": content,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = http.Post(ws.url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return 0, err
+	}
+
 	return len(p), nil
 }
 
-func removeANSICodes(input string) string {
-	// Regular expression to match ANSI escape codes
-	re := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-
-	// Replace all matches with an empty string
-	return re.ReplaceAllString(input, "")
-}
-
-// Sync is required to implement zapcore.WriteSyncer.
 func (ws *WebhookSyncer) Sync() error {
 	return nil
 }
 
-func init() {
-	// Optionally set the webhook URL via an environment variable or pass as a flag
-	webhookURL := os.Getenv("LOG_WEBHOOK")
+func removeANSICodes(input string) string {
+	re := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return re.ReplaceAllString(input, "")
+}
 
+func init() {
+	webhookURL := config.LogWebhook
+	fmt.Println(webhookURL)
 	var writeSyncers []zapcore.WriteSyncer
 
-	// Always log to stdout
 	writeSyncers = append(writeSyncers, zapcore.AddSync(os.Stdout))
 
-	// Add webhook syncer if URL is provided
 	if webhookURL != "" {
 		webhookSyncer := &WebhookSyncer{url: webhookURL}
 		writeSyncers = append(writeSyncers, zapcore.AddSync(webhookSyncer))
 	}
 
-	// Custom time encoder for the format [dd/mm/YYYY HH:mm:ss]
 	timeEncoder := func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 		enc.AppendString(ColorGray + t.Format("[02/01/2006 15:04:05]") + ColorReset)
 	}
 
-	// Custom level encoder with colored output
 	levelEncoder := func(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 		var color string
 		switch l {
@@ -84,16 +90,14 @@ func init() {
 			color = ColorGreen
 		case zapcore.WarnLevel:
 			color = ColorYellow
-		case zapcore.ErrorLevel:
-		case zapcore.FatalLevel:
+		case zapcore.ErrorLevel, zapcore.FatalLevel:
 			color = ColorRed
 		default:
 			color = ColorWhite
 		}
-		enc.AppendString(string(color) + strings.ToUpper(l.String()) + string(ColorReset))
+		enc.AppendString(color + strings.ToUpper(l.String()) + ColorReset)
 	}
 
-	// Configure the encoder
 	encoderCfg := zapcore.EncoderConfig{
 		TimeKey:        "timestamp",
 		EncodeTime:     timeEncoder,
@@ -106,17 +110,13 @@ func init() {
 		EncodeName:     zapcore.FullNameEncoder,
 	}
 
-	// Use a console encoder with the custom settings
 	encoder := zapcore.NewConsoleEncoder(encoderCfg)
-
-	// Create a core that writes logs to all configured write syncers
 	core := zapcore.NewCore(
 		encoder,
 		zapcore.NewMultiWriteSyncer(writeSyncers...),
 		zap.InfoLevel,
 	)
 
-	// Create the logger
 	logger := zap.New(core)
 	defer logger.Sync()
 	Log = logger.Sugar()
