@@ -431,13 +431,13 @@ func (h *SlashCommandsHandler) togglePingsCommand(s *discordgo.Session, i *disco
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Failed to retrieve chain data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		return
 	}
 
-	chain.Pings = !chain.Pings
-	if _, err := h.ChainsService.UpdateChainDocument(chain.ID, map[string]interface{}{"pings": chain.Pings}); err != nil {
+	if _, err := h.ChainsService.UpdateChainMeta(guildID, map[string]interface{}{"pings": !chain.Pings}); err != nil {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -489,8 +489,7 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 		if !h.checkAdmin(i, "You are not authorized to change the reply rate.") {
 			return
 		}
-		chain.ReplyRate = *rate
-		if _, err := h.ChainsService.UpdateChainDocument(chain.ID, map[string]interface{}{"reply_rate": *rate}); err != nil {
+		if _, err := h.ChainsService.UpdateChainMeta(chain.ID, map[string]interface{}{"reply_rate": *rate}); err != nil {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{

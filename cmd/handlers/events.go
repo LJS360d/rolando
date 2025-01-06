@@ -53,7 +53,7 @@ func (h *EventsHandler) onGuildUpdate(s *discordgo.Session, e *discordgo.Event) 
 		log.Log.Errorf("Failed to fetch guild for guild update event: %v", err)
 		return
 	}
-	h.ChainsService.UpdateChainDocument(oldGuild.ID, map[string]interface{}{"name": guildUpdate.Name})
+	h.ChainsService.UpdateChainMeta(oldGuild.ID, map[string]interface{}{"name": guildUpdate.Name})
 	log.Log.Infof("Guild %s updated: %s -> %s", guildUpdate.ID, oldGuild.Name, guildUpdate.Name)
 }
 
