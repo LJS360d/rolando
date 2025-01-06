@@ -6,6 +6,7 @@ import (
 	"rolando/cmd/model"
 	"rolando/cmd/repositories"
 	"rolando/cmd/utils"
+	"strconv"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -94,10 +95,31 @@ func (cs *ChainsService) DeleteTextData(id, data string) error {
 	return cs.messagesRepo.DeleteGuildMessage(id, data)
 }
 
-// UpdateChainDocument updates the chain's properties in the repository.
-func (cs *ChainsService) UpdateChainDocument(id string, fields map[string]any) (*repositories.Chain, error) {
+// UpdateChainMeta updates the chain's properties in memory and in the repository.
+func (cs *ChainsService) UpdateChainMeta(id string, fields map[string]any) (*repositories.Chain, error) {
 	if _, ok := fields["id"]; ok {
-		return nil, errors.New("cannot update field 'id'")
+		return nil, errors.New("cannot change field 'id'")
+	}
+	chain, err := cs.GetChain(id)
+	if err != nil {
+		return nil, err
+	}
+	// Reply Rate immediate update
+	if replyRateRaw, ok := fields["reply_rate"]; ok {
+		replyRateStr, _ := replyRateRaw.(string)
+		replyRate, err := strconv.Atoi(replyRateStr)
+		if err != nil {
+			return nil, errors.New("reply_rate must be an integer")
+		}
+		chain.ReplyRate = replyRate
+	}
+	// Pings immediate update
+	if pingsRaw, ok := fields["pings"]; ok {
+		pings, ok := pingsRaw.(bool)
+		if !ok {
+			return nil, errors.New("pings must be a boolean")
+		}
+		chain.Pings = pings
 	}
 	return cs.chainsRepo.UpdateChain(id, fields)
 }
