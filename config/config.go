@@ -19,6 +19,7 @@ var (
 	Env           string
 	DatabasePath  string
 	ServerAddress string
+	LogWebhook    string
 	StartupTime   time.Time
 	RunHttpServer bool
 )
@@ -39,6 +40,10 @@ func init() {
 	InviteUrl = os.Getenv("INVITE_URL")
 	if InviteUrl == "" {
 		log.Println("INVITE_URL not set in the environment")
+	}
+	LogWebhook = os.Getenv("LOG_WEBHOOK")
+	if LogWebhook == "" {
+		log.Println("LOG_WEBHOOK not set in the environment")
 	}
 	ownerIDsStr := os.Getenv("OWNER_IDS")
 	if ownerIDsStr == "" {
