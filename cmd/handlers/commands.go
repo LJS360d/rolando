@@ -351,7 +351,7 @@ func (h *SlashCommandsHandler) analyticsCommand(s *discordgo.Session, i *discord
 	// Constructing the embed
 	embed := &discordgo.MessageEmbed{
 		Title:       "Analytics",
-		Description: "",
+		Description: "**Complexity Score**: indicates how *smart* the bot is.\nA higher value means smarter",
 		Color:       0xFFD700, // Gold color
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -420,7 +420,7 @@ func (h *SlashCommandsHandler) analyticsCommand(s *discordgo.Session, i *discord
 
 // implementation of /togglepings command
 func (h *SlashCommandsHandler) togglePingsCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if !h.checkAdmin(i, "You are not authorized to toggle pings.") {
+	if !h.checkAdmin(i) {
 		return
 	}
 
