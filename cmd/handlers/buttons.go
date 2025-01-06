@@ -60,13 +60,13 @@ func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.Inter
 	})
 
 	// Check if training is already completed
-	chain, err := h.ChainsService.GetChainDocument(i.GuildID)
+	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID)
 	if err != nil {
 		log.Log.Errorf("Failed to fetch chain for guild %s: %v", i.GuildID, err)
 		return
 	}
 
-	if chain.Trained {
+	if chainDoc.Trained {
 		s.ChannelMessageSend(i.ChannelID, "Training already completed for this server.")
 		return
 	}
@@ -84,8 +84,8 @@ func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.Inter
 		}
 
 		// Update chain status
-		chain.Trained = true
-		_, err = h.ChainsService.UpdateChainDocument(i.GuildID, map[string]any{"trained": true})
+		chainDoc.Trained = true
+		_, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained": true})
 		if err != nil {
 			log.Log.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
 			return
