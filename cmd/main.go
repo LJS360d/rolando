@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"rolando/config"
@@ -25,8 +24,8 @@ var (
 func main() {
 	config.Version = Version
 	config.Env = Env
-	fmt.Println("Version: ", config.Version)
-	fmt.Println("Env: ", config.Env)
+	log.Log.Infof("Version: %s", config.Version)
+	log.Log.Infof("Env: %s", config.Env)
 	log.Log.Infoln("Creating discord session...")
 	ds, err := discordgo.New("Bot " + config.Token)
 	if err != nil {

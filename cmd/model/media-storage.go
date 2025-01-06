@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"rolando/cmd/log"
@@ -94,7 +95,7 @@ func (ms *MediaStorage) GetMedia(mediaType string) (string, error) {
 
 	if len(set) == 0 {
 		ms.mu.RUnlock()
-		return "", errors.New("no media found for this type")
+		return "", fmt.Errorf("no media found for type '%s'", mediaType)
 	}
 
 	// Pre-allocate slice with exact size needed
