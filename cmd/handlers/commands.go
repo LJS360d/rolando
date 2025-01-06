@@ -207,7 +207,14 @@ func (h *SlashCommandsHandler) OnSlashCommandInteraction(s *discordgo.Session, i
 		return
 	}
 	commandName := i.ApplicationCommandData().Name
-	log.Log.Infof("from %s in %s: /%s", i.Member.User.Username, i.GuildID, commandName)
+	guild, err := h.Client.State.Guild(i.GuildID)
+	if err != nil {
+		log.Log.Errorf("Failed to fetch guild '%s' for interaction: %v", i.GuildID, err)
+		return
+	}
+	who := i.User.Username
+	where := guild.Name
+	log.Log.Infof("from '%s' in '%s': /%s", who, where, commandName)
 	if handler, exists := h.Commands[commandName]; exists {
 		handler(s, i) // Call the function bound to this command
 	}

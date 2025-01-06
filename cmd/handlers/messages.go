@@ -38,14 +38,14 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 	// Fetch/Create chain for the guild
 	chain, err := h.ChainsService.GetChain(guild.ID)
 	if err != nil {
-		log.Log.Errorf("Failed to fetch chain for guild %s: %v", guild.ID, err)
+		log.Log.Errorf("Failed to fetch chain in '%s': %v", guild.Name, err)
 		return
 	}
 
 	// Update chain state if message content is valid
 	if len(content) > 3 {
 		if _, err := h.ChainsService.UpdateChainState(guild.ID, []string{content}); err != nil {
-			log.Log.Errorf("Failed to update chain state for guild %s: %v", guild.ID, err)
+			log.Log.Errorf("Failed to update chain state in '%s': %v", guild.Name, err)
 		}
 	}
 
@@ -55,7 +55,7 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 		go func() {
 			message, err := h.getMessage(chain)
 			if err != nil {
-				log.Log.Errorf("Failed to generate text for mention reply: %v", err)
+				log.Log.Errorf("Failed to generate text for mention reply in '%s': %v", guild.Name, err)
 				return
 			}
 
@@ -67,7 +67,7 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 					GuildID:   m.GuildID,
 				},
 			}); err != nil {
-				log.Log.Errorf("Failed to send mention reply: %v", err)
+				log.Log.Errorf("Failed to send mention reply in '%s': %v", guild.Name, err)
 			}
 		}()
 		return
@@ -78,11 +78,11 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 		go func() {
 			message, err := h.getMessage(chain)
 			if err != nil {
-				log.Log.Errorf("Failed to generate text for random message: %v", err)
+				log.Log.Errorf("Failed to generate text for random message in '%s': %v", guild.Name, err)
 				return
 			}
 			if _, err = h.Client.ChannelMessageSend(m.ChannelID, message); err != nil {
-				log.Log.Errorf("Failed to send random message: %v", err)
+				log.Log.Errorf("Failed to send random message in '%s': %v", guild.Name, err)
 			}
 		}()
 	}
