@@ -69,7 +69,6 @@ func removeANSICodes(input string) string {
 
 func init() {
 	webhookURL := config.LogWebhook
-	fmt.Println(webhookURL)
 	var writeSyncers []zapcore.WriteSyncer
 
 	writeSyncers = append(writeSyncers, zapcore.AddSync(os.Stdout))
@@ -79,10 +78,12 @@ func init() {
 		writeSyncers = append(writeSyncers, zapcore.AddSync(webhookSyncer))
 	}
 
+	// Time encoder
 	timeEncoder := func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 		enc.AppendString(ColorGray + t.Format("[02/01/2006 15:04:05]") + ColorReset)
 	}
 
+	// Level encoder
 	levelEncoder := func(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 		var color string
 		switch l {
@@ -98,18 +99,23 @@ func init() {
 		enc.AppendString(color + strings.ToUpper(l.String()) + ColorReset)
 	}
 
-	encoderCfg := zapcore.EncoderConfig{
-		TimeKey:        "timestamp",
-		EncodeTime:     timeEncoder,
-		LevelKey:       "level",
-		EncodeLevel:    levelEncoder,
-		MessageKey:     "msg",
-		CallerKey:      "caller",
-		EncodeCaller:   zapcore.ShortCallerEncoder,
-		EncodeDuration: zapcore.StringDurationEncoder,
-		EncodeName:     zapcore.FullNameEncoder,
+	// Caller encoder
+	callerEncoder := func(c zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
+		enc.AppendString(ColorGray + fmt.Sprintf("%s:%d", c.Function, c.Line) + ColorReset)
 	}
 
+	// Encoder config
+	encoderCfg := zapcore.EncoderConfig{
+		TimeKey:      "time",
+		EncodeTime:   timeEncoder,
+		LevelKey:     "level",
+		EncodeLevel:  levelEncoder,
+		MessageKey:   "msg",
+		CallerKey:    "caller",
+		EncodeCaller: callerEncoder, // Add this line
+	}
+
+	// Create encoder and core
 	encoder := zapcore.NewConsoleEncoder(encoderCfg)
 	core := zapcore.NewCore(
 		encoder,
@@ -117,7 +123,8 @@ func init() {
 		zap.InfoLevel,
 	)
 
-	logger := zap.New(core)
+	// Create logger with caller for error levels
+	logger := zap.New(core, zap.AddCaller())
 	defer logger.Sync()
 	Log = logger.Sugar()
 }
