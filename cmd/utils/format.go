@@ -37,7 +37,7 @@ func FormatNumber(number float64) string {
 		result.WriteRune(char)
 	}
 
-	if len(parts) > 1 {
+	if len(parts) > 1 && decimalPart != "00" {
 		return result.String() + "." + decimalPart
 	}
 

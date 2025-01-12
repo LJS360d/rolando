@@ -6,7 +6,6 @@ import (
 	"rolando/cmd/model"
 	"rolando/cmd/repositories"
 	"rolando/cmd/utils"
-	"strconv"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -106,8 +105,7 @@ func (cs *ChainsService) UpdateChainMeta(id string, fields map[string]any) (*rep
 	}
 	// Reply Rate immediate update
 	if replyRateRaw, ok := fields["reply_rate"]; ok {
-		replyRateStr, _ := replyRateRaw.(string)
-		replyRate, err := strconv.Atoi(replyRateStr)
+		replyRate, _ := replyRateRaw.(int)
 		if err != nil {
 			return nil, errors.New("reply_rate must be an integer")
 		}
