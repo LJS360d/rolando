@@ -212,11 +212,11 @@ func (h *SlashCommandsHandler) OnSlashCommandInteraction(s *discordgo.Session, i
 	if i.GuildID == "" {
 		where = "DMs"
 	} else {
-		if guild, err := h.Client.State.Guild(i.GuildID); err != nil {
+		if guild, err := h.Client.Guild(i.GuildID); err != nil {
 			where = guild.Name
 		} else {
 			log.Log.Errorf("Failed to fetch guild '%s' for interaction: %v", i.GuildID, err)
-			where = "Unknown Guild"
+			return
 		}
 	}
 
