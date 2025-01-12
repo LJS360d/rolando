@@ -46,8 +46,33 @@ func (h *ButtonsHandler) OnButtonInteraction(s *discordgo.Session, i *discordgo.
 		return
 	}
 
+	var where string
+	if i.GuildID == "" {
+		where = "DMs"
+	} else {
+		if guild, err := h.Client.Guild(i.GuildID); err != nil {
+			log.Log.Errorf("Failed to fetch guild '%s' for button interaction: %v", i.GuildID, err)
+			return
+		} else {
+			where = guild.Name
+		}
+	}
+
+	var who string
+	if i.User != nil {
+		who = i.User.Username
+	} else if i.Member != nil && i.Member.User != nil {
+		who = i.Member.User.Username
+	} else {
+		log.Log.Errorf("Failed to determine user for button interaction in '%s'", where)
+		return
+	}
+	buttonId := i.MessageComponentData().CustomID
+
+	log.Log.Infof("from '%s' in '%s': btn:%s", who, where, buttonId)
+
 	// Check if there's a handler for the button ID
-	if handler, exists := h.Handlers[i.MessageComponentData().CustomID]; exists {
+	if handler, exists := h.Handlers[buttonId]; exists {
 		handler(s, i) // Call the function bound to the button ID
 	}
 }
@@ -71,9 +96,19 @@ func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.Inter
 		return
 	}
 
+	var userId string
+	if i.User != nil {
+		userId = i.User.ID
+	} else if i.Member != nil && i.Member.User != nil {
+		userId = i.Member.User.ID
+	} else {
+		log.Log.Errorf("Failed to determine user ID for interaction in '%s'", chainDoc.Name)
+		return
+	}
+
 	// Start the training process
 	// Send confirmation message
-	s.ChannelMessageSend(i.ChannelID, fmt.Sprintf("<@%s> Started Fetching messages.\nI  will send a message when I'm done.\nEstimated Time: `1 Minute per every 5000 Messages in the Server`\nThis might take a while..", i.User.ID))
+	s.ChannelMessageSend(i.ChannelID, fmt.Sprintf("<@%s> Started Fetching messages.\nI  will send a message when I'm done.\nEstimated Time: `1 Minute per every 5000 Messages in the Server`\nThis might take a while..", userId))
 
 	go func() {
 		startTime := time.Now()
@@ -85,15 +120,14 @@ func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.Inter
 
 		// Update chain status
 		chainDoc.Trained = true
-		_, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained": true})
-		if err != nil {
+		if _, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained": true}); err != nil {
 			log.Log.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
 			return
 		}
 
 		// Send completion message
 		s.ChannelMessageSend(i.ChannelID, fmt.Sprintf("<@%s> Finished Fetching messages.\nMessages fetched: `%s`\nTime elapsed: `%s`\nMessages/Second: `%s`",
-			i.User.ID,
+			userId,
 			utils.FormatNumber(float64(len(messages))),
 			time.Since(startTime).String(),
 			utils.FormatNumber(float64(len(messages))/(time.Since(startTime).Seconds()))))

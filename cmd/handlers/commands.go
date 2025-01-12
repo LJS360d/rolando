@@ -213,7 +213,7 @@ func (h *SlashCommandsHandler) OnSlashCommandInteraction(s *discordgo.Session, i
 		where = "DMs"
 	} else {
 		if guild, err := h.Client.Guild(i.GuildID); err != nil {
-			log.Log.Errorf("Failed to fetch guild '%s' for interaction: %v", i.GuildID, err)
+			log.Log.Errorf("Failed to fetch guild '%s' for command interaction: %v", i.GuildID, err)
 			return
 		} else {
 			where = guild.Name
@@ -226,7 +226,7 @@ func (h *SlashCommandsHandler) OnSlashCommandInteraction(s *discordgo.Session, i
 	} else if i.Member != nil && i.Member.User != nil {
 		who = i.Member.User.Username
 	} else {
-		log.Log.Errorf("Failed to determine username for interaction in '%s'", where)
+		log.Log.Errorf("Failed to determine user for command interaction in '%s'", where)
 		return
 	}
 
