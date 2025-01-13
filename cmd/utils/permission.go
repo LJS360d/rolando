@@ -6,13 +6,13 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// HasChannelAccess checks if the bot user has access to the specified channel.
-func HasChannelAccess(userID string, channel *discordgo.Channel, guild *discordgo.Guild) bool {
+// HasGuildTextChannelAccess checks if the bot user has access to the specified guild text channel.
+func HasGuildTextChannelAccess(ds *discordgo.Session, userId string, channel *discordgo.Channel) bool {
 	if channel.Type != discordgo.ChannelTypeGuildText && channel.Type != discordgo.ChannelTypeGuildNews {
 		return false
 	}
 
-	permissions, err := guildMemberPermissions(userID, channel, guild)
+	permissions, err := ds.UserChannelPermissions(userId, channel.ID)
 	if err != nil {
 		return false
 	}
@@ -48,41 +48,6 @@ func MentionsUser(message *discordgo.Message, userID string, guild *discordgo.Gu
 	}
 
 	return false
-}
-
-// guildMemberPermissions calculates the permissions for a member in a channel.
-func guildMemberPermissions(userID string, channel *discordgo.Channel, guild *discordgo.Guild) (int64, error) {
-	member, err := guildMember(guild, userID)
-	if err != nil {
-		return 0, err
-	}
-
-	// Default permissions based on guild
-	permissions := guild.Permissions
-	for _, roleID := range member.Roles {
-		for _, role := range guild.Roles {
-			if role.ID == roleID {
-				permissions |= role.Permissions
-			}
-		}
-	}
-
-	// Apply channel-specific permissions
-	for _, overwrite := range channel.PermissionOverwrites {
-		if overwrite.Type == discordgo.PermissionOverwriteTypeRole {
-			for _, roleID := range member.Roles {
-				if overwrite.ID == roleID {
-					permissions &= ^overwrite.Deny
-					permissions |= overwrite.Allow
-				}
-			}
-		} else if overwrite.Type == discordgo.PermissionOverwriteTypeMember && overwrite.ID == userID {
-			permissions &= ^overwrite.Deny
-			permissions |= overwrite.Allow
-		}
-	}
-
-	return permissions, nil
 }
 
 // guildMember retrieves a member from a guild by user ID.
