@@ -37,7 +37,6 @@ func NewButtonsHandler(client *discordgo.Session, dataFetchService *services.Dat
 // Register button handlers in the map
 func (h *ButtonsHandler) registerButtons() {
 	h.Handlers["confirm-train"] = h.onConfirmTrain
-	h.Handlers["cancel-train"] = h.onCancelTrain
 }
 
 // Entry point for handling button interactions
@@ -81,13 +80,13 @@ func (h *ButtonsHandler) OnButtonInteraction(s *discordgo.Session, i *discordgo.
 func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Defer the update
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 
 	// Check if training is already completed
 	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID)
 	if err != nil {
-		log.Log.Errorf("Failed to fetch chain for guild %s: %v", i.GuildID, err)
+		log.Log.Errorf("Failed to fetch chainDoc for guild %s: %v", i.GuildID, err)
 		return
 	}
 
@@ -108,20 +107,26 @@ func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.Inter
 
 	// Start the training process
 	// Send confirmation message
-	s.ChannelMessageSend(i.ChannelID, fmt.Sprintf("<@%s> Started Fetching messages.\nI  will send a message when I'm done.\nEstimated Time: `1 Minute per every 5000 Messages in the Server`\nThis might take a while..", userId))
+	content := fmt.Sprintf("<@%s> Started Fetching messages.\nI  will send a message when I'm done.\nEstimated Time: `1 Minute per every 5000 Messages in the Server`\nThis might take a while..", userId)
+	s.ChannelMessageSend(i.ChannelID, content)
+	s.InteractionResponseDelete(i.Interaction)
 
+	// Update chain status
+	chainDoc.Trained = true
+	if _, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained": true}); err != nil {
+		log.Log.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
+		return
+	}
 	go func() {
 		startTime := time.Now()
 		messages, err := h.DataFetchService.FetchAllGuildMessages(i.GuildID)
 		if err != nil {
 			log.Log.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID, err)
-			return
-		}
-
-		// Update chain status
-		chainDoc.Trained = true
-		if _, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained": true}); err != nil {
-			log.Log.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
+			// Revert chain status
+			chainDoc.Trained = false
+			if _, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained": false}); err != nil {
+				log.Log.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
+			}
 			return
 		}
 
@@ -132,15 +137,4 @@ func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.Inter
 			time.Since(startTime).String(),
 			utils.FormatNumber(float64(len(messages))/(time.Since(startTime).Seconds()))))
 	}()
-}
-
-// Handle 'cancel-train' button interaction
-func (h *ButtonsHandler) onCancelTrain(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Respond to cancel interaction
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "Training process has been canceled.",
-		},
-	})
 }
