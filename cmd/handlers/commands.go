@@ -266,38 +266,35 @@ func (h *SlashCommandsHandler) trainCommand(s *discordgo.Session, i *discordgo.I
 		Style:    discordgo.PrimaryButton,
 		CustomID: "confirm-train",
 	}
-	cancelButton := &discordgo.Button{
-		Label:    "Cancel",
-		Style:    discordgo.DangerButton,
-		CustomID: "cancel-train",
-	}
 
 	// Create an action row with the buttons
 	actionRow := &discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{
 			confirmButton,
-			cancelButton,
 		},
 	}
 
 	// Send the reply with buttons
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: `Are you sure you want to use **ALL SERVER MESSAGES** as training data for me?
-This will fetch data in all accessible channels and delete all previous training data for this server.
+This will fetch data in all accessible text channels,
+you can use the` + "`/channels`" + ` command to see which are accessible.
 If you wish to exclude specific channels, revoke my typing permissions in those channels.
 `,
 			Components: []discordgo.MessageComponent{*actionRow},
 			Flags:      discordgo.MessageFlagsEphemeral,
 		},
-	})
+	}); err != nil {
+		log.Log.Errorf("Failed to send reply to /train command: %v", err)
+	}
 }
 
 // implementation of /gif command
 func (h *SlashCommandsHandler) gifCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 	chain, err := h.ChainsService.GetChain(i.GuildID)
 	if err != nil {
@@ -318,7 +315,7 @@ func (h *SlashCommandsHandler) gifCommand(s *discordgo.Session, i *discordgo.Int
 // implementation of /image command
 func (h *SlashCommandsHandler) imageCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 	chain, err := h.ChainsService.GetChain(i.GuildID)
 	if err != nil {
@@ -328,18 +325,15 @@ func (h *SlashCommandsHandler) imageCommand(s *discordgo.Session, i *discordgo.I
 	if err != nil || image == "" {
 		image = "No valid image found."
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: image,
-		},
+	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &image,
 	})
 }
 
 // implementation of /video command
 func (h *SlashCommandsHandler) videoCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 	chain, err := h.ChainsService.GetChain(i.GuildID)
 	if err != nil {
@@ -349,11 +343,8 @@ func (h *SlashCommandsHandler) videoCommand(s *discordgo.Session, i *discordgo.I
 	if err != nil || video == "" {
 		video = "No valid video found."
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: video,
-		},
+	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &video,
 	})
 }
 
