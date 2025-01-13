@@ -677,7 +677,7 @@ func (h *SlashCommandsHandler) channelsCommand(s *discordgo.Session, i *discordg
 	))
 
 	for _, ch := range channels {
-		hasAccess := channelAccessCheck(s, ch.ID)
+		hasAccess := utils.HasGuildTextChannelAccess(s, s.State.User.ID, ch)
 		fmt.Fprintf(responseBuilder, "%s <#%s>\n", accessEmote(hasAccess), ch.ID)
 	}
 
@@ -736,18 +736,6 @@ func (h *SlashCommandsHandler) checkAdmin(i *discordgo.InteractionCreate, msg ..
 	})
 
 	return false
-}
-
-func channelAccessCheck(s *discordgo.Session, channelID string) bool {
-	channel, err := s.State.Channel(channelID)
-	if err != nil {
-		return false
-	}
-	permissions, err := s.UserChannelPermissions(s.State.User.ID, channel.ID)
-	if err != nil {
-		return false
-	}
-	return permissions&discordgo.PermissionViewChannel != 0
 }
 
 // compares two commands to check if they are identical in the significant fields

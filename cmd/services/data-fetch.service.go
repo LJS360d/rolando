@@ -3,6 +3,7 @@ package services
 import (
 	"rolando/cmd/log"
 	"rolando/cmd/repositories"
+	"rolando/cmd/utils"
 	"strings"
 	"sync"
 
@@ -37,7 +38,7 @@ func (d *DataFetchService) FetchAllGuildMessages(guildID string) ([]string, erro
 	var wg sync.WaitGroup
 	messageCh := make(chan []string, len(guild.Channels))
 	for _, channel := range guild.Channels {
-		if !d.hasChannelAccess(channel) {
+		if !utils.HasGuildTextChannelAccess(d.Session, d.Session.State.User.ID, channel) {
 			continue
 		}
 
@@ -112,14 +113,6 @@ func (d *DataFetchService) getMessageBatch(channelID, lastMessageID string) ([]*
 		}
 	}
 	return cleanMessages, nil
-}
-
-func (d *DataFetchService) hasChannelAccess(channel *discordgo.Channel) bool {
-	permissions, err := d.Session.State.UserChannelPermissions(d.Session.State.User.ID, channel.ID)
-	if err != nil {
-		return false
-	}
-	return permissions&discordgo.PermissionViewChannel != 0
 }
 
 func (d *DataFetchService) containsURL(content string) bool {

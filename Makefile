@@ -18,6 +18,7 @@ BINARY_NAME   	:= main
 
 BUILDPATH       = $(BUILD_DIR)/$(BINARY_NAME)$(EXE)
 LDFLAGS 				= -ldflags "-w -s -X main.Version=$(VERSION) -X main.Env=$(ENV)"
+LDFLAGS_DEV 		= -ldflags "-X main.Version=$(VERSION) -X main.Env=$(ENV)"
 
 all: dev
 
@@ -44,7 +45,7 @@ dev: build-dev
 
 build-dev: ENV=development
 build-dev:
-	go build $(LDFLAGS) -o $(BUILDPATH) $(MAIN_PACKAGE)
+	go build $(LDFLAGS_DEV) -o $(BUILDPATH) $(MAIN_PACKAGE)
 
 run-docker:
 	docker compose -p rolando3 up -d --build --force-recreate
