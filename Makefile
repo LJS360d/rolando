@@ -10,7 +10,7 @@ else
 	CMD 	:=
 endif
 
-VERSION         := 3.2.7
+VERSION         := 3.2.8
 BUILD_DIR       := bin
 MAIN_PACKAGE    := ./cmd
 ENV 						?= production
