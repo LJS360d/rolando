@@ -304,11 +304,8 @@ func (h *SlashCommandsHandler) gifCommand(s *discordgo.Session, i *discordgo.Int
 	if err != nil || gif == "" {
 		gif = "No valid gif found."
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: gif,
-		},
+	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &gif,
 	})
 }
 
