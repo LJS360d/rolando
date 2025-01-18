@@ -15,7 +15,11 @@ FROM alpine:latest
 
 WORKDIR /root/
 
-RUN apk --no-cache add sqlite-libs
+RUN apk --no-cache add \
+    sqlite-libs \
+    ffmpeg \
+    mbrola \
+    espeak-ng
 
 COPY --from=builder /app/bin/main .
 COPY --from=builder /app/.env .

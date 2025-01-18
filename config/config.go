@@ -66,11 +66,12 @@ func init() {
 	Intents = (discordgo.IntentDirectMessageReactions |
 		discordgo.IntentDirectMessageTyping |
 		discordgo.IntentDirectMessages |
+		discordgo.IntentGuildVoiceStates |
 		// discordgo.IntentAutoModerationConfiguration |
 		// discordgo.IntentAutoModerationExecution |
 		// discordgo.IntentDirectMessageReactions |
 		// discordgo.IntentGuildEmojisAndStickers |
-		// discordgo.IntentGuildIntegrations |
+		discordgo.IntentGuildIntegrations |
 		discordgo.IntentGuildInvites |
 		// discordgo.IntentGuildMembers |
 		discordgo.IntentGuildMessageReactions |
@@ -80,7 +81,7 @@ func init() {
 		// discordgo.IntentGuildPresences |
 		// discordgo.IntentGuildScheduledEvents |
 		// discordgo.IntentGuildVoiceStates |
-		// discordgo.IntentGuildWebhooks |
+		discordgo.IntentGuildWebhooks |
 		discordgo.IntentGuilds |
 		discordgo.IntentMessageContent)
 

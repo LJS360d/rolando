@@ -124,11 +124,11 @@ func (s *BotController) GetGuild(c *gin.Context) {
 		ID:                       guild.ID,
 		Name:                     guild.Name,
 		Icon:                     guild.Icon,
-		ApproximateMemberCount:   guild.MemberCount,
-		ApproximatePresenceCount: guild.ApproximatePresenceCount,
 		Features:                 guild.Features,
 		Owner:                    guild.Owner,
 		Permissions:              guild.Permissions,
+		ApproximateMemberCount:   guild.ApproximateMemberCount,
+		ApproximatePresenceCount: guild.ApproximatePresenceCount,
 	}
 
 	c.JSON(200, userGuild)
