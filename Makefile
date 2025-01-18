@@ -1,24 +1,24 @@
 .PHONY: all run-docker gen build test lint clean dev build-dev run
 
 ifeq ($(OS),Windows_NT)
-  EXE 	:= .exe
-  RM 		= del
-	CMD 	:= .cmd
+  EXE   := .exe
+  RM     = del
+  CMD   := .cmd
 else
-  EXE 	:=
-  RM 		= rm -f
-	CMD 	:=
+  EXE   :=
+  RM     = rm -f
+  CMD   :=
 endif
 
 VERSION         := 3.3.0
 BUILD_DIR       := bin
 MAIN_PACKAGE    := ./cmd
-ENV 						?= production
-BINARY_NAME   	:= main
+ENV             ?= production
+BINARY_NAME     := main
 
 BUILDPATH       = $(BUILD_DIR)/$(BINARY_NAME)$(EXE)
-LDFLAGS 				= -ldflags "-w -s -X main.Version=$(VERSION) -X main.Env=$(ENV)"
-LDFLAGS_DEV 		= -ldflags "-X main.Version=$(VERSION) -X main.Env=$(ENV)"
+LDFLAGS         = -ldflags "-w -s -X main.Version=$(VERSION) -X main.Env=$(ENV)"
+LDFLAGS_DEV     = -ldflags "-X main.Version=$(VERSION) -X main.Env=$(ENV)"
 
 all: dev
 
@@ -48,4 +48,4 @@ build-dev:
 	go build $(LDFLAGS_DEV) -o $(BUILDPATH) $(MAIN_PACKAGE)
 
 run-docker:
-	docker compose -p rolando3 up -d --build --force-recreate
+	docker compose -p rolando up -d --build --force-recreate
