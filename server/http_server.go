@@ -18,7 +18,6 @@ type HttpServer struct {
 	ChainsService  *services.ChainsService
 	DiscordSession *discordgo.Session
 	MessagesRepo   *repositories.MessagesRepository
-	engine         *gin.Engine
 }
 
 func NewHttpServer(discordSession *discordgo.Session, chainsService *services.ChainsService, messagesRepo *repositories.MessagesRepository) *HttpServer {
@@ -34,7 +33,6 @@ func (s *HttpServer) Start() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
-	s.engine = r
 
 	analyticsController := analytics.NewController(s.ChainsService, s.DiscordSession)
 	botController := bot.NewController(s.ChainsService, s.DiscordSession)
