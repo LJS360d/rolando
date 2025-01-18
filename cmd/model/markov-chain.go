@@ -2,6 +2,7 @@ package model
 
 import (
 	"math/rand"
+	"regexp"
 	"rolando/cmd/repositories"
 	"strings"
 	"sync"
@@ -158,4 +159,33 @@ func (mc *MarkovChain) Talk(length int) string {
 	startingWord := keys[randomIndex]
 
 	return mc.GenerateText(startingWord, length)
+}
+
+func (mc *MarkovChain) TalkOnlyText(length int) string {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	keys := make([]string, 0, len(mc.State))
+	for key := range mc.State {
+		keys = append(keys, key)
+	}
+
+	randomIndex := rand.Intn(len(keys))
+	startingWord := keys[randomIndex]
+
+	gt := mc.GenerateText(startingWord, length)
+
+	// Remove URLs
+	reURL := regexp.MustCompile(`(?:https?|ftp|file|mailto):\/\/[^\s]+|www\.[^\s]+`)
+	gt = reURL.ReplaceAllString(gt, "")
+
+	// Remove special characters
+	reBadChars := regexp.MustCompile(`[^a-zA-Z0-9\s.,!?\*=` + "`]")
+	gt = reBadChars.ReplaceAllString(gt, "")
+
+	// Normalize spacing
+	gt = strings.TrimSpace(gt)
+	gt = regexp.MustCompile(`\s+`).ReplaceAllString(gt, " ")
+
+	return gt
 }

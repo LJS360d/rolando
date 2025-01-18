@@ -10,6 +10,7 @@ import (
 	"rolando/config"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 	"golang.org/x/exp/slices"
@@ -132,17 +133,67 @@ func NewSlashCommandsHandler(
 		{
 			Command: &discordgo.ApplicationCommand{
 				Name:        "channels",
-				Description: "View which channels are being used by the bot",
+				Description: "View which channels can be accessed for training data",
 			},
 			Handler: handler.channelsCommand,
 		},
 		{
 			Command: &discordgo.ApplicationCommand{
 				Name:        "src",
-				Description: "Provides the URL to the repository with bot source code.",
+				Description: "Provides the URL to the repository with bot source code",
 			},
 			Handler: handler.srcCommand,
 		},
+		{
+			Command: &discordgo.ApplicationCommand{
+				Name:        "vc-join",
+				Description: "Joins the voice channel you are currently in",
+			},
+			Handler: handler.vcJoinCommand,
+		},
+		{
+			Command: &discordgo.ApplicationCommand{
+				Name:        "vc-leave",
+				Description: "Leaves the voice channel you are currently in",
+			},
+			Handler: handler.vcLeaveCommand,
+		},
+		{
+			Command: &discordgo.ApplicationCommand{
+				Name:        "vc-speak",
+				Description: "Speaks a message in the VC you are in, and then leaves",
+			},
+			Handler: handler.vcSpeakCommand,
+		},
+		/* {
+			Command: &discordgo.ApplicationCommand{
+				Name:        "vc-language",
+				Description: "View or set the language for the  bot",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type: discordgo.ApplicationCommandOptionInteger,
+						Name: "language",
+						Choices: []*discordgo.ApplicationCommandOptionChoice{
+							{
+								Name:  "English",
+								Value: "en",
+							},
+							{
+								Name:  "Italian",
+								Value: "it",
+							},
+							{
+								Name:  "German",
+								Value: "de",
+							},
+						},
+						Description: "the language to set (leave empty to view)",
+						Required:    false,
+					},
+				},
+			},
+			Handler: handler.vcLanguageCommand,
+		}, */
 	})
 
 	return handler
@@ -694,6 +745,167 @@ func (h *SlashCommandsHandler) srcCommand(s *discordgo.Session, i *discordgo.Int
 	if err != nil {
 		log.Log.Errorf("Failed to send repo URL response: %v", err)
 	}
+}
+
+// implementation of /vc join command
+func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// step 0: defer a response to the interaction
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	})
+
+	// step 1: get the user's voice state
+	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
+	if err != nil {
+		content := "You must be in a voice channel to use this command."
+		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &content,
+		})
+		return
+	}
+
+	// step 2: join the voice channel
+	vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, false)
+	if err != nil || !vc.Ready {
+		channel, _ := s.State.Channel(voiceState.ChannelID)
+		content := fmt.Sprintf("Failed to join the voice channel: %s", channel.Name)
+		log.Log.Errorln(content, err)
+		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &content,
+		})
+		return
+	}
+
+	content := "I joined the voice channel, i'll speak sometimes"
+	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &content,
+	})
+	chain, _ := h.ChainsService.GetChain(voiceState.GuildID)
+	var ttsMutex sync.Mutex
+	d, err := utils.GenerateTTSDecoder("i am here", "en")
+	if err != nil {
+		log.Log.Errorf("Failed to generate TTS decoder: %v", err)
+		return
+	}
+	if err := utils.StreamAudioDecoder(vc, d); err != nil {
+		log.Log.Errorf("Failed to stream audio: %v", err)
+	}
+	for range vc.OpusRecv {
+		random := utils.GetRandom(1, 400)
+		if random != 1 {
+			continue
+		}
+		go func() {
+			ttsMutex.Lock()
+			defer ttsMutex.Unlock()
+
+			text := chain.TalkOnlyText(10)
+			// TODO get lang based on guild locale
+			lang := "en"
+			d, err := utils.GenerateTTSDecoder(text, lang)
+			if err != nil {
+				log.Log.Errorf("Failed to generate random TTS decoder: %v", err)
+				return
+			}
+			if err := utils.StreamAudioDecoder(vc, d); err != nil {
+				log.Log.Errorf("Failed to stream random TTS audio: %v", err)
+			}
+		}()
+	}
+}
+
+// implementation of /vc speak command
+func (h *SlashCommandsHandler) vcSpeakCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// step 1: get the user's voice state
+	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "You must be in a voice channel to use this command.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+
+	var vc *discordgo.VoiceConnection
+	vc, exists := s.VoiceConnections[voiceState.GuildID]
+	if !exists {
+		content := "Joining Voice Channel..."
+		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &content,
+		})
+		// join the voice channel
+		vc, err = s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, false)
+		if err != nil || !vc.Ready {
+			content := "You must be in a voice channel to use this command."
+			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Content: &content,
+			})
+			return
+		}
+	}
+
+	chain, _ := h.ChainsService.GetChain(voiceState.GuildID)
+	content := chain.TalkOnlyText(100)
+	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &content,
+	})
+	d, err := utils.GenerateTTSDecoder(content, "it")
+	if err != nil {
+		log.Log.Errorf("Failed to generate TTS decoder: %v", err)
+		return
+	}
+	if err := utils.StreamAudioDecoder(vc, d); err != nil {
+		log.Log.Errorf("Failed to stream audio: %v", err)
+	}
+	err = vc.Disconnect()
+	if err != nil {
+		log.Log.Errorf("Failed to disconnect from voice channel: %v", err)
+	}
+	vc.Close()
+}
+
+// implementation of /vc leave command
+func (h *SlashCommandsHandler) vcLeaveCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	vc, exists := s.VoiceConnections[i.GuildID]
+	var res string
+	if !exists {
+		res = "I am not connected to a voice channel."
+	} else {
+		res = "I am leaving the voice channel"
+	}
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: res,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
+
+	d, err := utils.GenerateTTSDecoder("bye bye", "en")
+	if err != nil {
+		log.Log.Errorf("Failed to generate TTS decoder: %v", err)
+		return
+	}
+	if err := utils.StreamAudioDecoder(vc, d); err != nil {
+		log.Log.Errorf("Failed to stream audio: %v", err)
+	} else {
+		log.Log.Infof("Spoke Bye Bye message in vc, leaving...")
+	}
+	err = vc.Disconnect()
+	if err != nil {
+		log.Log.Errorf("Failed to disconnect from voice channel: %v", err)
+	}
+	vc.Close()
 }
 
 // ------------- Helpers -------------
