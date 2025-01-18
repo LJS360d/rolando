@@ -735,7 +735,7 @@ func (h *SlashCommandsHandler) channelsCommand(s *discordgo.Session, i *discordg
 
 // implementation of /src command
 func (h *SlashCommandsHandler) srcCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	repoURL := "https://github.com/LJS360d/rolando2"
+	repoURL := "https://github.com/LJS360d/rolando"
 	err := h.Client.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
