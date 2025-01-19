@@ -86,6 +86,27 @@ func (repo *ChainsRepository) UpdateChain(id string, fields map[string]any) (*Ch
 	return &chain, nil
 }
 
+// GetChainsPage fetches chains with pagination and returns metadata
+func (repo *ChainsRepository) GetChainsPage(limit, offset int) ([]Chain, int64, error) {
+	var elements []Chain
+	var total int64
+
+	// Count total elements
+	if err := repo.DB.Model(&Chain{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Fetch paginated elements
+	if err := repo.DB.
+		Limit(limit).
+		Offset(offset).
+		Find(&elements).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return elements, total, nil
+}
+
 // DeleteChain deletes a chain by its ID
 func (repo *ChainsRepository) DeleteChain(id string) error {
 	if err := repo.DB.Delete(&Chain{}, "id = ?", id).Error; err != nil {

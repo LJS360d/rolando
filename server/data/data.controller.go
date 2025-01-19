@@ -43,6 +43,11 @@ func (s *DataController) GetData(c *gin.Context) {
 // GET /data/:chain, requires guild member authorization
 func (s *DataController) GetDataPaginated(c *gin.Context) {
 	chainId := c.Param("chain")
+	errCode, err := auth.EnsureGuildMember(c, s.ds, chainId)
+	if err != nil {
+		c.JSON(errCode, gin.H{"error": err.Error()})
+		return
+	}
 	pageSize, err := strconv.Atoi(c.Query("pageSize"))
 	if err != nil || pageSize <= 0 {
 		pageSize = 100 // default page size
@@ -67,10 +72,10 @@ func (s *DataController) GetDataPaginated(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"data": content,
 		"meta": gin.H{
-			"page": page,
-			"pageSize":    pageSize,
-			"totalItems":  total,
-			"totalPages":  (total + int64(pageSize) - 1) / int64(pageSize),
+			"page":       page,
+			"pageSize":   pageSize,
+			"totalItems": total,
+			"totalPages": (total + int64(pageSize) - 1) / int64(pageSize),
 		},
 	})
 }

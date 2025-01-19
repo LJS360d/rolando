@@ -92,7 +92,8 @@
 <script lang="ts">
 import { useGetChainAnalytics } from "@/api/analytics";
 import { useGetBotGuild } from "@/api/bot";
-import { useGetGuildData, type PageMeta } from "@/api/data";
+import { useGetGuildData } from "@/api/data";
+import type { PageMeta } from "@/api/common";
 import { useAuthStore } from "@/stores/auth";
 import { formatBytes, formatNumber, guildIconUrl } from "@/utils/format";
 import DOMPurify from "dompurify";

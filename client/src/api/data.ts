@@ -1,16 +1,5 @@
 import { useQuery } from "@tanstack/vue-query";
-
-export interface Page<T> {
-  data: T;
-  meta: PageMeta;
-}
-
-export interface PageMeta {
-  page: number,
-  pageSize: number,
-  totalItems: number,
-  totalPages: number
-}
+import type { Page, PageMeta } from "./common";
 
 export function useGetAllGuildData(token: string, guildId: string) {
   return useQuery({
