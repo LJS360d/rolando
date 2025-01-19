@@ -8,13 +8,14 @@ import (
 )
 
 type Chain struct {
-	ID        string    `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"unique;not null" json:"name"`
-	ReplyRate int       `gorm:"default:10" json:"reply_rate"`
-	Pings     bool      `gorm:"default:true" json:"pings"`
-	MaxSizeMb int       `gorm:"default:25" json:"max_size_mb"`
-	Trained   bool      `gorm:"default:false" json:"trained"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID          string    `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"unique;not null" json:"name"`
+	ReplyRate   int       `gorm:"default:10" json:"reply_rate"`
+	MaxSizeMb   int       `gorm:"default:25" json:"max_size_mb"`
+	TTSLanguage string    `gorm:"default:'en'" json:"tts_language"`
+	Pings       bool      `gorm:"default:true" json:"pings"`
+	Trained     bool      `gorm:"default:false" json:"trained"`
+	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type ChainsRepository struct {
@@ -38,12 +39,13 @@ func NewChainsRepository(dbPath string) (*ChainsRepository, error) {
 // CreateChain creates a new Markov Chain in the database
 func (repo *ChainsRepository) CreateChain(id string, name string) (*Chain, error) {
 	chain := &Chain{
-		ID:        id,
-		Name:      name,
-		ReplyRate: 10,    // Default reply rate
-		Pings:     true,  // Default pings
-		Trained:   false, // Default trained
-		MaxSizeMb: 25,    // Default max size in MB
+		ID:          id,
+		Name:        name,
+		ReplyRate:   10,    // Default reply rate
+		Pings:       true,  // Default pings
+		Trained:     false, // Default trained
+		MaxSizeMb:   25,    // Default max size in MB
+		TTSLanguage: "en",
 	}
 
 	// Use GORM to insert the chain record
