@@ -88,7 +88,7 @@ func NewSlashCommandsHandler(
 		{
 			Command: &discordgo.ApplicationCommand{
 				Name:        "replyrate",
-				Description: "View or set the reply rate for the bot",
+				Description: "View or set the reply rate",
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
@@ -165,10 +165,10 @@ func NewSlashCommandsHandler(
 			},
 			Handler: handler.vcSpeakCommand,
 		},
-		/* {
+		{
 			Command: &discordgo.ApplicationCommand{
 				Name:        "vc-language",
-				Description: "View or set the language for the  bot",
+				Description: "View or set the language to use when generating audio",
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type: discordgo.ApplicationCommandOptionInteger,
@@ -176,15 +176,23 @@ func NewSlashCommandsHandler(
 						Choices: []*discordgo.ApplicationCommandOptionChoice{
 							{
 								Name:  "English",
-								Value: "en",
+								Value: 0,
 							},
 							{
 								Name:  "Italian",
-								Value: "it",
+								Value: 1,
 							},
 							{
 								Name:  "German",
-								Value: "de",
+								Value: 2,
+							},
+							{
+								Name:  "Spanish",
+								Value: 3,
+							},
+							{
+								Name:  "Chinese",
+								Value: 4,
 							},
 						},
 						Description: "the language to set (leave empty to view)",
@@ -193,7 +201,7 @@ func NewSlashCommandsHandler(
 				},
 			},
 			Handler: handler.vcLanguageCommand,
-		}, */
+		},
 	})
 
 	return handler
@@ -241,11 +249,17 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 			// Register the new command
 			log.Log.Infof("Registering slash command: %s", cmd.Command.Name)
 			for _, guildId := range cmd.GuildIds {
-				h.Client.ApplicationCommandCreate(h.Client.State.User.ID, guildId, cmd.Command)
+				_, err := h.Client.ApplicationCommandCreate(h.Client.State.User.ID, guildId, cmd.Command)
+				if err != nil {
+					log.Log.Errorf("Failed to register slash command: %v", err)
+				}
 			}
 			// If no guild IDs, create globally
 			if len(cmd.GuildIds) == 0 {
-				h.Client.ApplicationCommandCreate(h.Client.State.User.ID, "", cmd.Command)
+				_, err := h.Client.ApplicationCommandCreate(h.Client.State.User.ID, "", cmd.Command)
+				if err != nil {
+					log.Log.Errorf("Failed to register slash command: %v", err)
+				}
 			}
 		}
 		h.Commands[cmd.Command.Name] = cmd.Handler
@@ -783,7 +797,8 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Content: &content,
 	})
-	chain, _ := h.ChainsService.GetChain(voiceState.GuildID)
+	chainDoc, _ := h.ChainsService.GetChainDocument(voiceState.GuildID)
+	chain, _ := h.ChainsService.GetChain(chainDoc.ID)
 	var ttsMutex sync.Mutex
 	d, err := utils.GenerateTTSDecoder("i am here", "en")
 	if err != nil {
@@ -794,18 +809,14 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 		log.Log.Errorf("Failed to stream audio: %v", err)
 	}
 	for range vc.OpusRecv {
-		random := utils.GetRandom(1, 400)
+		random := utils.GetRandom(1, 1000)
 		if random != 1 {
 			continue
 		}
 		go func() {
 			ttsMutex.Lock()
 			defer ttsMutex.Unlock()
-
-			text := chain.TalkOnlyText(10)
-			// TODO get lang based on guild locale
-			lang := "en"
-			d, err := utils.GenerateTTSDecoder(text, lang)
+			d, err := utils.GenerateTTSDecoder(chain.TalkOnlyText(10), chainDoc.TTSLanguage)
 			if err != nil {
 				log.Log.Errorf("Failed to generate random TTS decoder: %v", err)
 				return
@@ -854,12 +865,23 @@ func (h *SlashCommandsHandler) vcSpeakCommand(s *discordgo.Session, i *discordgo
 		}
 	}
 
-	chain, _ := h.ChainsService.GetChain(voiceState.GuildID)
+	chainDoc, err := h.ChainsService.GetChainDocument(voiceState.GuildID)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Failed to retrieve chain data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+	chain, _ := h.ChainsService.GetChain(chainDoc.ID)
 	content := chain.TalkOnlyText(100)
 	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Content: &content,
 	})
-	d, err := utils.GenerateTTSDecoder(content, "it")
+	d, err := utils.GenerateTTSDecoder(content, chainDoc.TTSLanguage)
 	if err != nil {
 		log.Log.Errorf("Failed to generate TTS decoder: %v", err)
 		return
@@ -906,6 +928,62 @@ func (h *SlashCommandsHandler) vcLeaveCommand(s *discordgo.Session, i *discordgo
 		log.Log.Errorf("Failed to disconnect from voice channel: %v", err)
 	}
 	vc.Close()
+}
+
+var langs = []string{"en", "it", "de", "es", "zh"}
+
+// implementation of /vc language command
+func (h *SlashCommandsHandler) vcLanguageCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	var lang string
+	for _, option := range i.ApplicationCommandData().Options {
+		if option.Name == "language" && option.Type == discordgo.ApplicationCommandOptionInteger {
+			lang = langs[option.IntValue()]
+			break
+		}
+	}
+
+	chainId := i.GuildID
+	chainDoc, err := h.ChainsService.GetChainDocument(chainId)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Failed to retrieve chain data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	if lang != "" {
+		if !h.checkAdmin(i) {
+			return
+		}
+		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"tts_language": lang}); err != nil {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Failed to update tts language.",
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Set language to use in vc to `" + lang + "`",
+			},
+		})
+		return
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Current language is `" + chainDoc.TTSLanguage + "`",
+		},
+	})
 }
 
 // ------------- Helpers -------------
