@@ -42,7 +42,8 @@ func (s *HttpServer) Start() {
 	r.GET("/auth/@me", authController.GetUser)
 
 	r.GET("/analytics/:chain", analyticsController.GetChainAnalytics)
-	r.GET("/analytics", analyticsController.GetAllChainsAnalytics)
+	r.GET("/analytics", analyticsController.GetChainsAnalyticsPaginated)
+	r.GET("/analytics/all", analyticsController.GetAllChainsAnalytics)
 
 	r.GET("/data/:chain/all", dataController.GetData)
 	r.GET("/data/:chain", dataController.GetDataPaginated)
