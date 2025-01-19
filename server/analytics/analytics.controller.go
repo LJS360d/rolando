@@ -5,6 +5,7 @@ import (
 	"rolando/cmd/repositories"
 	"rolando/cmd/services"
 	"rolando/server/auth"
+	"strconv"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gin-gonic/gin"
@@ -46,7 +47,7 @@ func (s *AnalyticsController) GetChainAnalytics(c *gin.Context) {
 	c.JSON(200, getSerializableAnalytics(&rawAnalytics, chainDoc))
 }
 
-// GET /analytics, requires owner authorization
+// GET /analytics/all, requires owner authorization
 func (s *AnalyticsController) GetAllChainsAnalytics(c *gin.Context) {
 	errCode, err := auth.EnsureOwner(c, s.ds)
 	if err != nil {
@@ -73,6 +74,55 @@ func (s *AnalyticsController) GetAllChainsAnalytics(c *gin.Context) {
 		allAnalytics = append(allAnalytics, chainAnalytics)
 	}
 	c.JSON(200, allAnalytics)
+}
+
+// GET /analytics, requires owner authorization
+func (s *AnalyticsController) GetChainsAnalyticsPaginated(c *gin.Context) {
+	errCode, err := auth.EnsureOwner(c, s.ds)
+	if err != nil {
+		c.JSON(errCode, gin.H{"error": err.Error()})
+		return
+	}
+	pageSize, err := strconv.Atoi(c.Query("pageSize"))
+	if err != nil || pageSize <= 0 {
+		pageSize = 8 // default page size
+	}
+	page, err := strconv.Atoi(c.Query("page"))
+	if err != nil || page < 1 {
+		page = 1 // default to first page
+	}
+
+	offset := (page - 1) * pageSize
+
+	chains, total, err := s.chainsService.GetChainsPage(pageSize, offset)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	content := make([]gin.H, 0)
+	for _, chain := range chains {
+		analyzer := model.NewMarkovChainAnalyzer(chain)
+		chainDoc, err := s.chainsService.GetChainDocument(chain.ID)
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Get the analytics data
+		rawAnalytics := analyzer.GetRawAnalytics()
+		chainAnalytics := getSerializableAnalytics(&rawAnalytics, chainDoc)
+		content = append(content, chainAnalytics)
+	}
+
+	c.JSON(200, gin.H{
+		"data": content,
+		"meta": gin.H{
+			"page":       page,
+			"pageSize":   pageSize,
+			"totalItems": total,
+			"totalPages": (total + int64(pageSize) - 1) / int64(pageSize),
+		},
+	})
 }
 
 // ------------ Helpers ---------------
