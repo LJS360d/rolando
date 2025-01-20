@@ -315,6 +315,7 @@ export default {
         Words: formatNumber(chain.words),
         Complexity: formatNumber(chain.complexity_score),
         "Reply Rate": !chain.reply_rate ? "0%" : `${chain.reply_rate} | ${(1 / chain.reply_rate * 100).toPrecision(3)}% `,
+        "VC Join Rate": !chain.vc_join_rate ? "0%" : `${chain.vc_join_rate} | ${(1 / chain.vc_join_rate * 100).toPrecision(3)}% `,
       };
     },
   },
