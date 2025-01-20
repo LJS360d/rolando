@@ -176,11 +176,11 @@ func (mc *MarkovChain) TalkOnlyText(length int) string {
 	gt := mc.GenerateText(startingWord, length)
 
 	// Remove URLs
-	reURL := regexp.MustCompile(`(?:https?|ftp|file|mailto):\/\/[^\s]+|www\.[^\s]+`)
+	reURL := regexp.MustCompile(`(?:https?|ftp|file|mailto):\/\/[^\s]+|(?:www\.)[^\s]+`)
 	gt = reURL.ReplaceAllString(gt, "")
 
 	// Remove special characters
-	reBadChars := regexp.MustCompile(`[^a-zA-Z0-9\s.,!?\*=` + "`]")
+	reBadChars := regexp.MustCompile(`[\*_~|\[\]\(\)\{\}#\+\-!<>=\\` + "`" + `]`)
 	gt = reBadChars.ReplaceAllString(gt, "")
 
 	// Normalize spacing
