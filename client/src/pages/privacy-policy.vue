@@ -1,12 +1,18 @@
 <template>
-  <v-container class="pa-2" max-width="1400">
+  <v-container
+    class="pa-2"
+    max-width="1400"
+  >
     <v-card class="elevation-3 rounded-lg">
       <v-card-title class="text-center grey--text text-h4 font-weight-bold">
         Privacy Policy
       </v-card-title>
       <v-card-text>
         <v-list>
-          <v-list-item-group v-for="(section, index) in sections" :key="index">
+          <v-list-item-group
+            v-for="(section, index) in sections"
+            :key="index"
+          >
             <v-list-item class="mt-5">
               <div>
                 <h3 class="headline font-weight-bold">

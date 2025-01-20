@@ -1,6 +1,14 @@
 <template>
-  <v-col cols="12" centered>
-    <v-progress-circular color="primary" indeterminate :size="64" :width="6" />
+  <v-col
+    cols="12"
+    centered
+  >
+    <v-progress-circular
+      color="primary"
+      indeterminate
+      :size="64"
+      :width="6"
+    />
   </v-col>
 </template>
 
