@@ -202,6 +202,21 @@ func NewSlashCommandsHandler(
 			},
 			Handler: handler.vcLanguageCommand,
 		},
+		{
+			Command: &discordgo.ApplicationCommand{
+				Name:        "vc-joinrate",
+				Description: "View or set the VC random join rate",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "rate",
+						Description: "the rate to set (1/rate) (leave empty to view)",
+						Required:    false,
+					},
+				},
+			},
+			Handler: handler.vcJoinRateCommand,
+		},
 	})
 
 	return handler
@@ -237,12 +252,18 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 				log.Log.Infof("Updating slash command: %s", cmd.Command.Name)
 				for _, guildId := range cmd.GuildIds {
 					h.Client.ApplicationCommandDelete(h.Client.State.User.ID, guildId, existingCmd.ID)
-					h.Client.ApplicationCommandCreate(h.Client.State.User.ID, guildId, cmd.Command)
+					_, err := h.Client.ApplicationCommandCreate(h.Client.State.User.ID, guildId, cmd.Command)
+					if err != nil {
+						log.Log.Errorf("Failed to register slash command: %v", err)
+					}
 				}
 				// If no guild IDs, create globally
 				if len(cmd.GuildIds) == 0 {
 					h.Client.ApplicationCommandDelete(h.Client.State.User.ID, "", existingCmd.ID)
-					h.Client.ApplicationCommandCreate(h.Client.State.User.ID, "", cmd.Command)
+					_, err := h.Client.ApplicationCommandCreate(h.Client.State.User.ID, "", cmd.Command)
+					if err != nil {
+						log.Log.Errorf("Failed to register slash command: %v", err)
+					}
 				}
 			}
 		} else {
@@ -549,7 +570,7 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 	}
 
 	guildID := i.GuildID
-	chain, err := h.ChainsService.GetChain(guildID)
+	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
 	if err != nil {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -560,12 +581,12 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 		})
 		return
 	}
-
+	var ratePercent float64
 	if rate != nil {
 		if !h.checkAdmin(i, "You are not authorized to change the reply rate.") {
 			return
 		}
-		if _, err := h.ChainsService.UpdateChainMeta(chain.ID, map[string]interface{}{"reply_rate": *rate}); err != nil {
+		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"reply_rate": *rate}); err != nil {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -575,19 +596,29 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 			})
 			return
 		}
+		if *rate == 0 {
+			ratePercent = 0
+		} else {
+			ratePercent = float64(1 / float64(*rate) * 100)
+		}
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "Set reply rate to `" + strconv.Itoa(*rate) + "`",
+				Content: "Set reply rate to `" + strconv.Itoa(*rate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
 			},
 		})
 		return
 	}
 
+	if chainDoc.ReplyRate == 0 {
+		ratePercent = 0
+	} else {
+		ratePercent = float64(1 / float64(chainDoc.ReplyRate) * 100)
+	}
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: "Current rate is `" + strconv.Itoa(chain.ReplyRate) + "`",
+			Content: "Current VC join rate is `" + strconv.Itoa(chainDoc.ReplyRate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
 		},
 	})
 }
@@ -986,6 +1017,72 @@ func (h *SlashCommandsHandler) vcLanguageCommand(s *discordgo.Session, i *discor
 	})
 }
 
+// implementation of /vc joinrate command
+func (h *SlashCommandsHandler) vcJoinRateCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	var rate *int
+	for _, option := range options {
+		if option.Name == "rate" && option.Type == discordgo.ApplicationCommandOptionInteger {
+			value := int(option.IntValue())
+			rate = &value
+			break
+		}
+	}
+
+	guildID := i.GuildID
+	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Failed to retrieve chain data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+	var ratePercent float64
+	if rate != nil {
+		if !h.checkAdmin(i, "You are not authorized to change the VC join rate.") {
+			return
+		}
+		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"vc_join_rate": *rate}); err != nil {
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Failed to update VC join rate.",
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			})
+			return
+		}
+		if *rate == 0 {
+			ratePercent = 0
+		} else {
+			ratePercent = float64(1 / float64(*rate) * 100)
+		}
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Set VC join rate to `" + strconv.Itoa(*rate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
+			},
+		})
+		return
+	}
+
+	if chainDoc.VcJoinRate == 0 {
+		ratePercent = 0
+	} else {
+		ratePercent = float64(1 / float64(chainDoc.VcJoinRate) * 100)
+	}
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Current VC join rate is `" + strconv.Itoa(chainDoc.VcJoinRate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
+		},
+	})
+}
+
 // ------------- Helpers -------------
 
 func (h *SlashCommandsHandler) checkAdmin(i *discordgo.InteractionCreate, msg ...string) bool {
@@ -1029,8 +1126,16 @@ func shouldRefreshCommand(cached, loaded discordgo.ApplicationCommand) bool {
 		return false
 	}
 	// Compare command options, if any
-	for i, option := range cached.Options {
-		if !reflect.DeepEqual(option, loaded.Options[i]) {
+	for i, option := range loaded.Options {
+		if len(option.Choices) != 0 {
+			// Compare each choice name and value
+			for j, choice := range option.Choices {
+				cachedChoice := cached.Options[i].Choices[j]
+				if choice.Name != cachedChoice.Name || float64(choice.Value.(int)) != cachedChoice.Value.(float64) {
+					return false
+				}
+			}
+		} else if !reflect.DeepEqual(option, cached.Options[i]) {
 			return false
 		}
 	}
