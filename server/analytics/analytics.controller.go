@@ -142,5 +142,7 @@ func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDo
 		"max_size_mb":      chainDoc.MaxSizeMb,
 		"pings_enabled":    chainDoc.Pings,
 		"trained":          chainDoc.Trained,
+		"tts_language":     chainDoc.TTSLanguage,
+		"vc_join_rate":     chainDoc.VcJoinRate,
 	}
 }
