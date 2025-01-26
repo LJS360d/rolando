@@ -77,7 +77,7 @@ func CreateSpeechBuffNative(text, lang string) (io.Reader, error) {
 }
 
 func GenerateTTSDecoder(text, lang string) (*ogg.PacketDecoder, error) {
-	buff, err := CreateSpeechBuffNative(text, lang)
+	buff, err := CreateSpeechBuff(text, lang)
 	if err != nil {
 		return nil, err
 	}
