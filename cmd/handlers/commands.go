@@ -618,7 +618,7 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: "Current VC join rate is `" + strconv.Itoa(chainDoc.ReplyRate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
+			Content: "Current reply rate is `" + strconv.Itoa(chainDoc.ReplyRate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
 		},
 	})
 }
