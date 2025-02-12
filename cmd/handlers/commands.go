@@ -831,7 +831,7 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 	chainDoc, _ := h.ChainsService.GetChainDocument(voiceState.GuildID)
 	chain, _ := h.ChainsService.GetChain(chainDoc.ID)
 	var ttsMutex sync.Mutex
-	d, err := utils.GenerateTTSDecoder("i am here", "en")
+	d, err := utils.GenerateTTSDecoder("i am here", chainDoc.TTSLanguage)
 	if err != nil {
 		log.Log.Errorf("Failed to generate TTS decoder: %v", err)
 		return
@@ -943,8 +943,8 @@ func (h *SlashCommandsHandler) vcLeaveCommand(s *discordgo.Session, i *discordgo
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
-
-	d, err := utils.GenerateTTSDecoder("bye bye", "en")
+	chainDoc, _ := h.ChainsService.GetChainDocument(i.GuildID)
+	d, err := utils.GenerateTTSDecoder("bye bye", chainDoc.TTSLanguage)
 	if err != nil {
 		log.Log.Errorf("Failed to generate TTS decoder: %v", err)
 		return
