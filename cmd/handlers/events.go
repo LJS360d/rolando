@@ -106,7 +106,6 @@ func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Ev
 		log.Log.Errorf("Failed to fetch channel for voice state update event: %v", err)
 		return
 	}
-
 	chainDoc, err := h.ChainsService.GetChainDocument(voiceStateUpdate.GuildID)
 	if err != nil {
 		log.Log.Errorf("Failed to fetch chain document for guild %s: %v", voiceStateUpdate.GuildID, err)
@@ -136,11 +135,12 @@ func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Ev
 			log.Log.Errorf("Failed to stream audio: %v", err)
 		}
 		err = vc.Disconnect()
+		vc.Close()
 		if err != nil {
-			log.Log.Errorf("Failed to disconnect from voice channel '%s': %v", channel.Name, err)
+			log.Log.Errorf("Failed to disconnect from voice channel '%s' in '%s': %v", channel.Name, chainDoc.Name, err)
 		}
 		vc.Close()
-		log.Log.Infof("Randomly spoke in voice channel '%s'", channel.Name)
+		log.Log.Infof("Randomly spoke in voice channel '%s' in '%s'", channel.Name, chainDoc.Name)
 	}()
 }
 
