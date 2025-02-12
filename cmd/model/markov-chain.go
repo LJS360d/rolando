@@ -89,7 +89,6 @@ func (mc *MarkovChain) GenerateText(startWord string, length int) string {
 	}
 
 	if !mc.Pings {
-		// Replace @mentions, add your regex logic here
 		generatedTextStr := generatedText.String()
 		return strings.ReplaceAll(generatedTextStr, "<@&?\\w+>", "$1")
 	}
@@ -186,6 +185,12 @@ func (mc *MarkovChain) TalkOnlyText(length int) string {
 	// Normalize spacing
 	gt = strings.TrimSpace(gt)
 	gt = regexp.MustCompile(`\s+`).ReplaceAllString(gt, " ")
+
+	// Truncate numbers longer than 5 digits
+	reLongNumbers := regexp.MustCompile(`\b\d{6,}\b`)
+	gt = reLongNumbers.ReplaceAllStringFunc(gt, func(match string) string {
+		return match[:5] // Truncate to 5 digits
+	})
 
 	return gt
 }
