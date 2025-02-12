@@ -24,7 +24,7 @@ func NewMessageHandler(client *discord.Session, chainsService *services.ChainsSe
 
 func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageCreate) {
 	if m.Author.Bot {
-		return
+		return // do not process bot messages
 	}
 	// Access guild and content
 	content := m.Content
@@ -47,6 +47,12 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 		if _, err := h.ChainsService.UpdateChainState(guild.ID, []string{content}); err != nil {
 			log.Log.Errorf("Failed to update chain state in '%s': %v", guild.Name, err)
 		}
+	}
+
+	// Check if a message can be sent to the channel
+	channel, err := s.State.Channel(m.ChannelID)
+	if err != nil || !utils.HasGuildTextChannelAccess(s, s.State.User.ID, channel) {
+		return
 	}
 
 	// Check if the bot is mentioned
