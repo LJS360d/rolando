@@ -66,7 +66,11 @@ func (h *EventsHandler) onGuildCreate(s *discordgo.Session, e *discordgo.Event) 
 		return
 	}
 	log.Log.Infof("Joined guild %s", guildCreate.Name)
-	h.ChainsService.CreateChain(guildCreate.ID, guildCreate.Name)
+	_, err := h.ChainsService.CreateChain(guildCreate.ID, guildCreate.Name)
+	if err != nil {
+		log.Log.Errorf("Error creating chain: %s", err)
+		return
+	}
 	s.ChannelMessage(guildCreate.SystemChannelID, fmt.Sprintf("Hello %s.\nperform the command `/train` to use all the server's messages as training data", guildCreate.Name))
 	UpdatePresence(s)
 }
