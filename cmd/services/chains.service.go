@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"rolando/cmd/log"
 	"rolando/cmd/model"
 	"rolando/cmd/repositories"
@@ -84,7 +85,8 @@ func (cs *ChainsService) CreateChain(id, name string) (*model.MarkovChain, error
 	chain := model.NewMarkovChain(id, 10, true, []string{}, cs.messagesRepo)
 	_, exists := cs.chainsMap[id]
 	if exists {
-		log.Log.Warnf("Creating a chain that already exists: %s", name)
+		cs.mu.Unlock()
+		return nil, fmt.Errorf("chain %s already exists", name)
 	}
 	cs.chainsMap[id] = chain
 	_, err := cs.chainsRepo.CreateChain(id, name)
