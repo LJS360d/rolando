@@ -12,9 +12,33 @@ import (
 	"os/exec"
 	"time"
 
+	vosk "github.com/alphacep/vosk-api/go"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/ogg"
 )
+
+func SpeechToTextNative(audio io.Reader, lang string) (string, error) {
+	vosk.SetLogLevel(-1)
+	model, err := vosk.NewModel("vosk/models/" + lang)
+	if err != nil {
+		return "", err
+	}
+
+	sampleRate := 16000.0
+	rec, err := vosk.NewRecognizer(model, sampleRate)
+	if err != nil {
+		return "", err
+	}
+	rec.SetWords(1)
+	var bytes []byte
+	_, err = audio.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	rec.AcceptWaveform(bytes)
+	text := rec.FinalResult()
+	return text, nil
+}
 
 func CreateSpeechBuff(text string, lang string) (io.Reader, error) {
 	data := []rune(text)
