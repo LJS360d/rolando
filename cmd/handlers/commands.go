@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"reflect"
+	"rolando/cmd/data"
 	"rolando/cmd/log"
 	"rolando/cmd/model"
 	"rolando/cmd/services"
@@ -861,7 +862,10 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 				leaveChan <- struct{}{} // Signal to leave the vc
 			}
 		})
-		for range vc.OpusRecv {
+		for packet := range vc.OpusRecv {
+			if packet == nil {
+				continue
+			}
 			random := utils.GetRandom(1, 1000)
 			if random != 1 {
 				continue
@@ -1000,14 +1004,12 @@ func (h *SlashCommandsHandler) vcLeaveCommand(s *discordgo.Session, i *discordgo
 	vc.Close()
 }
 
-var langs = []string{"en", "it", "de", "es", "zh"}
-
 // implementation of /vc language command
 func (h *SlashCommandsHandler) vcLanguageCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	var lang string
 	for _, option := range i.ApplicationCommandData().Options {
 		if option.Name == "language" && option.Type == discordgo.ApplicationCommandOptionInteger {
-			lang = langs[option.IntValue()]
+			lang = data.Langs[option.IntValue()]
 			break
 		}
 	}
