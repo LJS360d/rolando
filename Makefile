@@ -31,7 +31,7 @@ VOSK_MODELS_PATH := $(PWD)/$(VOSK_MODELS)
 LD_LIBRARY_PATH := $(VOSK_LIB_PATH)
 # tells the compiler (CGO preprocessor) where to find vosk_api.h at COMPILE TIME
 CGO_CPPFLAGS := -I $(VOSK_LIB_PATH)
-# tells the CGO linker where to find libvosk.so at COMPILE* TIME (*link time actually)
+# tells the CGO linker where to find libvosk.so at COMPILE TIME
 CGO_LDFLAGS := -L $(VOSK_LIB_PATH) -lvosk -lpthread -dl
 
 CGO_FLAGS = LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)"
