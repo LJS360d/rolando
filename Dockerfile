@@ -1,6 +1,6 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.23-bullseye AS builder
 
-RUN apk add --no-cache make
+RUN apt-get update && apt-get install -y wget unzip
 
 WORKDIR /app
 
@@ -11,17 +11,18 @@ COPY . .
 
 RUN make build
 
-FROM alpine:latest
+FROM debian:bullseye-slim
 
 WORKDIR /root/
 
-RUN apk --no-cache add \
-    sqlite-libs \
-    ffmpeg \
-    espeak-ng
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sqlite3 libsqlite3-0 ffmpeg espeak-ng ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/bin/main .
 COPY --from=builder /app/.env .
+COPY --from=builder /app/vosk /root/vosk
+ENV LD_LIBRARY_PATH="/root/vosk/lib:$LD_LIBRARY_PATH"
 
 EXPOSE 8080
 
