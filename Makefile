@@ -1,4 +1,4 @@
-.PHONY: all run-docker gen build test lint clean dev build-dev run
+.PHONY: all run-docker build clean dev run lint clean
 VOSK_LIB_DOWNLOAD := https://github.com/alphacep/vosk-api/releases/download
 VOSK_LIB_RELEASE := v0.3.45
 
@@ -31,11 +31,11 @@ VOSK_MODELS_PATH := $(PWD)/$(VOSK_MODELS)
 LD_LIBRARY_PATH := $(VOSK_LIB_PATH)
 # tells the compiler (CGO preprocessor) where to find vosk_api.h at COMPILE TIME
 CGO_CPPFLAGS := -I $(VOSK_LIB_PATH)
-# tells the CGO linker where to find libvosk.so at COMPILE TIME
+# tells the CGO linker where to find libvosk.so at COMPILE* TIME (*link time actually)
 CGO_LDFLAGS := -L $(VOSK_LIB_PATH) -lvosk -lpthread -dl
 
-CGO_FLAGS = LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)"
-
+CGO_FLAGS = CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)"
+RUNTIME_LD_FLAGS = LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)
 
 VERSION         := 3.4.9
 BUILD_DIR       := bin
@@ -52,6 +52,9 @@ all: dev
 build: vosk
 	$(CGO_FLAGS) go build $(LDFLAGS) -o $(BUILDPATH) $(MAIN_PACKAGE)
 
+$(BUILDPATH): vosk
+	$(CGO_FLAGS) go build $(LDFLAGS) -o $(BUILDPATH) $(MAIN_PACKAGE)
+
 lint:
 	go fmt ./...
 	staticcheck ./...
@@ -60,15 +63,11 @@ clean:
 	go clean
 	$(RM) $(BUILD_DIR)
 
-run: build
-	$(CGO_FLAGS) ./$(BUILDPATH)
+run: $(BUILDPATH)
+	$(RUNTIME_LD_FLAGS) ./$(BUILDPATH)
 
-dev: build-dev
-	$(CGO_FLAGS) ./$(BUILDPATH)
-
-build-dev: ENV=development
-build-dev: vosk
-	$(CGO_FLAGS) go build $(LDFLAGS_DEV) -o $(BUILDPATH) $(MAIN_PACKAGE)
+dev: ENV=development
+dev: build run
 
 run-docker:
 	docker compose -p rolando up -d --build --force-recreate
