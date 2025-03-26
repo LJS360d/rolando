@@ -1,15 +1,10 @@
 package log
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"regexp"
 	"rolando/config"
 	"strings"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -30,54 +25,34 @@ const (
 	ColorReset  string = "\033[0m"
 )
 
-type WebhookSyncer struct {
-	zapcore.WriteSyncer
-	url   string
-	mutex sync.Mutex
-}
-
-// Write appends log messages to the buffer.
-func (ws *WebhookSyncer) Write(p []byte) (n int, err error) {
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-
-	content := removeANSICodes(string(p))
-	payload := map[string]string{
-		"content": content,
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return 0, err
-	}
-
-	_, err = http.Post(ws.url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return 0, err
-	}
-
-	return len(p), nil
-}
-
-func (ws *WebhookSyncer) Sync() error {
-	return nil
-}
-
-func removeANSICodes(input string) string {
-	re := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	return re.ReplaceAllString(input, "")
-}
-
 func init() {
 	webhookURL := config.LogWebhook
-	var writeSyncers []zapcore.WriteSyncer
 
-	writeSyncers = append(writeSyncers, zapcore.AddSync(os.Stdout))
+	consoleCore := zapcore.NewCore(
+		getConsoleEncoder(),
+		zapcore.AddSync(os.Stdout),
+		zap.DebugLevel,
+	)
+
+	cores := []zapcore.Core{consoleCore}
 
 	if webhookURL != "" {
-		webhookSyncer := &WebhookSyncer{url: webhookURL}
-		writeSyncers = append(writeSyncers, zapcore.AddSync(webhookSyncer))
+		webhookCore := zapcore.NewCore(
+			getWebhookEncoder(),
+			zapcore.AddSync(&WebhookSyncer{url: webhookURL}),
+			zap.InfoLevel,
+		)
+		cores = append(cores, webhookCore)
 	}
 
+	core := zapcore.NewTee(cores...)
+
+	logger := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
+	defer logger.Sync()
+	Log = logger.Sugar()
+}
+
+func getConsoleEncoder() zapcore.Encoder {
 	// Time encoder
 	timeEncoder := func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 		enc.AppendString(ColorGray + t.Format("[02/01/2006 15:04:05]") + ColorReset)
@@ -104,27 +79,20 @@ func init() {
 		enc.AppendString(ColorGray + fmt.Sprintf("%s:%d", c.Function, c.Line) + ColorReset)
 	}
 
-	// Encoder config
-	encoderCfg := zapcore.EncoderConfig{
+	// Create encoder and core
+	return zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
 		TimeKey:      "time",
 		EncodeTime:   timeEncoder,
 		LevelKey:     "level",
 		EncodeLevel:  levelEncoder,
 		MessageKey:   "msg",
 		CallerKey:    "caller",
-		EncodeCaller: callerEncoder, // Add this line
-	}
+		EncodeCaller: callerEncoder,
+	})
+}
 
-	// Create encoder and core
-	encoder := zapcore.NewConsoleEncoder(encoderCfg)
-	core := zapcore.NewCore(
-		encoder,
-		zapcore.NewMultiWriteSyncer(writeSyncers...),
-		zap.InfoLevel,
-	)
-
-	// Create logger with caller for error levels
-	logger := zap.New(core, zap.AddCaller())
-	defer logger.Sync()
-	Log = logger.Sugar()
+func getWebhookEncoder() zapcore.Encoder {
+	cfg := zap.NewDevelopmentEncoderConfig()
+	cfg.EncodeTime = nil
+	return zapcore.NewConsoleEncoder(cfg)
 }
