@@ -18,6 +18,7 @@ import (
 	vosk "github.com/alphacep/vosk-api/go"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/ogg"
+	"github.com/pion/opus"
 )
 
 var (
@@ -77,7 +78,38 @@ func SpeechToTextNativeFromBytes(bytes []byte, lang string) (string, error) {
 
 	rec.SetWords(1)
 	rec.AcceptWaveform(bytes)
-	text := rec.FinalResult()
+	text := rec.PartialResult()
+	return text, nil
+}
+
+func SpeechToTextNativeFromOpusBytes(opusData []byte, lang string) (string, error) {
+	model, err := loadModel(lang)
+	if err != nil {
+		return "", err
+	}
+
+	sampleRate := 16000.0
+	rec, err := vosk.NewRecognizer(model, sampleRate)
+	if err != nil {
+		return "", err
+	}
+	defer rec.Free()
+
+	rec.SetWords(1)
+
+	decoder := opus.NewDecoder() // 1 channel (mono)
+	if err != nil {
+		return "", fmt.Errorf("failed to create opus decoder: %w", err)
+	}
+
+	pcm := make([]byte, 960) // Allocate a buffer for PCM data
+	_, _, err = decoder.Decode(opusData, pcm)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode opus: %w", err)
+	}
+
+	rec.AcceptWaveform(pcm)
+	text := rec.PartialResult()
 	return text, nil
 }
 
@@ -237,6 +269,7 @@ func StreamAudio(vc *discordgo.VoiceConnection, audio io.Reader) error {
 	return nil
 }
 
+// StreamAudioBuffer streams audio from a byte buffer of opus decoded bytes to a voice connection
 func StreamAudioBuffer(vc *discordgo.VoiceConnection, audioBuffer []byte) error {
 	vc.Speaking(true)
 	defer vc.Speaking(false)
@@ -284,7 +317,6 @@ func StreamAudioDecoder(vc *discordgo.VoiceConnection, decoder *ogg.PacketDecode
 		packetCount++
 
 		// Sleep to maintain the 20ms timing for each Opus frame
-		// You may adjust the sleep duration depending on the packet size and rate
 		time.Sleep(time.Millisecond * 20)
 	}
 

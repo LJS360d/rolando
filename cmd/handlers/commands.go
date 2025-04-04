@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"rolando/cmd/data"
 	"rolando/cmd/log"
 	"rolando/cmd/model"
+	"rolando/cmd/repositories"
 	"rolando/cmd/services"
 	"rolando/cmd/utils"
 	"rolando/config"
@@ -15,6 +17,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/ogg"
 	"golang.org/x/exp/slices"
 )
 
@@ -833,9 +836,16 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 	})
 
 	// step 4: generate a static TTS audio and stream it to the vc
-	chainDoc, _ := h.ChainsService.GetChainDocument(voiceState.GuildID)
-	chain, _ := h.ChainsService.GetChain(chainDoc.ID)
-	var ttsMutex sync.Mutex
+	chainDoc, err := h.ChainsService.GetChainDocument(voiceState.GuildID)
+	if err != nil {
+		log.Log.Errorf("Failed to retrieve chain document: %v", err)
+		return
+	}
+	chain, err := h.ChainsService.GetChain(chainDoc.ID)
+	if err != nil {
+		log.Log.Errorf("Failed to retrieve chain: %v", err)
+		return
+	}
 	d, err := utils.GenerateTTSDecoder("i am here", chainDoc.TTSLanguage)
 	if err != nil {
 		log.Log.Errorf("Failed to generate TTS decoder: %v", err)
@@ -846,60 +856,7 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 	}
 
 	// step 5: start listening in the vc
-	leaveChan := make(chan struct{})
-	var cleanupHandler func()
-	go func() {
-		defer close(leaveChan)
-		cleanupHandler = s.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
-			if vs.GuildID != i.GuildID {
-				return // Not the guild we're in
-			}
-			if vs.UserID == s.State.User.ID {
-				return // the bot leaving
-			}
-			currentUsers, _ := getVCUsers(s, i.GuildID, voiceState.ChannelID)
-			if len(currentUsers) < 1 { // All other users have left the vc
-				leaveChan <- struct{}{} // Signal to leave the vc
-			}
-		})
-		for packet := range vc.OpusRecv {
-			if packet == nil {
-				continue
-			}
-			random := utils.GetRandom(1, 1000)
-			if random != 1 {
-				continue
-			}
-			go func() {
-				ttsMutex.Lock()
-				defer ttsMutex.Unlock()
-				d, err := utils.GenerateTTSDecoder(chain.TalkOnlyText(10), chainDoc.TTSLanguage)
-				if err != nil {
-					log.Log.Errorf("Failed to generate random TTS decoder in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
-					return
-				}
-				if err := utils.StreamAudioDecoder(vc, d); err != nil {
-					log.Log.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
-				}
-			}()
-		}
-	}()
-
-	// cleanup: leave the vc when receiving the signal or after 8 hours
-	select {
-	case <-leaveChan:
-		log.Log.Infof("Leaving vc '%s' in '%s'", voiceChannel.Name, chainDoc.Name)
-		cleanupHandler()
-		vc.Disconnect()
-		vc.Close()
-		break
-	case <-time.After(8 * time.Hour): // timeout after 8 hours
-		log.Log.Infof("VC Timeout in '%s' in '%s'", voiceChannel.Name, chainDoc.Name)
-		cleanupHandler()
-		vc.Disconnect()
-		vc.Close()
-		break
-	}
+	listenVc(s, i, vc, voiceChannel, voiceState, chainDoc, chain)
 }
 
 // implementation of /vc speak command
@@ -1201,4 +1158,104 @@ func shouldRefreshCommand(cached, loaded discordgo.ApplicationCommand) bool {
 		}
 	}
 	return true
+}
+
+func buildOpusHeaders() [][]byte {
+	identificationHeader := []byte{
+		'O', 'p', 'u', 's', 'H', 'e', 'a', 'd', 1, 1, 48, 0x80, 0xbb, 0, 0, 0, 0, 0, 0,
+	}
+	commentHeader := []byte{
+		'O', 'p', 'u', 's', 'T', 'a', 'g', 's', 0, 0, 0, 0,
+	}
+	return [][]byte{identificationHeader, commentHeader}
+}
+
+func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordgo.VoiceConnection, voiceChannel *discordgo.Channel, voiceState *discordgo.VoiceState, chainDoc *repositories.Chain, chain *model.MarkovChain) {
+	leaveChan := make(chan struct{})
+	var cleanupHandler func()
+
+	// TEMP
+	var opusSaveMutex sync.Mutex
+	file, err := os.OpenFile(fmt.Sprintf("%s.opus", voiceChannel.Name), os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		log.Log.Errorf("Failed to open %s.opus file: %v", voiceChannel.Name, err)
+		return
+	}
+	defer file.Close()
+	// Create an Ogg Opus encoder
+	encoder := ogg.NewEncoder(1, file)
+	granulePos := int64(0)
+	samplesPerPacket := 960 // Typical samples per 20ms frame
+	headers := buildOpusHeaders()
+	encoder.EncodeBOS(granulePos, headers[0])
+	granulePos += int64(samplesPerPacket)
+	encoder.Encode(granulePos, headers[1])
+	granulePos += int64(samplesPerPacket)
+	log.Log.Infoln("Wrote BOS headers")
+	// END TEMP
+	var ttsMutex sync.Mutex
+
+	go func() {
+		defer close(leaveChan)
+		cleanupHandler = s.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
+			if vs.GuildID != i.GuildID {
+				return // Not the guild we're in
+			}
+			if vs.UserID == s.State.User.ID {
+				return // the bot leaving
+			}
+			currentUsers, _ := getVCUsers(s, i.GuildID, voiceState.ChannelID)
+			if len(currentUsers) < 1 { // All other users have left the vc
+				leaveChan <- struct{}{} // Signal to leave the vc
+			}
+		})
+		for packet := range vc.OpusRecv {
+			if packet == nil {
+				continue
+			}
+			// TEMP
+			opusSaveMutex.Lock()
+			err := encoder.Encode(granulePos, packet.Opus)
+			if err != nil {
+				log.Log.Errorf("Failed to encode opus packet: %v", err)
+				return
+			}
+			granulePos += int64(samplesPerPacket)
+			opusSaveMutex.Unlock()
+			// END TEMP
+
+			random := utils.GetRandom(1, 1000)
+			if random != 1 {
+				continue
+			}
+			go func() {
+				ttsMutex.Lock()
+				defer ttsMutex.Unlock()
+				d, err := utils.GenerateTTSDecoder(chain.TalkOnlyText(10), chainDoc.TTSLanguage)
+				if err != nil {
+					log.Log.Errorf("Failed to generate random TTS decoder in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
+					return
+				}
+				if err := utils.StreamAudioDecoder(vc, d); err != nil {
+					log.Log.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
+				}
+			}()
+		}
+	}()
+
+	// cleanup: leave the vc when receiving the signal or after 8 hours
+	select {
+	case <-leaveChan:
+		log.Log.Infof("Leaving vc '%s' in '%s'", voiceChannel.Name, chainDoc.Name)
+		cleanupHandler()
+		vc.Disconnect()
+		vc.Close()
+		break
+	case <-time.After(8 * time.Hour): // timeout after 8 hours
+		log.Log.Infof("VC Timeout in '%s' in '%s'", voiceChannel.Name, chainDoc.Name)
+		cleanupHandler()
+		vc.Disconnect()
+		vc.Close()
+		break
+	}
 }
