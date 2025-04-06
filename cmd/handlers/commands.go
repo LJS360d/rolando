@@ -1176,7 +1176,6 @@ func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.M
 
 func (h *SlashCommandsHandler) checkPaywall(skuId string, cb SlashCommandHandler) SlashCommandHandler {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		log.Log.Debugf("Performing Paywall check for sku '%s'", skuId)
 		canUse := h.guildPaywallCheck(s, i, skuId)
 		if !canUse {
 			premiumButton := &discordgo.Button{
@@ -1215,6 +1214,7 @@ func (h *SlashCommandsHandler) guildPaywallCheck(s *discordgo.Session, i *discor
 	if !config.PaywallsEnabled {
 		return true
 	}
+	log.Log.Debugf("Performing guild paywall check for sku '%s'", skuId)
 	guildID := i.GuildID
 	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
 	if err != nil {
