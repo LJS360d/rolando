@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"rolando/config"
+	"rolando/internal/config"
 	"slices"
 	"strings"
 

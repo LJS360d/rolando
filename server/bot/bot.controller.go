@@ -2,9 +2,9 @@ package bot
 
 import (
 	"fmt"
-	"rolando/cmd/log"
-	"rolando/cmd/services"
-	"rolando/config"
+	"rolando/internal/config"
+	"rolando/internal/logger"
+	"rolando/internal/services"
 	"rolando/server/auth"
 	"runtime"
 	"sync"
@@ -66,10 +66,10 @@ func (s *BotController) Broadcast(c *gin.Context) {
 				}
 				channelId = guild.SystemChannelID
 			}
-			log.Log.Infof("Broadcasting message in guild: %s, channel: %s", g.Id, channelId)
+			logger.Infof("Broadcasting message in guild: %s, channel: %s", g.Id, channelId)
 			_, err := s.ds.ChannelMessageSend(channelId, req.Content)
 			if err != nil {
-				log.Log.Errorf("could not send message in guild: %s, channel: %s: %v", g.Id, channelId, err)
+				logger.Errorf("could not send message in guild: %s, channel: %s: %v", g.Id, channelId, err)
 				errCh <- err
 			}
 		}(g)
@@ -256,7 +256,7 @@ func (s *BotController) LeaveGuild(c *gin.Context) {
 	c.JSON(204, nil)
 	err = s.chainsService.DeleteChain(guildId)
 	if err != nil {
-		log.Log.Errorf("Failed to delete chain after leaving guild: %v", err)
+		logger.Errorf("Failed to delete chain after leaving guild: %v", err)
 		return
 	}
 }

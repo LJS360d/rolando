@@ -1,10 +1,10 @@
 package server
 
 import (
-	"rolando/cmd/log"
-	"rolando/cmd/repositories"
-	"rolando/cmd/services"
-	"rolando/config"
+	"rolando/internal/config"
+	"rolando/internal/logger"
+	"rolando/internal/repositories"
+	"rolando/internal/services"
 	"rolando/server/analytics"
 	"rolando/server/auth"
 	"rolando/server/bot"
@@ -59,8 +59,8 @@ func (s *HttpServer) Start() {
 	r.POST("/bot/broadcast", botController.Broadcast)
 
 	// Start the server
-	log.Log.Infof("Server listening at %v", config.ServerAddress)
+	logger.Infof("Server listening at %v", config.ServerAddress)
 	if err := r.Run(config.ServerAddress); err != nil {
-		log.Log.Fatalf("failed to start server: %v", err)
+		logger.Fatalf("failed to start server: %v", err)
 	}
 }

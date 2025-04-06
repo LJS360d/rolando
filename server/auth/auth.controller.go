@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"rolando/config"
+	"rolando/internal/config"
 	"slices"
 
 	"github.com/bwmarrin/discordgo"
