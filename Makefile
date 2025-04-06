@@ -37,7 +37,7 @@ CGO_LDFLAGS := -L $(VOSK_LIB_PATH) -lvosk -lpthread -dl
 CGO_FLAGS = CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)"
 RUNTIME_LD_FLAGS = LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)
 
-VERSION         := 3.4.9
+VERSION         := 3.5.0
 BUILD_DIR       := bin
 MAIN_PACKAGE    := ./cmd
 ENV             ?= production
