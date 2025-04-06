@@ -26,7 +26,7 @@ const (
 func init() {
 	webhookURL := config.LogWebhook
 	var level zapcore.Level
-	if config.Env != "production" {
+	if config.Env == "development" {
 		level = zap.DebugLevel
 	} else {
 		level = zap.InfoLevel
