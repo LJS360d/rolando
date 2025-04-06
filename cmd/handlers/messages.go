@@ -23,7 +23,7 @@ func NewMessageHandler(client *discord.Session, chainsService *services.ChainsSe
 }
 
 func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageCreate) {
-	if m.Author.Bot {
+	if m.Author == nil || m.Author.Bot {
 		return // do not process bot messages
 	}
 	// Access guild and content

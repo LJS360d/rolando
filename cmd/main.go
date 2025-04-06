@@ -25,8 +25,8 @@ func main() {
 	config.Version = Version
 	config.Env = Env
 	log.Log.Infof("Version: %s", config.Version)
-	log.Log.Infof("Env: %s", config.Env)
-	log.Log.Infoln("Creating discord session...")
+	log.Log.Debugf("Env: %s", config.Env)
+	log.Log.Debugln("Creating discord session...")
 	ds, err := discordgo.New("Bot " + config.Token)
 	if err != nil {
 		log.Log.Fatalf("error creating Discord session,", err)
@@ -39,9 +39,9 @@ func main() {
 	if err != nil {
 		log.Log.Fatalln("error opening connection,", err)
 	}
-	log.Log.Infoln("Discord session created")
+	log.Log.Debugln("Discord session created")
 	handlers.UpdatePresence(ds)
-	log.Log.Infoln("Initializing services...")
+	log.Log.Debugln("Initializing services...")
 	// DI
 	messagesRepo, err := repositories.NewMessagesRepository(config.DatabasePath)
 	if err != nil {
@@ -58,7 +58,7 @@ func main() {
 	commandsHandler := handlers.NewSlashCommandsHandler(ds, chainsService)
 	buttonsHandler := handlers.NewButtonsHandler(ds, dataFetchService, chainsService)
 	eventsHandler := handlers.NewEventsHandler(ds, chainsService)
-	log.Log.Infoln("All services initialized")
+	log.Log.Debugln("All services initialized")
 	chainsService.LoadChains()
 	ds.AddHandler(commandsHandler.OnSlashCommandInteraction)
 	ds.AddHandler(messagesHandler.OnMessageCreate)

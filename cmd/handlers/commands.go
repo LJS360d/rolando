@@ -151,21 +151,21 @@ func NewSlashCommandsHandler(
 				Name:        "vc-join",
 				Description: "Joins the voice channel you are currently in",
 			},
-			Handler: handler.vcJoinCommand,
+			Handler: handler.checkPaywall(config.VoiceChatFeaturesSKU, handler.vcJoinCommand),
 		},
 		{
 			Command: &discordgo.ApplicationCommand{
 				Name:        "vc-leave",
 				Description: "Leaves the voice channel you are currently in",
 			},
-			Handler: handler.vcLeaveCommand,
+			Handler: handler.checkPaywall(config.VoiceChatFeaturesSKU, handler.vcLeaveCommand),
 		},
 		{
 			Command: &discordgo.ApplicationCommand{
 				Name:        "vc-speak",
 				Description: "Speaks a message in the VC you are in, and then leaves",
 			},
-			Handler: handler.vcSpeakCommand,
+			Handler: handler.checkPaywall(config.VoiceChatFeaturesSKU, handler.vcSpeakCommand),
 		},
 		{
 			Command: &discordgo.ApplicationCommand{
@@ -202,7 +202,7 @@ func NewSlashCommandsHandler(
 					},
 				},
 			},
-			Handler: handler.vcLanguageCommand,
+			Handler: handler.checkPaywall(config.VoiceChatFeaturesSKU, handler.vcLanguageCommand),
 		},
 		{
 			Command: &discordgo.ApplicationCommand{
@@ -217,7 +217,7 @@ func NewSlashCommandsHandler(
 					},
 				},
 			},
-			Handler: handler.vcJoinRateCommand,
+			Handler: handler.checkPaywall(config.VoiceChatFeaturesSKU, handler.vcJoinRateCommand),
 		},
 	})
 
@@ -1172,6 +1172,72 @@ func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.M
 		}
 	}
 	return users, nil
+}
+
+func (h *SlashCommandsHandler) checkPaywall(skuId string, cb SlashCommandHandler) SlashCommandHandler {
+	log.Log.Debugf("Performing Paywall check for sku '%s'", skuId)
+	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		canUse := h.guildPaywallCheck(s, i, skuId)
+		if !canUse {
+			premiumButton := &discordgo.Button{
+				Style: discordgo.PremiumButton,
+				SKUID: skuId,
+			}
+			actionRow := &discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					premiumButton,
+				},
+			}
+			var content string
+			content = "Hey the usage of this command is not free! You can buy a subscription right now"
+			if config.PremiumsPageLink != "" {
+				content += " or on the website " + config.PremiumsPageLink
+			} else {
+				content += "."
+			}
+			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content:    content,
+					Components: []discordgo.MessageComponent{*actionRow},
+				},
+			})
+			if err != nil {
+				log.Log.Errorf("Failed to send paywall check premium button response: %v", err)
+			}
+			return
+		}
+		cb(s, i)
+	}
+}
+
+func (h *SlashCommandsHandler) guildPaywallCheck(s *discordgo.Session, i *discordgo.InteractionCreate, skuId string) bool {
+	if !config.PaywallsEnabled {
+		return true
+	}
+	guildID := i.GuildID
+	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Failed to retrieve chain data.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		log.Log.Errorf("Failed to retrieve chain data for guild %s: %v", guildID, err)
+		return false
+	}
+	if chainDoc.Premium {
+		return true
+	}
+	// Check if the guild has the SKU
+	for _, ent := range i.Entitlements {
+		if ent.SKUID == skuId && ent.EndsAt != nil && ent.EndsAt.After(time.Now()) {
+			return true
+		}
+	}
+	return false
 }
 
 // compares two commands to check if they are identical in the significant fields

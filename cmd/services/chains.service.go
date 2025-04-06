@@ -161,7 +161,7 @@ func (cs *ChainsService) DeleteChain(id string) error {
 
 // LoadChains loads all chains from the repository into memory.
 func (cs *ChainsService) LoadChains() error {
-	log.Log.Infoln("Loading chains...")
+	log.Log.Debugln("Loading chains...")
 	chains, err := cs.chainsRepo.GetAll()
 	if err != nil {
 		return err
@@ -172,7 +172,7 @@ func (cs *ChainsService) LoadChains() error {
 	for _, chain := range chains {
 		messages, err := cs.GetChainMessages(chain.ID)
 		if err != nil {
-			log.Log.Infof("Error loading messages for chain %s: %v", chain.ID, err)
+			log.Log.Errorf("Error loading messages for chain %s: %v", chain.ID, err)
 			continue
 		}
 
@@ -184,7 +184,7 @@ func (cs *ChainsService) LoadChains() error {
 			cs.messagesRepo,
 		)
 	}
-	log.Log.Infof("Loaded %d chains", len(cs.chainsMap))
+	log.Log.Debugf("Loaded %d chains", len(cs.chainsMap))
 	return nil
 }
 

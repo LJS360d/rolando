@@ -38,6 +38,10 @@ func (h *EventsHandler) registerEvents() {
 	h.Handlers["GUILD_CREATE"] = h.onGuildCreate
 	h.Handlers["GUILD_DELETE"] = h.onGuildDelete
 	h.Handlers["VOICE_STATE_UPDATE"] = h.onVoiceStateUpdate
+	// Subscriptions Logs
+	// h.Handlers["ENTITLEMENT_CREATE"] = h.onEntitlementCreate
+	// h.Handlers["SUBSCRIPTION_CREATE"] = h.onSubscriptionCreate
+	// h.Handlers["SUBSCRIPTION_UPDATE"] = h.onSubscriptionUpdate
 }
 
 func (h *EventsHandler) OnEventCreate(s *discordgo.Session, e *discordgo.Event) {

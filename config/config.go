@@ -11,17 +11,20 @@ import (
 )
 
 var (
-	Token         string
-	Intents       discordgo.Intent
-	OwnerIDs      []string
-	Version       string
-	InviteUrl     string
-	Env           string
-	DatabasePath  string
-	ServerAddress string
-	LogWebhook    string
-	StartupTime   time.Time
-	RunHttpServer bool
+	Token                string
+	Intents              discordgo.Intent
+	OwnerIDs             []string
+	Version              string
+	InviteUrl            string
+	Env                  string
+	DatabasePath         string
+	ServerAddress        string
+	LogWebhook           string
+	StartupTime          time.Time
+	RunHttpServer        bool
+	PaywallsEnabled      bool
+	VoiceChatFeaturesSKU string
+	PremiumsPageLink     string
 )
 
 func init() {
@@ -63,6 +66,10 @@ func init() {
 	RunHttpServer = os.Getenv("RUN_HTTP_SERVER") == "true" || os.Getenv("RUN_HTTP_SERVER") == "1" || os.Getenv("RUN_HTTP_SERVER") == ""
 	StartupTime = time.Now()
 
+	PaywallsEnabled = os.Getenv("PAYWALLS_ENABLED") == "true" || os.Getenv("PAYWALLS_ENABLED") == "1" || os.Getenv("PAYWALLS_ENABLED") == ""
+	VoiceChatFeaturesSKU = os.Getenv("VOICE_CHAT_FEATURES_SKU_ID")
+
+	PremiumsPageLink = os.Getenv("PREMIUMS_PAGE_LINK")
 	Intents = (discordgo.IntentDirectMessageReactions |
 		discordgo.IntentDirectMessageTyping |
 		discordgo.IntentDirectMessages |
