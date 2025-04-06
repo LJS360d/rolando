@@ -17,6 +17,7 @@ type Chain struct {
 	Pings       bool      `gorm:"default:true" json:"pings"`
 	Trained     bool      `gorm:"default:false" json:"trained"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	Premium     bool      `gorm:"default:false" json:"premium"`
 }
 
 type ChainsRepository struct {

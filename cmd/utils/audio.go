@@ -31,7 +31,7 @@ func init() {
 		if _, err := loadModel(lang); err != nil {
 			log.Log.Errorf("Error loading model %s: %v", lang, err)
 		} else {
-			log.Log.Infof("Loaded vosk model '%s'", lang)
+			log.Log.Debugf("Loaded vosk model '%s'", lang)
 		}
 	}
 }

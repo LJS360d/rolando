@@ -1,10 +1,8 @@
 package log
 
 import (
-	"fmt"
 	"os"
 	"rolando/config"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -27,11 +25,16 @@ const (
 
 func init() {
 	webhookURL := config.LogWebhook
-
+	var level zapcore.Level
+	if config.Env != "production" {
+		level = zap.DebugLevel
+	} else {
+		level = zap.InfoLevel
+	}
 	consoleCore := zapcore.NewCore(
 		getConsoleEncoder(),
 		zapcore.AddSync(os.Stdout),
-		zap.DebugLevel,
+		level,
 	)
 
 	cores := []zapcore.Core{consoleCore}
@@ -40,7 +43,7 @@ func init() {
 		webhookCore := zapcore.NewCore(
 			getWebhookEncoder(),
 			zapcore.AddSync(&WebhookSyncer{url: webhookURL}),
-			zap.InfoLevel,
+			level,
 		)
 		cores = append(cores, webhookCore)
 	}
@@ -58,25 +61,9 @@ func getConsoleEncoder() zapcore.Encoder {
 		enc.AppendString(ColorGray + t.Format("[02/01/2006 15:04:05]") + ColorReset)
 	}
 
-	// Level encoder
-	levelEncoder := func(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
-		var color string
-		switch l {
-		case zapcore.InfoLevel:
-			color = ColorGreen
-		case zapcore.WarnLevel:
-			color = ColorYellow
-		case zapcore.ErrorLevel, zapcore.FatalLevel:
-			color = ColorRed
-		default:
-			color = ColorWhite
-		}
-		enc.AppendString(color + strings.ToUpper(l.String()) + ColorReset)
-	}
-
 	// Caller encoder
 	callerEncoder := func(c zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
-		enc.AppendString(ColorGray + fmt.Sprintf("%s:%d", c.Function, c.Line) + ColorReset)
+		enc.AppendString(ColorGray + c.TrimmedPath() + ColorReset)
 	}
 
 	// Create encoder and core
@@ -84,7 +71,7 @@ func getConsoleEncoder() zapcore.Encoder {
 		TimeKey:      "time",
 		EncodeTime:   timeEncoder,
 		LevelKey:     "level",
-		EncodeLevel:  levelEncoder,
+		EncodeLevel:  zapcore.CapitalColorLevelEncoder,
 		MessageKey:   "msg",
 		CallerKey:    "caller",
 		EncodeCaller: callerEncoder,
@@ -94,5 +81,6 @@ func getConsoleEncoder() zapcore.Encoder {
 func getWebhookEncoder() zapcore.Encoder {
 	cfg := zap.NewDevelopmentEncoderConfig()
 	cfg.EncodeTime = nil
+	cfg.EncodeCaller = nil
 	return zapcore.NewConsoleEncoder(cfg)
 }
