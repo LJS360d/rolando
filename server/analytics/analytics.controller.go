@@ -1,9 +1,9 @@
 package analytics
 
 import (
-	"rolando/cmd/model"
-	"rolando/cmd/repositories"
-	"rolando/cmd/services"
+	"rolando/internal/model"
+	"rolando/internal/repositories"
+	"rolando/internal/services"
 	"rolando/server/auth"
 	"strconv"
 

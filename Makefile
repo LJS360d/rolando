@@ -1,4 +1,11 @@
 .PHONY: all run-docker build clean dev run lint clean
+
+VERSION         := 3.5.1
+BUILD_DIR       := bin
+MAIN_PACKAGE    := ./cmd
+ENV             ?= production
+BINARY_NAME     := main
+
 VOSK_LIB_DOWNLOAD := https://github.com/alphacep/vosk-api/releases/download
 VOSK_LIB_RELEASE := v0.3.45
 
@@ -35,17 +42,11 @@ CGO_CPPFLAGS := -I $(VOSK_LIB_PATH)
 CGO_LDFLAGS := -L $(VOSK_LIB_PATH) -lvosk -lpthread -dl
 
 CGO_FLAGS = CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)"
-RUNTIME_LD_FLAGS = LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)
-
-VERSION         := 3.5.0
-BUILD_DIR       := bin
-MAIN_PACKAGE    := ./cmd
-ENV             ?= production
-BINARY_NAME     := main
+RUNTIME_LD_FLAGS = GO_ENV=$(ENV) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)
 
 BUILDPATH       = $(BUILD_DIR)/$(BINARY_NAME)$(EXE)
-LDFLAGS         = -ldflags "-w -s -X main.Version=$(VERSION) -X main.Env=$(ENV)"
-LDFLAGS_DEV     = -ldflags "-X main.Version=$(VERSION) -X main.Env=$(ENV)"
+LDFLAGS         = -ldflags "-w -s -X main.Version=$(VERSION)"
+LDFLAGS_DEV     = -ldflags "-X main.Version=$(VERSION)"
 
 all: dev
 

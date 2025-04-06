@@ -23,6 +23,7 @@ COPY --from=builder /app/bin/main .
 COPY --from=builder /app/.env .
 COPY --from=builder /app/vosk /root/vosk
 ENV LD_LIBRARY_PATH="/root/vosk/lib:$LD_LIBRARY_PATH"
+ENV GO_ENV="production"
 
 EXPOSE 8080
 

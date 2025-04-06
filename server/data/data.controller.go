@@ -1,7 +1,7 @@
 package data
 
 import (
-	"rolando/cmd/repositories"
+	"rolando/internal/repositories"
 	"rolando/server/auth"
 	"strconv"
 

@@ -3,14 +3,17 @@ package main
 import (
 	"os"
 	"os/signal"
-	"rolando/config"
+	"rolando/internal/config"
+	"rolando/internal/logger"
 	"rolando/server"
 	"syscall"
 
-	"rolando/cmd/handlers"
-	"rolando/cmd/log"
-	"rolando/cmd/repositories"
-	"rolando/cmd/services"
+	"rolando/cmd/handlers/buttons"
+	"rolando/cmd/handlers/commands"
+	"rolando/cmd/handlers/events"
+	"rolando/cmd/handlers/messages"
+	"rolando/internal/repositories"
+	"rolando/internal/services"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -18,18 +21,16 @@ import (
 // LDFLAGS
 var (
 	Version string
-	Env     string
 )
 
 func main() {
 	config.Version = Version
-	config.Env = Env
-	log.Log.Infof("Version: %s", config.Version)
-	log.Log.Debugf("Env: %s", config.Env)
-	log.Log.Debugln("Creating discord session...")
+	logger.Infof("Version: %s", config.Version)
+	logger.Debugf("Env: %s", config.Env)
+	logger.Debugln("Creating discord session...")
 	ds, err := discordgo.New("Bot " + config.Token)
 	if err != nil {
-		log.Log.Fatalf("error creating Discord session,", err)
+		logger.Fatalf("error creating Discord session,", err)
 	}
 
 	ds.Identify.Intents = config.Intents
@@ -37,34 +38,34 @@ func main() {
 	// Open a websocket connection to Discord and begin listening.
 	err = ds.Open()
 	if err != nil {
-		log.Log.Fatalln("error opening connection,", err)
+		logger.Fatalln("error opening connection,", err)
 	}
-	log.Log.Debugln("Discord session created")
-	handlers.UpdatePresence(ds)
-	log.Log.Debugln("Initializing services...")
+	logger.Debugln("Discord session created")
+	events.UpdatePresence(ds)
+	logger.Debugln("Initializing services...")
 	// DI
 	messagesRepo, err := repositories.NewMessagesRepository(config.DatabasePath)
 	if err != nil {
-		log.Log.Fatalf("error creating messages repository: %v", err)
+		logger.Fatalf("error creating messages repository: %v", err)
 	}
 	chainsRepo, err := repositories.NewChainsRepository(config.DatabasePath)
 	if err != nil {
-		log.Log.Fatalf("error creating chains repository: %v", err)
+		logger.Fatalf("error creating chains repository: %v", err)
 	}
 	chainsService := services.NewChainsService(ds, *chainsRepo, *messagesRepo)
 	dataFetchService := services.NewDataFetchService(ds, chainsService, messagesRepo)
 	// Handlers
-	messagesHandler := handlers.NewMessageHandler(ds, chainsService)
-	commandsHandler := handlers.NewSlashCommandsHandler(ds, chainsService)
-	buttonsHandler := handlers.NewButtonsHandler(ds, dataFetchService, chainsService)
-	eventsHandler := handlers.NewEventsHandler(ds, chainsService)
-	log.Log.Debugln("All services initialized")
+	messagesHandler := messages.NewMessageHandler(ds, chainsService)
+	commandsHandler := commands.NewSlashCommandsHandler(ds, chainsService)
+	buttonsHandler := buttons.NewButtonsHandler(ds, dataFetchService, chainsService)
+	eventsHandler := events.NewEventsHandler(ds, chainsService)
+	logger.Debugln("All services initialized")
 	chainsService.LoadChains()
 	ds.AddHandler(commandsHandler.OnSlashCommandInteraction)
 	ds.AddHandler(messagesHandler.OnMessageCreate)
 	ds.AddHandler(buttonsHandler.OnButtonInteraction)
 	ds.AddHandler(eventsHandler.OnEventCreate)
-	log.Log.Infof("Logged in as %s", ds.State.User.String())
+	logger.Infof("Logged in as %s", ds.State.User.String())
 	if config.RunHttpServer {
 		srv := server.NewHttpServer(ds, chainsService, messagesRepo)
 		srv.Start()
