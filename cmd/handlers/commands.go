@@ -1214,7 +1214,7 @@ func (h *SlashCommandsHandler) guildPaywallCheck(s *discordgo.Session, i *discor
 	if !config.PaywallsEnabled {
 		return true
 	}
-	log.Log.Debugf("Performing guild paywall check for sku '%s'", skuId)
+	log.Log.Infof("Performing guild paywall check for sku '%s'", skuId)
 	guildID := i.GuildID
 	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
 	if err != nil {
