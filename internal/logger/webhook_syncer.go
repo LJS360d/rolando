@@ -52,5 +52,6 @@ func GetWebhookEncoder() zapcore.Encoder {
 	cfg := zap.NewDevelopmentEncoderConfig()
 	cfg.EncodeTime = nil
 	cfg.EncodeCaller = nil
+	cfg.StacktraceKey = ""
 	return zapcore.NewConsoleEncoder(cfg)
 }
