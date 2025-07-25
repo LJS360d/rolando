@@ -1,10 +1,17 @@
 package commands
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"os"
 	"rolando/internal/logger"
+	"rolando/internal/model"
+	"rolando/internal/repositories"
+	"rolando/internal/stt"
 	"rolando/internal/tts"
 	"rolando/internal/utils"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,9 +57,16 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 	})
 
 	// step 4: generate a static TTS audio and stream it to the vc
-	chainDoc, _ := h.ChainsService.GetChainDocument(voiceState.GuildID)
-	chain, _ := h.ChainsService.GetChain(chainDoc.ID)
-	var ttsMutex sync.Mutex
+	chainDoc, err := h.ChainsService.GetChainDocument(voiceState.GuildID)
+	if err != nil {
+		logger.Errorf("Failed to retrieve chain document: %v", err)
+		return
+	}
+	chain, err := h.ChainsService.GetChain(chainDoc.ID)
+	if err != nil {
+		logger.Errorf("Failed to retrieve chain: %v", err)
+		return
+	}
 	d, err := tts.GenerateTTSDecoder("i am here", chainDoc.TTSLanguage)
 	if err != nil {
 		logger.Errorf("Failed to generate TTS decoder: %v", err)
@@ -63,8 +77,40 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 	}
 
 	// step 5: start listening in the vc
+	listenVc(s, i, vc, voiceChannel, voiceState, chainDoc, chain)
+}
+
+func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.Member, error) {
+	guild, err := s.Guild(guildID)
+	if err != nil {
+		return nil, err
+	}
+
+	var users []*discordgo.Member
+	for _, vs := range guild.VoiceStates {
+		if vs.ChannelID == channelID {
+			for _, member := range guild.Members {
+				if member.User.ID == vs.UserID {
+					users = append(users, member)
+					break
+				}
+			}
+		}
+	}
+	return users, nil
+}
+
+func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordgo.VoiceConnection, voiceChannel *discordgo.Channel, voiceState *discordgo.VoiceState, chainDoc *repositories.Chain, chain *model.MarkovChain) {
 	leaveChan := make(chan struct{})
 	var cleanupHandler func()
+
+	var ttsMutex sync.Mutex
+	// TEMP
+	var saveMutex sync.Mutex
+	file, _ := os.OpenFile("test.raw", os.O_RDWR|os.O_CREATE, 0644)
+	defer file.Close()
+	// END TEMP
+
 	go func() {
 		defer close(leaveChan)
 		cleanupHandler = s.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
@@ -83,10 +129,36 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 			if packet == nil {
 				continue
 			}
-			random := utils.GetRandom(1, 1000)
-			if random != 1 {
+			saveMutex.Lock()
+
+			pcm, err := utils.DecodeOpusPacket(packet.Opus)
+			if err != nil {
+				logger.Errorf("Failed to convert opus to pcm: %v", err)
+				saveMutex.Unlock()
 				continue
 			}
+			var audioData bytes.Buffer
+			for _, sample := range pcm {
+				binary.Write(&audioData, binary.LittleEndian, sample)
+				binary.Write(file, binary.LittleEndian, sample)
+			}
+			text, err := stt.SpeechToTextNativeFromBytes(audioData.Bytes(), chainDoc.TTSLanguage)
+			if err != nil {
+				logger.Errorf("Failed to stt: %v", err)
+				saveMutex.Unlock()
+				continue
+			}
+
+			random := utils.GetRandom(1, 1000)
+			if strings.Contains(text, "rolando") {
+				random = 1
+			}
+			if random != 1 {
+				saveMutex.Unlock()
+				continue
+			}
+			saveMutex.Unlock()
+
 			go func() {
 				ttsMutex.Lock()
 				defer ttsMutex.Unlock()
@@ -117,24 +189,4 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 		vc.Close()
 		break
 	}
-}
-
-func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.Member, error) {
-	guild, err := s.Guild(guildID)
-	if err != nil {
-		return nil, err
-	}
-
-	var users []*discordgo.Member
-	for _, vs := range guild.VoiceStates {
-		if vs.ChannelID == channelID {
-			for _, member := range guild.Members {
-				if member.User.ID == vs.UserID {
-					users = append(users, member)
-					break
-				}
-			}
-		}
-	}
-	return users, nil
 }

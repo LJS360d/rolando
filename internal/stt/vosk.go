@@ -1,6 +1,7 @@
 package stt
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"rolando/cmd/data"
@@ -13,15 +14,22 @@ import (
 var (
 	loadedModels = make(map[string]*vosk.VoskModel)
 	modelsMutex  sync.Mutex
+	recognizers  = make(map[string]*vosk.VoskRecognizer)
 )
 
 func init() {
 	vosk.SetLogLevel(-1)
 	for _, lang := range data.Langs {
-		if _, err := loadModel(lang); err != nil {
+		if model, err := loadModel(lang); err != nil {
 			logger.Errorf("Error loading model %s: %v", lang, err)
 		} else {
 			logger.Debugf("Loaded vosk model '%s'", lang)
+			rec, err := vosk.NewRecognizer(model, 48000.0)
+			if err != nil {
+				logger.Errorf("Failed to create recognizer for model %s: %v", lang, err)
+			}
+			rec.SetWords(1)
+			recognizers[lang] = rec
 		}
 	}
 }
@@ -53,20 +61,18 @@ func SpeechToTextNative(audio io.Reader, lang string) (string, error) {
 }
 
 func SpeechToTextNativeFromBytes(bytes []byte, lang string) (string, error) {
-	model, err := loadModel(lang)
-	if err != nil {
-		return "", err
+	rec, ok := recognizers[lang]
+	if !ok {
+		return "", fmt.Errorf("no recognizer for language %s", lang)
 	}
-
-	sampleRate := 16000.0
-	rec, err := vosk.NewRecognizer(model, sampleRate)
-	if err != nil {
-		return "", err
-	}
-	defer rec.Free()
-
-	rec.SetWords(1)
 	rec.AcceptWaveform(bytes)
-	text := rec.FinalResult()
-	return text, nil
+	jsonStr := rec.Result()
+	var result struct {
+		Text string `json:"text"`
+	}
+	err := json.Unmarshal([]byte(jsonStr), &result)
+	if err != nil {
+		return "", err
+	}
+	return result.Text, nil
 }
