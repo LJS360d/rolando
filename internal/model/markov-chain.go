@@ -153,7 +153,9 @@ func (mc *MarkovChain) Talk(length int) string {
 	for key := range mc.State {
 		keys = append(keys, key)
 	}
-
+	if len(keys) == 0 {
+		return ""
+	}
 	randomIndex := rand.Intn(len(keys))
 	startingWord := keys[randomIndex]
 
@@ -168,7 +170,9 @@ func (mc *MarkovChain) TalkOnlyText(length int) string {
 	for key := range mc.State {
 		keys = append(keys, key)
 	}
-
+	if len(keys) == 0 {
+		return ""
+	}
 	randomIndex := rand.Intn(len(keys))
 	startingWord := keys[randomIndex]
 
