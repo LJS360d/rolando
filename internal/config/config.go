@@ -36,7 +36,8 @@ func init() {
 	}
 	Env = os.Getenv("GO_ENV")
 	if Env == "" {
-		log.Fatalf("GO_ENV not set in the environment")
+		log.Println("GO_ENV not set in the environment")
+		Env = "production"
 	}
 
 	// Assign the environment variables to package-level variables
@@ -84,7 +85,7 @@ func init() {
 		// discordgo.IntentGuildEmojisAndStickers |
 		discordgo.IntentGuildIntegrations |
 		discordgo.IntentGuildInvites |
-		// discordgo.IntentGuildMembers |
+		discordgo.IntentsGuildMembers |
 		discordgo.IntentGuildMessageReactions |
 		discordgo.IntentGuildMessageTyping |
 		discordgo.IntentGuildMessages |
