@@ -87,8 +87,8 @@ type DiscordUser struct {
 	GlobalName           string  `json:"global_name"`
 	AvatarDecorationData *string `json:"avatar_decoration_data"` // Can be null
 	BannerColor          string  `json:"banner_color"`
-	Clan                 *string `json:"clan"`          // Can be null
-	PrimaryGuild         *string `json:"primary_guild"` // Can be null
+	Clan                 *any    `json:"clan"`          // Can be null
+	PrimaryGuild         *any    `json:"primary_guild"` // Can be null
 	MFAEnabled           bool    `json:"mfa_enabled"`
 	Locale               string  `json:"locale"`
 	PremiumType          int     `json:"premium_type"`
