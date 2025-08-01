@@ -1,17 +1,12 @@
 package commands
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
-	"os"
 	"rolando/internal/logger"
 	"rolando/internal/model"
 	"rolando/internal/repositories"
-	"rolando/internal/stt"
 	"rolando/internal/tts"
 	"rolando/internal/utils"
-	"strings"
 	"sync"
 	"time"
 
@@ -105,11 +100,6 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 	var cleanupHandler func()
 
 	var ttsMutex sync.Mutex
-	// TEMP
-	var saveMutex sync.Mutex
-	file, _ := os.OpenFile("test.raw", os.O_RDWR|os.O_CREATE, 0644)
-	defer file.Close()
-	// END TEMP
 
 	go func() {
 		defer close(leaveChan)
@@ -129,35 +119,27 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 			if packet == nil {
 				continue
 			}
-			saveMutex.Lock()
-
-			pcm, err := utils.DecodeOpusPacket(packet.Opus)
-			if err != nil {
-				logger.Errorf("Failed to convert opus to pcm: %v", err)
-				saveMutex.Unlock()
-				continue
-			}
-			var audioData bytes.Buffer
-			for _, sample := range pcm {
-				binary.Write(&audioData, binary.LittleEndian, sample)
-				binary.Write(file, binary.LittleEndian, sample)
-			}
-			text, err := stt.SpeechToTextNativeFromBytes(audioData.Bytes(), chainDoc.TTSLanguage)
-			if err != nil {
-				logger.Errorf("Failed to stt: %v", err)
-				saveMutex.Unlock()
-				continue
-			}
+			// TODO: experiment more with this to make it work properly, thus far i managed to make the STT work once with the medium IT model, but the small one just does not work at all, also the PCM conversion is clearly not working properly, when saving the PCM to a file playing that audio results in sped up audio and missing parts
+			/*
+				pcm, err := utils.DecodeOpusPacket(packet.Opus)
+				if err != nil {
+					logger.Errorf("Failed to convert opus to pcm: %v", err)
+					continue
+				}
+				var audioData bytes.Buffer
+				for _, sample := range pcm {
+					binary.Write(&audioData, binary.LittleEndian, sample)
+				}
+				text, err := stt.SpeechToTextNativeFromBytes(audioData.Bytes(), chainDoc.TTSLanguage)
+				if err != nil {
+					logger.Errorf("Failed to stt: %v", err)
+					continue
+				} */
 
 			random := utils.GetRandom(1, 1000)
-			if strings.Contains(text, "rolando") {
-				random = 1
-			}
 			if random != 1 {
-				saveMutex.Unlock()
 				continue
 			}
-			saveMutex.Unlock()
 
 			go func() {
 				ttsMutex.Lock()
