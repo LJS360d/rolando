@@ -85,7 +85,7 @@ func init() {
 		// discordgo.IntentGuildEmojisAndStickers |
 		discordgo.IntentGuildIntegrations |
 		discordgo.IntentGuildInvites |
-		discordgo.IntentsGuildMembers |
+		// discordgo.IntentsGuildMembers |
 		discordgo.IntentGuildMessageReactions |
 		discordgo.IntentGuildMessageTyping |
 		discordgo.IntentGuildMessages |
