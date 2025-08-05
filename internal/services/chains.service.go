@@ -9,7 +9,6 @@ import (
 	"rolando/internal/utils"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -138,16 +137,21 @@ func (cs *ChainsService) UpdateChainMeta(id string, fields map[string]any) (*rep
 		if err != nil {
 			return nil, errors.New("n_gram_size must be an integer, " + err.Error())
 		}
-		messages, err := cs.GetChainMessages(id)
-		if err != nil {
-			return nil, errors.New("failed to retrieve messages for chain " + id + ": " + err.Error())
+		if nGramSize != chain.NGramSize {
+			messages, err := cs.GetChainMessages(id)
+			if err != nil {
+				return nil, errors.New("failed to retrieve messages for chain " + id + ": " + err.Error())
+			}
+			go func() {
+				chainDoc, err := cs.GetChainDocument(id)
+				if err != nil {
+					logger.Errorf("Failed to update n_gram_size for chain %s: %v", id, err)
+					return
+				}
+				logger.Infof("Updating n_gram_size for chain %s to %d", chainDoc.Name, nGramSize)
+				chain.ChangeNGramSize(nGramSize, messages)
+			}()
 		}
-		go func() {
-			startTime := time.Now()
-			logger.Infof("Updating n_gram_size for chain %s to %d", id, nGramSize)
-			chain.ChangeNGramSize(nGramSize, messages)
-			logger.Infof("Finished updating n_gram_size for chain %s to %d in %s", id, nGramSize, time.Since(startTime).String())
-		}()
 	}
 	// Pings immediate update
 	if pingsRaw, ok := fields["pings"]; ok {
