@@ -12,6 +12,7 @@ type ChainAnalytics struct {
 	Images          string
 	Videos          string
 	ReplyRate       string
+	NGramSize       string
 	Words           string
 	Messages        string
 	Size            string
@@ -23,6 +24,7 @@ type NumericChainAnalytics struct {
 	Images          int
 	Videos          int
 	ReplyRate       int
+	NGramSize       int
 	Words           int
 	Messages        uint32
 	Size            uint64
@@ -56,6 +58,7 @@ func (mca *MarkovChainAnalyzer) GetAnalytics() ChainAnalytics {
 		Images:          fmt.Sprintf("%d", len(mca.chain.MediaStorage.images)),
 		Videos:          fmt.Sprintf("%d", len(mca.chain.MediaStorage.videos)),
 		ReplyRate:       fmt.Sprintf("%d", mca.chain.ReplyRate),
+		NGramSize:       fmt.Sprintf("%d", mca.chain.NGramSize),
 		Words:           fmt.Sprintf("%d", len(mca.chain.State)),
 		Messages:        fmt.Sprintf("%d", mca.chain.MessageCounter),
 		Size:            utils.FormatBytes(uint64(utils.MeasureSize(mca.chain.State))),
@@ -69,6 +72,7 @@ func (mca *MarkovChainAnalyzer) GetRawAnalytics() NumericChainAnalytics {
 		Images:          len(mca.chain.MediaStorage.images),
 		Videos:          len(mca.chain.MediaStorage.videos),
 		ReplyRate:       mca.chain.ReplyRate,
+		NGramSize:       mca.chain.NGramSize,
 		Words:           len(mca.chain.State),
 		Messages:        mca.chain.MessageCounter,
 		Size:            uint64(utils.MeasureSize(mca.chain.State)),

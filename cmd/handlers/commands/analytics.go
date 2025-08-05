@@ -36,6 +36,11 @@ func (h *SlashCommandsHandler) analyticsCommand(s *discordgo.Session, i *discord
 				Inline: true,
 			},
 			{
+				Name:   "Cohesion",
+				Value:  fmt.Sprintf("```%d```", analytics.NGramSize),
+				Inline: true,
+			},
+			{
 				Name:   "Vocabulary",
 				Value:  fmt.Sprintf("```%d words```", analytics.Words),
 				Inline: true,

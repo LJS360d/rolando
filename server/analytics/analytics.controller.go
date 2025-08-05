@@ -134,6 +134,7 @@ func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDo
 		"images":           rawAnalytics.Images,
 		"videos":           rawAnalytics.Videos,
 		"reply_rate":       rawAnalytics.ReplyRate,
+		"n_gram_size":      rawAnalytics.NGramSize,
 		"words":            rawAnalytics.Words,
 		"messages":         rawAnalytics.Messages,
 		"bytes":            rawAnalytics.Size,

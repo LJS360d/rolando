@@ -7,7 +7,9 @@ import (
 	"rolando/internal/model"
 	"rolando/internal/repositories"
 	"rolando/internal/utils"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -82,7 +84,7 @@ func (cs *ChainsService) GetChainDocument(id string) (*repositories.Chain, error
 func (cs *ChainsService) CreateChain(id, name string) (*model.MarkovChain, error) {
 	logger.Infof("Creating chain: %s", name)
 	cs.mu.Lock()
-	chain := model.NewMarkovChain(id, 10, true, []string{}, cs.messagesRepo)
+	chain := model.NewMarkovChain(id, 10, 2, true, []string{}, cs.messagesRepo)
 	_, exists := cs.chainsMap[id]
 	if exists {
 		cs.mu.Unlock()
@@ -124,11 +126,28 @@ func (cs *ChainsService) UpdateChainMeta(id string, fields map[string]any) (*rep
 	}
 	// Reply Rate immediate update
 	if replyRateRaw, ok := fields["reply_rate"]; ok {
-		replyRate, _ := replyRateRaw.(int)
+		replyRate, err := parseToInt(replyRateRaw)
 		if err != nil {
-			return nil, errors.New("reply_rate must be an integer")
+			return nil, errors.New("reply_rate must be an integer, " + err.Error())
 		}
 		chain.ReplyRate = replyRate
+	}
+	// NGramSize immediate update
+	if nGramSizeRaw, ok := fields["n_gram_size"]; ok {
+		nGramSize, err := parseToInt(nGramSizeRaw)
+		if err != nil {
+			return nil, errors.New("n_gram_size must be an integer, " + err.Error())
+		}
+		messages, err := cs.GetChainMessages(id)
+		if err != nil {
+			return nil, errors.New("failed to retrieve messages for chain " + id + ": " + err.Error())
+		}
+		go func() {
+			startTime := time.Now()
+			logger.Infof("Updating n_gram_size for chain %s to %d", id, nGramSize)
+			chain.ChangeNGramSize(nGramSize, messages)
+			logger.Infof("Finished updating n_gram_size for chain %s to %d in %s", id, nGramSize, time.Since(startTime).String())
+		}()
 	}
 	// Pings immediate update
 	if pingsRaw, ok := fields["pings"]; ok {
@@ -179,6 +198,7 @@ func (cs *ChainsService) LoadChains() error {
 		cs.chainsMap[chain.ID] = model.NewMarkovChain(
 			chain.ID,
 			chain.ReplyRate,
+			chain.NGramSize,
 			chain.Pings,
 			messages,
 			cs.messagesRepo,
@@ -211,4 +231,19 @@ func (cs *ChainsService) GetChainsMemUsage() int64 {
 		totalSize += int64(utils.MeasureSize(chain))
 	}
 	return totalSize
+}
+
+// ---------- Helpers -----------
+
+func parseToInt(v any) (int, error) {
+	switch val := v.(type) {
+	case int:
+		return val, nil
+	case float64:
+		return int(val), nil
+	case string:
+		return strconv.Atoi(val)
+	default:
+		return 0, fmt.Errorf("invalid type for integer parsing: %T", val)
+	}
 }
