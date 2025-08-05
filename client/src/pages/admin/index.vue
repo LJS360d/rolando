@@ -1,12 +1,6 @@
 <template>
-  <v-container
-    class="pa-2"
-    min-width="100%"
-  >
-    <v-card
-      flat
-      :prepend-avatar="botUser?.avatar_url"
-    >
+  <v-container class="pa-2" min-width="100%">
+    <v-card flat :prepend-avatar="botUser?.avatar_url">
       <template #title>
         <span class="font-weight-light">{{ botUser?.global_name }}</span>
       </template>
@@ -15,159 +9,74 @@
         <span class="text-sm">Currently part of <b>{{ guilds?.length }}</b> guilds</span>
       </template>
       <template #text>
-        <memory-usage-bar
-          v-if="chains && resources"
-          :current="resources?.memory.stack_in_use + resources?.memory.heap_alloc"
-          :max="resources?.memory.total_alloc"
-          :peak="resources?.memory.sys"
-          :blocks="computedBlocks"
-        />
+        <memory-usage-bar v-if="chains && resources"
+          :current="resources?.memory.stack_in_use + resources?.memory.heap_alloc" :max="resources?.memory.total_alloc"
+          :peak="resources?.memory.sys" :blocks="computedBlocks" />
       </template>
     </v-card>
     <v-divider class="my-4" />
     <div class="d-flex flex-wrap ga-3">
-      <v-card
-        v-for="guild in guilds"
-        :key="guild.id"
-        flat
-        class="max-w-card"
-        :prepend-avatar="guildIconUrl(guild.id, guild.icon)"
-      >
-        <v-icon
-          v-if="userGuilds.includes(guild.id)"
-          class="position-absolute"
-          icon="fas fa-star"
-          size="12"
-          style="top: 4px; left: 4px;"
-          title="You are a member of this server"
-        />
+      <v-card v-for="guild in guilds" :key="guild.id" flat class="max-w-card"
+        :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
+        <v-icon v-if="userGuilds.includes(guild.id)" class="position-absolute" icon="fas fa-star" size="12"
+          style="top: 4px; left: 4px;" title="You are a member of this server" />
         <template #title>
-          <span
-            class="font-weight-light"
-            :title="guild.name"
-          >{{ guild.name }}</span>
+          <span class="font-weight-light" :title="guild.name">{{ guild.name }}</span>
         </template>
         <template #subtitle>
           <span class="text-sm"><b>{{ guild.approximate_member_count }}</b> members</span>
         </template>
         <template #text>
           <div v-if="getChain(guild.id)">
-            <v-row
-              justify="center"
-              class="pa-3 pb-0"
-            >
+            <v-row justify="center" class="pa-3 pb-0">
               <span>
                 {{ formatBytes(getChain(guild.id)?.bytes ?? 0) }} /
                 {{ formatBytes(1024 ** 2 * (getChain(guild.id)?.max_size_mb ?? 0)) }}
               </span>
             </v-row>
-            <v-row
-              justify="space-between"
-              class="pa-3"
-            >
+            <v-row justify="space-between" class="pa-3">
               <v-col cols="12">
-                <v-row
-                  v-for="(field, key) in getAnalyticsForGuild(guild.id)"
-                  :key="key"
-                  justify="space-between"
-                >
+                <v-row v-for="(field, key) in getAnalyticsForGuild(guild.id)" :key="key" justify="space-between">
                   <span class="text-xs">{{ key }}</span>
                   <span class="text-xs">{{ field }}</span>
                 </v-row>
               </v-col>
             </v-row>
           </div>
-          <v-row
-            v-else
-            justify="center"
-            class="h-100 align-center"
-          >
+          <v-row v-else justify="center" class="h-100 align-center">
             No data available
           </v-row>
         </template>
         <template #actions>
           <v-row justify="space-between">
             <v-col cols="8">
-              <v-tooltip
-                #activator="{ props }"
-                text="Invite to server"
-                location="bottom"
-              >
-                <guild-invite-btn
-                  :guild-id="guild.id"
-                  v-bind="props"
-                />
+              <v-tooltip #activator="{ props }" text="Invite to server" location="bottom">
+                <guild-invite-btn :guild-id="guild.id" v-bind="props" />
               </v-tooltip>
-              <v-tooltip
-                #activator="{ props }"
-                text="Copy ID"
-                location="bottom"
-              >
-                <v-btn
-                  v-bind="props"
-                  icon="far fa-copy"
-                  size="small"
-                  @click="copyToClipboard(guild.id)"
-                />
+              <v-tooltip #activator="{ props }" text="Copy ID" location="bottom">
+                <v-btn v-bind="props" icon="far fa-copy" size="small" @click="copyToClipboard(guild.id)" />
               </v-tooltip>
-              <v-tooltip
-                #activator="{ props }"
-                text="Check data"
-                location="bottom"
-              >
-                <v-btn
-                  v-if="!!getChain(guild.id)"
-                  v-bind="props"
-                  :href="`/data/${guild.id}`"
-                  target="_blank"
-                  icon="far fa-file-lines"
-                  size="small"
-                />
+              <v-tooltip #activator="{ props }" text="Check data" location="bottom">
+                <v-btn v-if="!!getChain(guild.id)" v-bind="props" :href="`/data/${guild.id}`" target="_blank"
+                  icon="far fa-file-lines" size="small" />
               </v-tooltip>
               <template v-if="!!getChain(guild.id)">
-                <guild-edit-btn
-                  :guild="guild"
-                  :chain="getChain(guild.id)!"
-                  @confirm="updateChain"
-                />
+                <guild-edit-btn :guild="guild" :chain="getChain(guild.id)!" @confirm="updateChain" />
               </template>
             </v-col>
-            <v-col
-              cols="2"
-              class="d-flex justify-end"
-            >
-              <v-tooltip
-                #activator="{ props }"
-                text="Leave"
-                location="bottom"
-              >
-                <v-btn
-                  v-bind="props"
-                  class="justify-self-end"
-                  color="red"
-                  icon="fas fa-right-from-bracket"
-                  size="small"
-                  @click="() => openConfirmLeaveGuild(guild.name, guild.id)"
-                />
+            <v-col cols="2" class="d-flex justify-end">
+              <v-tooltip #activator="{ props }" text="Leave" location="bottom">
+                <v-btn v-bind="props" class="justify-self-end" color="red" icon="fas fa-right-from-bracket" size="small"
+                  @click="() => openConfirmLeaveGuild(guild.name, guild.id)" />
               </v-tooltip>
             </v-col>
           </v-row>
         </template>
       </v-card>
     </div>
-    <app-dialog
-      :model-value="dialog.visible"
-      :message="dialog.text"
-      :title="dialog.title"
-      @confirm="dialog.confirm"
-      @cancel="dialog.cancel"
-    />
-    <v-snackbar
-      v-model="snackbar.visible"
-      :color="snackbar.color"
-      :timeout="3000"
-      bottom
-    >
+    <app-dialog :model-value="dialog.visible" :message="dialog.text" :title="dialog.title" @confirm="dialog.confirm"
+      @cancel="dialog.cancel" />
+    <v-snackbar v-model="snackbar.visible" :color="snackbar.color" :timeout="3000" bottom>
       {{ snackbar.message }}
     </v-snackbar>
   </v-container>
@@ -178,6 +87,7 @@ import { useGetAllChainsAnalytics, type ChainAnalytics } from '@/api/analytics';
 import { leaveGuild, updateChainDocument, useGetBotGuilds, useGetBotResources, useGetBotUser } from '@/api/bot';
 import { useAuthStore } from '@/stores/auth';
 import { formatBytes, formatNumber, formatTime, guildIconUrl } from '@/utils/format';
+import { differenceWith, isEqual, keyBy, reduce, toPairs } from 'lodash';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 export default {
@@ -285,6 +195,7 @@ export default {
           pings: chain.value.pings_enabled,
           trained: chain.value.trained,
           reply_rate: chain.value.reply_rate,
+          n_gram_size: chain.value.n_gram_size,
           max_size_mb: chain.value.max_size_mb,
         });
         if (!res.ok) {
@@ -314,6 +225,7 @@ export default {
         Messages: formatNumber(chain.messages),
         Words: formatNumber(chain.words),
         Complexity: formatNumber(chain.complexity_score),
+        "N Gram Size": String(chain.n_gram_size),
         "Reply Rate": !chain.reply_rate ? "0%" : `${chain.reply_rate} | ${(1 / chain.reply_rate * 100).toPrecision(3)}% `,
         "VC Join Rate": !chain.vc_join_rate ? "0%" : `${chain.vc_join_rate} | ${(1 / chain.vc_join_rate * 100).toPrecision(3)}% `,
       };

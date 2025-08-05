@@ -12,6 +12,7 @@ export interface ChainAnalytics {
   name: string;
   pings_enabled: boolean;
   reply_rate: number;
+  n_gram_size: number;
   vc_join_rate: number;
   tts_language: string;
   trained: boolean;

@@ -36,6 +36,7 @@ func NewSlashCommandsHandler(
 	}
 
 	// Initialize commands
+	var CohesionMinValue float64 = 2.0
 	handler.registerCommands([]SlashCommand{
 		{
 			Command: &discordgo.ApplicationCommand{
@@ -93,6 +94,22 @@ func NewSlashCommandsHandler(
 				},
 			},
 			Handler: handler.replyRateCommand,
+		},
+		{
+			Command: &discordgo.ApplicationCommand{
+				Name:        "cohesion",
+				Description: "View or set the cohesion value; A higher value makes sentences more coherent",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						MinValue:    &CohesionMinValue,
+						Name:        "value",
+						Description: "the value to set, must be at least 2 (leave empty to view)",
+						Required:    false,
+					},
+				},
+			},
+			Handler: handler.cohesionCommand,
 		},
 		{
 			Command: &discordgo.ApplicationCommand{
