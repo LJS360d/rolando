@@ -103,6 +103,7 @@ func NewSlashCommandsHandler(
 					{
 						Type:        discordgo.ApplicationCommandOptionInteger,
 						MinValue:    &CohesionMinValue,
+						MaxValue:    255,
 						Name:        "value",
 						Description: "the value to set, must be at least 2 (leave empty to view)",
 						Required:    false,
