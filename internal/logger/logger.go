@@ -63,20 +63,13 @@ func getConsoleEncoder() zapcore.Encoder {
 		enc.AppendString(ColorGray + t.Format("[02/01/2006 15:04:05]") + ColorReset)
 	}
 
-	// Caller encoder
-	callerEncoder := func(c zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
-		enc.AppendString(ColorGray + c.TrimmedPath() + ColorReset)
-	}
-
 	// Create encoder and core
 	return zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
-		TimeKey:      "time",
-		EncodeTime:   timeEncoder,
-		LevelKey:     "level",
-		EncodeLevel:  zapcore.CapitalColorLevelEncoder,
-		MessageKey:   "msg",
-		CallerKey:    "caller",
-		EncodeCaller: callerEncoder,
+		TimeKey:     "time",
+		EncodeTime:  timeEncoder,
+		LevelKey:    "level",
+		EncodeLevel: zapcore.CapitalColorLevelEncoder,
+		MessageKey:  "msg",
 	})
 }
 
