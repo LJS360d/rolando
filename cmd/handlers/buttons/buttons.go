@@ -3,6 +3,7 @@ package buttons
 import (
 	"rolando/internal/logger"
 	"rolando/internal/services"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -65,10 +66,11 @@ func (h *ButtonsHandler) OnButtonInteraction(s *discordgo.Session, i *discordgo.
 	}
 	buttonId := i.MessageComponentData().CustomID
 
+	startTime := time.Now()
 	logger.Infof("from '%s' in '%s': btn:%s", who, where, buttonId)
-
 	// Check if there's a handler for the button ID
 	if handler, exists := h.Handlers[buttonId]; exists {
 		handler(s, i) // Call the function bound to the button ID
 	}
+	logger.Infof("btn:%s handler from '%s' in '%s' completed in %s", buttonId, who, where, time.Since(startTime).String())
 }

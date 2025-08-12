@@ -37,6 +37,98 @@ func NewMarkovChain(id string, replyRate int, nGramSize int, pings bool,
 	return mc
 }
 
+// internal function for generating text from a token that is contained in the state
+func (mc *MarkovChain) generateText(startPrefix string, length int) string {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	var generatedTokens []string
+	currentPrefixTokens := strings.Fields(startPrefix)
+	generatedTokens = append(generatedTokens, currentPrefixTokens...)
+
+	for i := 0; i < length; i++ {
+		// Backoff loop: if the current N-gram prefix doesn't exist,
+		// we shorten the prefix and try again.
+		var nextWords map[string]int
+		var exists bool
+		backoffPrefixTokens := currentPrefixTokens
+		for len(backoffPrefixTokens) > 0 {
+			backoffPrefixKey := strings.Join(backoffPrefixTokens, " ")
+			nextWords, exists = mc.State[backoffPrefixKey]
+			if exists {
+				break
+			}
+			// If not found, back off by removing the first token
+			backoffPrefixTokens = backoffPrefixTokens[1:]
+		}
+
+		// If no prefix at all is found (even a single word), we stop.
+		if !exists || len(nextWords) == 0 {
+			break
+		}
+
+		var nextWordArray []string
+		var nextWordWeights []int
+		for word, weight := range nextWords {
+			nextWordArray = append(nextWordArray, word)
+			nextWordWeights = append(nextWordWeights, weight)
+		}
+
+		nextWord := mc.stochasticChoice(nextWordArray, nextWordWeights)
+
+		generatedTokens = append(generatedTokens, nextWord)
+
+		// Update the current prefix for the next iteration by
+		// taking the last N-1 tokens from the generated sequence.
+		if len(generatedTokens) >= mc.NGramSize-1 {
+			currentPrefixTokens = generatedTokens[len(generatedTokens)-(mc.NGramSize-1):]
+		} else {
+			// If we don't have enough tokens for a full prefix yet, use the whole sequence.
+			currentPrefixTokens = generatedTokens
+		}
+	}
+
+	generatedText := strings.Join(generatedTokens, " ")
+
+	// to remove Discord pings
+	if !mc.Pings {
+		re := regexp.MustCompile(`<\@\S+>`)
+		generatedText = re.ReplaceAllString(generatedText, "")
+	}
+	return generatedText
+}
+
+func (mc *MarkovChain) stochasticChoice(options []string, weights []int) string {
+	totalWeight := 0
+	for _, weight := range weights {
+		totalWeight += weight
+	}
+	if totalWeight == 0 {
+		// should never happen, and if it does i dont care, it would just not generate anything
+		return ""
+	}
+	randomWeight := rand.Intn(totalWeight)
+	var weightSum int
+	for i, option := range options {
+		weightSum += weights[i]
+		if randomWeight < weightSum {
+			return option
+		}
+	}
+	return options[len(options)-1]
+}
+
+func (mc *MarkovChain) tokenize(text string) []string {
+	tokens := strings.Fields(text)
+	var filteredTokens []string
+	for _, token := range tokens {
+		if len(token) > 0 {
+			filteredTokens = append(filteredTokens, token)
+		}
+	}
+	return filteredTokens
+}
+
 func (mc *MarkovChain) ProvideData(messages []string) {
 	for _, message := range messages {
 		mc.UpdateState(message)
@@ -52,7 +144,7 @@ func (mc *MarkovChain) UpdateState(message string) {
 	}
 
 	mc.MessageCounter++
-	tokens := mc.Tokenize(message)
+	tokens := mc.tokenize(message)
 
 	// We need at least NGramSize tokens to form a prefix and a next word.
 	if len(tokens) < mc.NGramSize {
@@ -94,156 +186,58 @@ func (mc *MarkovChain) ChangeNGramSize(newSize int, messages []string) {
 	mc.ProvideData(messages)
 }
 
-func (mc *MarkovChain) GenerateText(startPrefix string, length int) string {
-	mc.mu.RLock()
-	defer mc.mu.RUnlock()
+func (mc *MarkovChain) GenerateTextFromSeed(seed string, length int) string {
+	var startingPrefix string
 
-	var generatedTokens []string
-	currentPrefixTokens := strings.Fields(startPrefix)
-	generatedTokens = append(generatedTokens, currentPrefixTokens...)
-
-	for i := 0; i < length; i++ {
-		// Backoff loop: if the current N-gram prefix doesn't exist,
-		// we shorten the prefix and try again.
-		var nextWords map[string]int
-		var exists bool
-		backoffPrefixTokens := currentPrefixTokens
-		for len(backoffPrefixTokens) > 0 {
-			backoffPrefixKey := strings.Join(backoffPrefixTokens, " ")
-			nextWords, exists = mc.State[backoffPrefixKey]
-			if exists {
-				break
+	// 1. O(1) Check: See if the seed is a direct key.
+	if _, exists := mc.State[seed]; exists {
+		startingPrefix = seed
+	} else {
+		// 2. O(N) Fallback: If not found, search for a key containing the seed.
+		var matchingKeys []string
+		for key := range mc.State {
+			if strings.Contains(key, seed) {
+				matchingKeys = append(matchingKeys, key)
 			}
-			// If not found, back off by removing the first token
-			backoffPrefixTokens = backoffPrefixTokens[1:]
 		}
 
-		// If no prefix at all is found (even a single word), we stop.
-		if !exists || len(nextWords) == 0 {
-			break
-		}
-
-		// Prepare for stochastic choice
-		var nextWordArray []string
-		var nextWordWeights []int
-		for word, weight := range nextWords {
-			nextWordArray = append(nextWordArray, word)
-			nextWordWeights = append(nextWordWeights, weight)
-		}
-
-		nextWord := mc.StochasticChoice(nextWordArray, nextWordWeights)
-
-		generatedTokens = append(generatedTokens, nextWord)
-
-		// Update the current prefix for the next iteration by
-		// taking the last N-1 tokens from the generated sequence.
-		if len(generatedTokens) >= mc.NGramSize-1 {
-			currentPrefixTokens = generatedTokens[len(generatedTokens)-(mc.NGramSize-1):]
+		if len(matchingKeys) > 0 {
+			// random choice from matching keys.
+			startingPrefix = matchingKeys[rand.Intn(len(matchingKeys))]
 		} else {
-			// If we don't have enough tokens for a full prefix yet, use the whole sequence.
-			currentPrefixTokens = generatedTokens
-		}
-	}
-
-	generatedText := strings.Join(generatedTokens, " ")
-
-	// to remove Discord pings
-	if !mc.Pings {
-		re := regexp.MustCompile(`<\@\S+>`)
-		generatedText = re.ReplaceAllString(generatedText, "")
-	}
-	return generatedText
-}
-
-func (mc *MarkovChain) Delete(message string) {
-	if strings.HasPrefix(message, "https://") {
-		mc.MediaStorage.RemoveMedia(message)
-		return
-	}
-
-	tokens := mc.Tokenize(message)
-	if len(tokens) < mc.NGramSize {
-		return
-	}
-
-	for i := 0; i < len(tokens)-mc.NGramSize+1; i++ {
-		prefixTokens := tokens[i : i+mc.NGramSize-1]
-		nextWord := tokens[i+mc.NGramSize-1]
-		prefixKey := strings.Join(prefixTokens, " ")
-
-		if nextWordMap, exists := mc.State[prefixKey]; exists {
-			if _, exists := nextWordMap[nextWord]; exists {
-				delete(nextWordMap, nextWord)
-				// Clean up the map if it's empty
-				if len(nextWordMap) == 0 {
-					delete(mc.State, prefixKey)
-				}
+			// 3. O(N) Ultimate Fallback: If no matches, pick a completely random key.
+			keys := make([]string, 0, len(mc.State))
+			for key := range mc.State {
+				keys = append(keys, key)
 			}
+			if len(keys) == 0 {
+				return ""
+			}
+			startingPrefix = keys[rand.Intn(len(keys))]
 		}
 	}
-}
 
-func (mc *MarkovChain) StochasticChoice(options []string, weights []int) string {
-	totalWeight := 0
-	for _, weight := range weights {
-		totalWeight += weight
-	}
-	if totalWeight == 0 {
-		// should never happen, and if it does i dont care, it would just not generate anything
-		return ""
-	}
-	randomWeight := rand.Intn(totalWeight)
-	var weightSum int
-	for i, option := range options {
-		weightSum += weights[i]
-		if randomWeight < weightSum {
-			return option
-		}
-	}
-	return options[len(options)-1]
-}
-
-func (mc *MarkovChain) Tokenize(text string) []string {
-	tokens := strings.Fields(text)
-	var filteredTokens []string
-	for _, token := range tokens {
-		if len(token) > 0 {
-			filteredTokens = append(filteredTokens, token)
-		}
-	}
-	return filteredTokens
+	return mc.generateText(startingPrefix, length)
 }
 
 func (mc *MarkovChain) Talk(length int) string {
-
 	keys := make([]string, 0, len(mc.State))
+	mc.mu.RLock()
 	for key := range mc.State {
 		keys = append(keys, key)
 	}
+	mc.mu.RUnlock()
 	if len(keys) == 0 {
 		return ""
 	}
 	randomIndex := rand.Intn(len(keys))
 	startingPrefix := keys[randomIndex]
 
-	return mc.GenerateText(startingPrefix, length)
+	return mc.generateText(startingPrefix, length)
 }
 
-func (mc *MarkovChain) TalkOnlyText(length int) string {
-	mc.mu.RLock()
-	defer mc.mu.RUnlock()
-
-	keys := make([]string, 0, len(mc.State))
-	for key := range mc.State {
-		keys = append(keys, key)
-	}
-	if len(keys) == 0 {
-		return ""
-	}
-	randomIndex := rand.Intn(len(keys))
-	startingPrefix := keys[randomIndex]
-
-	gt := mc.GenerateText(startingPrefix, length)
+func (mc *MarkovChain) TalkFiltered(length int) string {
+	gt := mc.Talk(length)
 
 	// Remove URLs
 	reURL := regexp.MustCompile(`(?:https?|ftp|file|mailto):\/\/[^\s]+|(?:www\.)[^\s]+`)
@@ -264,4 +258,32 @@ func (mc *MarkovChain) TalkOnlyText(length int) string {
 	})
 
 	return gt
+}
+
+func (mc *MarkovChain) Delete(message string) {
+	if strings.HasPrefix(message, "https://") {
+		mc.MediaStorage.RemoveMedia(message)
+		return
+	}
+
+	tokens := mc.tokenize(message)
+	if len(tokens) < mc.NGramSize {
+		return
+	}
+
+	for i := 0; i < len(tokens)-mc.NGramSize+1; i++ {
+		prefixTokens := tokens[i : i+mc.NGramSize-1]
+		nextWord := tokens[i+mc.NGramSize-1]
+		prefixKey := strings.Join(prefixTokens, " ")
+
+		if nextWordMap, exists := mc.State[prefixKey]; exists {
+			if _, exists := nextWordMap[nextWord]; exists {
+				delete(nextWordMap, nextWord)
+				// Clean up the map if it's empty
+				if len(nextWordMap) == 0 {
+					delete(mc.State, prefixKey)
+				}
+			}
+		}
+	}
 }
