@@ -6,6 +6,7 @@ import (
 	"rolando/internal/logger"
 	"rolando/internal/services"
 	"slices"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -328,10 +329,12 @@ func (h *SlashCommandsHandler) OnSlashCommandInteraction(s *discordgo.Session, i
 		return
 	}
 
+	startTime := time.Now()
 	logger.Infof("from '%s' in '%s': /%s", who, where, commandName)
 	if handler, exists := h.Commands[commandName]; exists {
 		handler(s, i) // Call the function bound to this command
 	}
+	logger.Infof("/%s handler from '%s' in '%s' done in %s", commandName, who, where, time.Since(startTime).String())
 }
 
 // compares two commands to check if they are identical in the significant fields

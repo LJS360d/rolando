@@ -144,7 +144,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 			go func() {
 				ttsMutex.Lock()
 				defer ttsMutex.Unlock()
-				d, err := tts.GenerateTTSDecoder(chain.TalkOnlyText(10), chainDoc.TTSLanguage)
+				d, err := tts.GenerateTTSDecoder(chain.TalkFiltered(10), chainDoc.TTSLanguage)
 				if err != nil {
 					logger.Errorf("Failed to generate random TTS decoder in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
 					return

@@ -57,7 +57,7 @@ func (h *SlashCommandsHandler) vcSpeakCommand(s *discordgo.Session, i *discordgo
 		return
 	}
 	chain, _ := h.ChainsService.GetChain(chainDoc.ID)
-	content := chain.TalkOnlyText(100)
+	content := chain.TalkFiltered(100)
 	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Content: &content,
 	})

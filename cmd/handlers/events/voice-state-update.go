@@ -57,7 +57,7 @@ func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Ev
 			return
 		}
 		chain, _ := h.ChainsService.GetChain(chainDoc.ID)
-		d, err := tts.GenerateTTSDecoder(chain.TalkOnlyText(100), chainDoc.TTSLanguage)
+		d, err := tts.GenerateTTSDecoder(chain.TalkFiltered(100), chainDoc.TTSLanguage)
 		if err != nil {
 			logger.Errorf("Failed to generate TTS decoder: %v", err)
 			return
