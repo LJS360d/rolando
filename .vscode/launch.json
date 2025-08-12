@@ -7,7 +7,9 @@
       "type": "go",
       "request": "launch",
       "program": "${workspaceFolder}/cmd",
-      "env": {},
+      "env": {
+        "GO_ENV": "development"
+      },
       "args": [],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"

@@ -7,6 +7,7 @@ import (
 	"rolando/internal/logger"
 	"rolando/server"
 	"syscall"
+	"time"
 
 	"rolando/cmd/handlers/buttons"
 	"rolando/cmd/handlers/commands"
@@ -70,6 +71,7 @@ func main() {
 		srv := server.NewHttpServer(ds, chainsService, messagesRepo)
 		srv.Start()
 	}
+	logger.Infof("Startup time: %s", time.Since(config.StartupTime).String())
 
 	// Wait here until SIGINT or other term signal is received.
 	sc := make(chan os.Signal, 1)

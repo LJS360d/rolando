@@ -94,10 +94,10 @@ func (h *MessageHandler) getMessage(chain *model.MarkovChain) (string, error) {
 	case random <= 21:
 		return chain.Talk(random), nil
 	case random <= 23:
-		return chain.MediaStorage.GetMedia("gif")
+		return chain.MediaStore.GetMedia("gif")
 	case random <= 24:
-		return chain.MediaStorage.GetMedia("image")
+		return chain.MediaStore.GetMedia("image")
 	default:
-		return chain.MediaStorage.GetMedia("video")
+		return chain.MediaStore.GetMedia("video")
 	}
 }

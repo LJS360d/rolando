@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"regexp"
 	"rolando/internal/repositories"
+	"rolando/internal/store"
 	"strings"
 	"sync"
 )
@@ -15,7 +16,7 @@ type MarkovChain struct {
 	Pings          bool
 	State          map[string]map[string]int
 	MessageCounter uint32
-	MediaStorage   *MediaStorage
+	MediaStore     *store.MediaUrlsStore
 	mu             sync.RWMutex
 }
 
@@ -26,12 +27,12 @@ func NewMarkovChain(id string, replyRate int, nGramSize int, pings bool,
 	}
 
 	mc := &MarkovChain{
-		ID:           id,
-		NGramSize:    nGramSize,
-		ReplyRate:    replyRate,
-		Pings:        pings,
-		State:        make(map[string]map[string]int),
-		MediaStorage: NewMediaStorage(id, nil, nil, nil, messagesRepo),
+		ID:         id,
+		NGramSize:  nGramSize,
+		ReplyRate:  replyRate,
+		Pings:      pings,
+		State:      make(map[string]map[string]int),
+		MediaStore: store.NewMediaUrlsStore(id, nil, nil, nil, messagesRepo),
 	}
 	mc.ProvideData(messages)
 	return mc
@@ -139,7 +140,7 @@ func (mc *MarkovChain) ProvideData(messages []string) {
 // It creates a prefix of N-1 words and maps it to the N-th word.
 func (mc *MarkovChain) UpdateState(message string) {
 	if strings.HasPrefix(message, "https://") {
-		mc.MediaStorage.AddMedia(message)
+		mc.MediaStore.AddMedia(message)
 		return
 	}
 
@@ -262,7 +263,7 @@ func (mc *MarkovChain) TalkFiltered(length int) string {
 
 func (mc *MarkovChain) Delete(message string) {
 	if strings.HasPrefix(message, "https://") {
-		mc.MediaStorage.RemoveMedia(message)
+		mc.MediaStore.RemoveMedia(message)
 		return
 	}
 

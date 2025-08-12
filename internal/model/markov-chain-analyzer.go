@@ -54,9 +54,9 @@ func (mca *MarkovChainAnalyzer) GetComplexity() int {
 func (mca *MarkovChainAnalyzer) GetAnalytics() ChainAnalytics {
 	return ChainAnalytics{
 		ComplexityScore: fmt.Sprintf("%d", mca.GetComplexity()),
-		Gifs:            fmt.Sprintf("%d", len(mca.chain.MediaStorage.gifs)),
-		Images:          fmt.Sprintf("%d", len(mca.chain.MediaStorage.images)),
-		Videos:          fmt.Sprintf("%d", len(mca.chain.MediaStorage.videos)),
+		Gifs:            fmt.Sprintf("%d", len(mca.chain.MediaStore.Gifs)),
+		Images:          fmt.Sprintf("%d", len(mca.chain.MediaStore.Images)),
+		Videos:          fmt.Sprintf("%d", len(mca.chain.MediaStore.Videos)),
 		ReplyRate:       fmt.Sprintf("%d", mca.chain.ReplyRate),
 		NGramSize:       fmt.Sprintf("%d", mca.chain.NGramSize),
 		Words:           fmt.Sprintf("%d", len(mca.chain.State)),
@@ -68,9 +68,9 @@ func (mca *MarkovChainAnalyzer) GetAnalytics() ChainAnalytics {
 func (mca *MarkovChainAnalyzer) GetRawAnalytics() NumericChainAnalytics {
 	return NumericChainAnalytics{
 		ComplexityScore: mca.GetComplexity(),
-		Gifs:            len(mca.chain.MediaStorage.gifs),
-		Images:          len(mca.chain.MediaStorage.images),
-		Videos:          len(mca.chain.MediaStorage.videos),
+		Gifs:            len(mca.chain.MediaStore.Gifs),
+		Images:          len(mca.chain.MediaStore.Images),
+		Videos:          len(mca.chain.MediaStore.Videos),
 		ReplyRate:       mca.chain.ReplyRate,
 		NGramSize:       mca.chain.NGramSize,
 		Words:           len(mca.chain.State),
