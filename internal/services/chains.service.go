@@ -9,6 +9,7 @@ import (
 	"rolando/internal/utils"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -192,13 +193,13 @@ func (cs *ChainsService) LoadChains() error {
 
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
+	startTime := time.Now()
 	for _, chain := range chains {
 		messages, err := cs.GetChainMessages(chain.ID)
 		if err != nil {
 			logger.Errorf("Error loading messages for chain %s: %v", chain.ID, err)
 			continue
 		}
-
 		cs.chainsMap[chain.ID] = model.NewMarkovChain(
 			chain.ID,
 			chain.ReplyRate,
@@ -208,7 +209,7 @@ func (cs *ChainsService) LoadChains() error {
 			cs.messagesRepo,
 		)
 	}
-	logger.Debugf("Loaded %d chains", len(cs.chainsMap))
+	logger.Debugf("Loaded %d chains in %s", len(cs.chainsMap), time.Since(startTime))
 	return nil
 }
 

@@ -1,4 +1,4 @@
-package model
+package store
 
 import (
 	"errors"
@@ -14,17 +14,17 @@ import (
 
 type MediaSet map[string]bool
 
-type MediaStorage struct {
+type MediaUrlsStore struct {
 	chainID      string
-	gifs         MediaSet
-	images       MediaSet
-	videos       MediaSet
+	Gifs         MediaSet
+	Images       MediaSet
+	Videos       MediaSet
 	messagesRepo repositories.MessagesRepository
 	mu           sync.RWMutex
 	client       *http.Client
 }
 
-func NewMediaStorage(chainID string, gifs, images, videos []string, messagesRepo repositories.MessagesRepository) *MediaStorage {
+func NewMediaUrlsStore(chainID string, gifs, images, videos []string, messagesRepo repositories.MessagesRepository) *MediaUrlsStore {
 	gifsMap := make(MediaSet, len(gifs))
 	imagesMap := make(MediaSet, len(images))
 	videosMap := make(MediaSet, len(videos))
@@ -39,11 +39,11 @@ func NewMediaStorage(chainID string, gifs, images, videos []string, messagesRepo
 		videosMap[video] = true
 	}
 
-	return &MediaStorage{
+	return &MediaUrlsStore{
 		chainID:      chainID,
-		gifs:         gifsMap,
-		images:       imagesMap,
-		videos:       videosMap,
+		Gifs:         gifsMap,
+		Images:       imagesMap,
+		Videos:       videosMap,
 		messagesRepo: messagesRepo,
 		client: &http.Client{
 			Timeout: 5 * time.Second,
@@ -56,38 +56,38 @@ func NewMediaStorage(chainID string, gifs, images, videos []string, messagesRepo
 	}
 }
 
-func (ms *MediaStorage) AddMedia(url string) {
+func (ms *MediaUrlsStore) AddMedia(url string) {
 	ms.mu.Lock()
 	if utils.IsGif(url) {
-		ms.gifs[url] = true
+		ms.Gifs[url] = true
 	} else if utils.IsVideo(url) {
-		ms.videos[url] = true
+		ms.Videos[url] = true
 	} else if utils.IsImage(url) {
-		ms.images[url] = true
+		ms.Images[url] = true
 	}
 	ms.mu.Unlock()
 }
 
-func (ms *MediaStorage) RemoveMedia(url string) {
+func (ms *MediaUrlsStore) RemoveMedia(url string) {
 	ms.mu.Lock()
-	delete(ms.gifs, url)
-	delete(ms.videos, url)
-	delete(ms.images, url)
+	delete(ms.Gifs, url)
+	delete(ms.Videos, url)
+	delete(ms.Images, url)
 	ms.mu.Unlock()
 }
 
-func (ms *MediaStorage) GetMedia(mediaType string) (string, error) {
+func (ms *MediaUrlsStore) GetMedia(mediaType string) (string, error) {
 	ms.mu.RLock()
 	var urls []string
 	var set MediaSet
 
 	switch mediaType {
 	case "gif":
-		set = ms.gifs
+		set = ms.Gifs
 	case "image":
-		set = ms.images
+		set = ms.Images
 	case "video":
-		set = ms.videos
+		set = ms.Videos
 	default:
 		ms.mu.RUnlock()
 		return "", errors.New("invalid media type")
@@ -108,7 +108,7 @@ func (ms *MediaStorage) GetMedia(mediaType string) (string, error) {
 	return ms.getValidUrlFromSet(urls)
 }
 
-func (ms *MediaStorage) getValidUrlFromSet(urls []string) (string, error) {
+func (ms *MediaUrlsStore) getValidUrlFromSet(urls []string) (string, error) {
 	if len(urls) == 0 {
 		return "", errors.New("no URLs available")
 	}
@@ -137,7 +137,7 @@ func (ms *MediaStorage) getValidUrlFromSet(urls []string) (string, error) {
 	return "", errors.New("no valid media URLs found")
 }
 
-func (ms *MediaStorage) validateUrl(url string) (bool, error) {
+func (ms *MediaUrlsStore) validateUrl(url string) (bool, error) {
 	req, err := http.NewRequest(http.MethodHead, url, nil)
 	if err != nil {
 		return false, err
@@ -158,7 +158,7 @@ func (ms *MediaStorage) validateUrl(url string) (bool, error) {
 	return true, nil
 }
 
-func (ms *MediaStorage) handleInvalidUrl(url string) {
+func (ms *MediaUrlsStore) handleInvalidUrl(url string) {
 	ms.RemoveMedia(url)
 	if err := ms.messagesRepo.DeleteGuildMessagesContaining(ms.chainID, url); err != nil {
 		logger.Errorf("Error removing invalid URL: %v", err)

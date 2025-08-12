@@ -11,7 +11,7 @@ func (h *SlashCommandsHandler) gifCommand(s *discordgo.Session, i *discordgo.Int
 	if err != nil {
 		return
 	}
-	gif, err := chain.MediaStorage.GetMedia("gif")
+	gif, err := chain.MediaStore.GetMedia("gif")
 	if err != nil || gif == "" {
 		gif = "No valid gif found."
 	}
@@ -29,7 +29,7 @@ func (h *SlashCommandsHandler) imageCommand(s *discordgo.Session, i *discordgo.I
 	if err != nil {
 		return
 	}
-	image, err := chain.MediaStorage.GetMedia("image")
+	image, err := chain.MediaStore.GetMedia("image")
 	if err != nil || image == "" {
 		image = "No valid image found."
 	}
@@ -47,7 +47,7 @@ func (h *SlashCommandsHandler) videoCommand(s *discordgo.Session, i *discordgo.I
 	if err != nil {
 		return
 	}
-	video, err := chain.MediaStorage.GetMedia("video")
+	video, err := chain.MediaStore.GetMedia("video")
 	if err != nil || video == "" {
 		video = "No valid video found."
 	}
