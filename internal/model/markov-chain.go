@@ -215,8 +215,6 @@ func (mc *MarkovChain) Tokenize(text string) []string {
 }
 
 func (mc *MarkovChain) Talk(length int) string {
-	mc.mu.RLock()
-	defer mc.mu.RUnlock()
 
 	keys := make([]string, 0, len(mc.State))
 	for key := range mc.State {
