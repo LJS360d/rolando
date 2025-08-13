@@ -185,7 +185,7 @@ func (cs *ChainsService) DeleteChain(id string) error {
 
 // LoadChains loads all chains from the repository into memory.
 func (cs *ChainsService) LoadChains() error {
-	logger.Debugln("Loading chains...")
+	logger.Infof("Loading chains...")
 	chains, err := cs.chainsRepo.GetAll()
 	if err != nil {
 		return err
@@ -209,7 +209,7 @@ func (cs *ChainsService) LoadChains() error {
 			cs.messagesRepo,
 		)
 	}
-	logger.Debugf("Loaded %d chains in %s", len(cs.chainsMap), time.Since(startTime))
+	logger.Infof("Loaded %d chains in %s", len(cs.chainsMap), time.Since(startTime))
 	return nil
 }
 
