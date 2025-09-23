@@ -1,5 +1,5 @@
 package data
 
 var (
-	Langs = []string{"en", "it", "de", "es", "zh"}
+	Langs = []string{"en", "it", "de", "es"}
 )
