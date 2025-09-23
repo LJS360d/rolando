@@ -12,7 +12,6 @@ VOSK_LIB_RELEASE := v0.3.45
 VOSK_MODELS_DOWNLOAD := https://alphacephei.com/vosk/models
 VOSK_MODEL_EN := vosk-model-small-en-us-0.15
 VOSK_MODEL_IT := vosk-model-small-it-0.22
-VOSK_MODEL_ZH := vosk-model-small-cn-0.22
 VOSK_MODEL_DE := vosk-model-small-de-0.15
 VOSK_MODEL_ES := vosk-model-small-es-0.42
 
@@ -96,11 +95,6 @@ $(VOSK_MODELS):
 	@unzip $(VOSK_MODEL_IT).zip -d vosk/models
 	@mv vosk/models/$(VOSK_MODEL_IT)/ vosk/models/it
 	@rm $(VOSK_MODEL_IT).zip
-
-	@wget $(VOSK_MODELS_DOWNLOAD)/$(VOSK_MODEL_ZH).zip
-	@unzip $(VOSK_MODEL_ZH).zip -d vosk/models
-	@mv vosk/models/$(VOSK_MODEL_ZH)/ vosk/models/zh
-	@rm $(VOSK_MODEL_ZH).zip
 
 	@wget $(VOSK_MODELS_DOWNLOAD)/$(VOSK_MODEL_ES).zip
 	@unzip $(VOSK_MODEL_ES).zip -d vosk/models
