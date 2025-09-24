@@ -1,6 +1,12 @@
 FROM golang:1.23-bullseye AS builder
 
-RUN apt-get update && apt-get install -y wget unzip
+# build dependencies, including libopus-dev and libopusfile-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libopus-dev \
+    libopusfile-dev \
+    pkg-config \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -15,8 +21,14 @@ FROM debian:bullseye-slim
 
 WORKDIR /root/
 
+# runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    sqlite3 libsqlite3-0 ffmpeg espeak-ng ca-certificates \
+    sqlite3 \
+    libsqlite3-0 \
+    libopusfile0 \
+    ffmpeg \
+    espeak-ng \
+    ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/bin/main .
