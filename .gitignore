@@ -39,3 +39,6 @@ bin/
 *.sqlite
 
 vosk
+vosk*.zip
+*.raw
+*.opus
