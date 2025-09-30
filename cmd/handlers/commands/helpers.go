@@ -86,6 +86,13 @@ func (h *SlashCommandsHandler) guildSubscriptionCheck(s *discordgo.Session, i *d
 	if !config.PaywallsEnabled {
 		return true
 	}
+	// pass if the user is a bot owner
+	for _, ownerID := range config.OwnerIDs {
+		if i.Member.User.ID == ownerID {
+			logger.Infof("User %s is an owner, skipping guild subscription check", i.Member.User.GlobalName)
+			return true
+		}
+	}
 	logger.Infof("Performing guild subscription check for sku '%s'", skuId)
 	guildID := i.GuildID
 	chainDoc, err := h.ChainsService.GetChainDocument(guildID)

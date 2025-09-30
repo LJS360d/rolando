@@ -11,16 +11,20 @@ import (
 // implementation of /vc leave command
 func (h *SlashCommandsHandler) vcLeaveCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	vc, exists := s.VoiceConnections[i.GuildID]
-	var res string
 	if !exists {
-		res = "I am not connected to a voice channel."
-	} else {
-		res = "I am leaving the voice channel"
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "I am not connected to a voice channel.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
 	}
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: res,
+			Content: "I am leaving the voice channel",
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
@@ -39,5 +43,4 @@ func (h *SlashCommandsHandler) vcLeaveCommand(s *discordgo.Session, i *discordgo
 	if err != nil {
 		logger.Errorf("Failed to disconnect from voice channel: %v", err)
 	}
-	vc.Close()
 }

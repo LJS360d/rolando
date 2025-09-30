@@ -10,13 +10,13 @@ services:
     environment:
       - DATABASE_PATH=/root/data/${COMPOSE_PROJECT_NAME}.db
       - SERVER_ADDRESS=0.0.0.0:8080
-    depends_on:
-      - frontend
     networks:
       - default
     restart: unless-stopped
 
   frontend:
+    profiles:
+      - prod
     build:
       context: ./client
       dockerfile: Dockerfile

@@ -1,15 +1,20 @@
 package commands
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"rolando/internal/logger"
 	"rolando/internal/model"
 	"rolando/internal/repositories"
+	"rolando/internal/stt"
 	"rolando/internal/tts"
 	"rolando/internal/utils"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/bwmarrin/dgvoice"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -72,7 +77,7 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 	}
 
 	// step 5: start listening in the vc
-	listenVc(s, i, vc, voiceChannel, voiceState, chainDoc, chain)
+	listenVc(s, i, vc, voiceChannel, chainDoc, chain)
 }
 
 func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.Member, error) {
@@ -81,94 +86,130 @@ func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.M
 		return nil, err
 	}
 
+	memberMap := make(map[string]*discordgo.Member)
+	for _, member := range guild.Members {
+		memberMap[member.User.ID] = member
+	}
+
 	var users []*discordgo.Member
 	for _, vs := range guild.VoiceStates {
 		if vs.ChannelID == channelID {
-			for _, member := range guild.Members {
-				if member.User.ID == vs.UserID {
-					users = append(users, member)
-					break
-				}
+			if member, ok := memberMap[vs.UserID]; ok {
+				users = append(users, member)
 			}
 		}
 	}
 	return users, nil
 }
 
-func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordgo.VoiceConnection, voiceChannel *discordgo.Channel, voiceState *discordgo.VoiceState, chainDoc *repositories.Chain, chain *model.MarkovChain) {
-	leaveChan := make(chan struct{})
-	var cleanupHandler func()
-
+func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordgo.VoiceConnection, voiceChannel *discordgo.Channel, chainDoc *repositories.Chain, chain *model.MarkovChain) {
 	var ttsMutex sync.Mutex
+	done := make(chan struct{})
+
+	freeCleanupHandler := s.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
+		if vs.GuildID != i.GuildID {
+			// not the guild we are working in, ignore
+			return
+		}
+
+		if vs.UserID == s.State.User.ID {
+			// the bot leaving through other means (kicked, /vc-leave, lost connection, etc.) shutdown
+			logger.Infof("Left voice channel '%s' in '%s', initiating cleanup...", voiceChannel.Name, chainDoc.Name)
+			select {
+			case done <- struct{}{}: // Send signal if possible
+			default: // Don't block if already sent/closed
+			}
+			return
+		}
+
+		currentUsers, _ := getVCUsers(s, i.GuildID, vc.ChannelID)
+		if len(currentUsers) < 1 { // All other users have left
+			select {
+			case done <- struct{}{}: // Send signal if possible
+			default: // Don't block if already sent/closed
+			}
+		}
+	})
+
+	// use the 'done' channel to instruct other goroutines to stop *before* cleanup.
+	defer func() {
+		freeCleanupHandler()
+		select {
+		case done <- struct{}{}: // Send signal if possible
+		default: // Don't block if already sent/closed
+		}
+		close(done)
+		err := vc.Disconnect()
+		if err != nil {
+			logger.Warnf("Failed to disconnect from voice channel (already disconnected?): %v", err)
+		}
+		stt.FreeRecognizer(chain.ID)
+		logger.Infof("Cleanup complete for VC '%s' in '%s'", voiceChannel.Name, chainDoc.Name)
+	}()
 
 	go func() {
-		defer close(leaveChan)
-		cleanupHandler = s.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
-			if vs.GuildID != i.GuildID {
-				return // Not the guild we're in
-			}
-			if vs.UserID == s.State.User.ID {
-				return // the bot leaving
-			}
-			currentUsers, _ := getVCUsers(s, i.GuildID, voiceState.ChannelID)
-			if len(currentUsers) < 1 { // All other users have left the vc
-				leaveChan <- struct{}{} // Signal to leave the vc
-			}
-		})
-		for packet := range vc.OpusRecv {
-			if packet == nil {
-				continue
-			}
-			// TODO: experiment more with this to make it work properly, thus far i managed to make the STT work once with the medium IT model, but the small one just does not work at all, also the PCM conversion is clearly not working properly, when saving the PCM to a file playing that audio results in sped up audio and missing parts
-			/*
-				pcm, err := utils.DecodeOpusPacket(packet.Opus)
-				if err != nil {
-					logger.Errorf("Failed to convert opus to pcm: %v", err)
-					continue
-				}
-				var audioData bytes.Buffer
-				for _, sample := range pcm {
-					binary.Write(&audioData, binary.LittleEndian, sample)
-				}
-				text, err := stt.SpeechToTextNativeFromBytes(audioData.Bytes(), chainDoc.TTSLanguage)
-				if err != nil {
-					logger.Errorf("Failed to stt: %v", err)
-					continue
-				} */
+		pcmChan := make(chan *discordgo.Packet)
+		go dgvoice.ReceivePCM(vc, pcmChan)
 
-			random := utils.GetRandom(1, 1000)
-			if random != 1 {
-				continue
-			}
-
-			go func() {
-				ttsMutex.Lock()
-				defer ttsMutex.Unlock()
-				d, err := tts.GenerateTTSDecoder(chain.TalkFiltered(10), chainDoc.TTSLanguage)
-				if err != nil {
-					logger.Errorf("Failed to generate random TTS decoder in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
+		for {
+			select {
+			case packet, ok := <-pcmChan:
+				if !ok || packet == nil {
+					// Connection dropped or dgvoice finished. Signal shutdown.
+					logger.Warnf("PCM channel closed. initiating cleanup...")
+					select {
+					case done <- struct{}{}:
+					default:
+					}
 					return
 				}
-				if err := utils.StreamAudioDecoder(vc, d); err != nil {
-					logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
+
+				pcm := packet.PCM
+				var audioData bytes.Buffer
+				binary.Write(&audioData, binary.LittleEndian, pcm)
+				text, err := stt.SpeechToTextNative(&audioData, chainDoc.TTSLanguage, chainDoc.ID)
+
+				if err != nil {
+					logger.Errorf("Failed Speech to Text: %v", err)
+					continue
 				}
-			}()
+
+				random := utils.GetRandom(1, 1000)
+				if text != "" {
+					chain.UpdateState(text)
+					if strings.Contains(text, "rolando") {
+						random = 1
+					}
+				}
+				if random != 1 {
+					continue
+				}
+				go func() {
+					ttsMutex.Lock()
+					defer ttsMutex.Unlock()
+					d, err := tts.GenerateTTSDecoder(chain.TalkFiltered(10), chainDoc.TTSLanguage)
+					if err != nil {
+						logger.Errorf("Failed to generate random TTS decoder in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
+						return
+					}
+					if err := utils.StreamAudioDecoder(vc, d); err != nil {
+						logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
+					}
+				}()
+
+			case <-done:
+				logger.Info("Received shutdown signal in Audio Processing goroutine, exiting")
+				return
+			}
 		}
 	}()
 
-	// cleanup: leave the vc when receiving the signal or after 8 hours
 	select {
-	case <-leaveChan:
-		logger.Infof("Leaving vc '%s' in '%s'", voiceChannel.Name, chainDoc.Name)
-		cleanupHandler()
-		vc.Disconnect()
-		vc.Close()
-		break
+	case <-done:
+		// Received signal from the Audio Processor or the VoiceStateUpdate Handler.
+		// go into the defer block for cleanup
+		return
 	case <-time.After(8 * time.Hour): // timeout after 8 hours
-		logger.Infof("VC Timeout in '%s' in '%s'", voiceChannel.Name, chainDoc.Name)
-		cleanupHandler()
-		vc.Disconnect()
-		vc.Close()
-		break
+		logger.Infof("VC Timeout in '%s' in '%s', initiating cleanup...", voiceChannel.Name, chainDoc.Name)
 	}
 }

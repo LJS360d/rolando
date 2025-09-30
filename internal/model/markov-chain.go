@@ -144,13 +144,13 @@ func (mc *MarkovChain) UpdateState(message string) {
 		return
 	}
 
-	mc.MessageCounter++
 	tokens := mc.tokenize(message)
-
 	// We need at least NGramSize tokens to form a prefix and a next word.
 	if len(tokens) < mc.NGramSize {
 		return
 	}
+
+	mc.MessageCounter++
 
 	for i := 0; i < len(tokens)-mc.NGramSize+1; i++ {
 		// The prefix is a slice of N-1 words
@@ -279,9 +279,11 @@ func (mc *MarkovChain) Delete(message string) {
 
 		if nextWordMap, exists := mc.State[prefixKey]; exists {
 			if _, exists := nextWordMap[nextWord]; exists {
+				mc.MessageCounter--
 				delete(nextWordMap, nextWord)
 				// Clean up the map if it's empty
 				if len(nextWordMap) == 0 {
+					mc.MessageCounter--
 					delete(mc.State, prefixKey)
 				}
 			}
