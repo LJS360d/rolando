@@ -1,6 +1,6 @@
 .PHONY: all run-docker build clean dev run lint clean
 
-VERSION         := 3.6.6
+VERSION         := 3.7.0
 BUILD_DIR       := bin
 MAIN_PACKAGE    := ./cmd
 ENV             ?= production
@@ -22,7 +22,7 @@ ifeq ($(OS),Windows_NT)
   VOSK_ARCHIVE := vosk-win64-0.3.45
 else
   EXE   :=
-  RM     = rm -f
+  RM     = rm -rf
   CMD   :=
   VOSK_ARCHIVE := vosk-linux-x86_64-0.3.45
 endif
@@ -62,6 +62,7 @@ lint:
 clean:
 	go clean
 	$(RM) $(BUILD_DIR)
+	$(RM) vosk
 
 run: $(BUILDPATH)
 	$(RUNTIME_LD_FLAGS) ./$(BUILDPATH)
@@ -70,7 +71,11 @@ dev: ENV=development
 dev: build run
 
 run-docker:
+ifeq ($(ENV),production)
+	docker compose -p rolando --profile prod up -d --build --force-recreate
+else
 	docker compose -p rolando up -d --build --force-recreate
+endif
 
 vosk: $(VOSK_LIB) $(VOSK_MODELS)
 

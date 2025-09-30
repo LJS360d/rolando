@@ -203,10 +203,6 @@ func NewSlashCommandsHandler(
 								Name:  "Spanish",
 								Value: 3,
 							},
-							{
-								Name:  "Chinese",
-								Value: 4,
-							},
 						},
 						Description: "the language to set (leave empty to view)",
 						Required:    false,
@@ -328,7 +324,6 @@ func (h *SlashCommandsHandler) OnSlashCommandInteraction(s *discordgo.Session, i
 		logger.Errorf("Failed to determine user for command interaction in '%s'", where)
 		return
 	}
-
 	startTime := time.Now()
 	logger.Infof("from '%s' in '%s': /%s", who, where, commandName)
 	if handler, exists := h.Commands[commandName]; exists {

@@ -17,7 +17,7 @@ COPY . .
 
 RUN make build
 
-FROM debian:bullseye-slim
+FROM debian:12-slim
 
 WORKDIR /root/
 

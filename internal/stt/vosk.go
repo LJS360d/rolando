@@ -14,23 +14,18 @@ import (
 var (
 	loadedModels = make(map[string]*vosk.VoskModel)
 	modelsMutex  sync.Mutex
-	recognizers  = make(map[string]*vosk.VoskRecognizer)
+	// guildId -> Recognizers
+	recognizers = make(map[string]*vosk.VoskRecognizer)
 )
 
 func init() {
 	vosk.SetLogLevel(-1)
 	for _, lang := range data.Langs {
-		if model, err := loadModel(lang); err != nil {
-			logger.Errorf("Error loading model %s: %v", lang, err)
-		} else {
-			logger.Debugf("Loaded vosk model '%s'", lang)
-			rec, err := vosk.NewRecognizer(model, 48000.0)
-			if err != nil {
-				logger.Errorf("Failed to create recognizer for model %s: %v", lang, err)
-			}
-			rec.SetWords(1)
-			recognizers[lang] = rec
+		_, err := loadModel(lang)
+		if err != nil {
+			logger.Fatalf("Error loading model %s: %v", lang, err)
 		}
+		logger.Debugf("Loaded vosk model '%s'", lang)
 	}
 }
 
@@ -51,26 +46,56 @@ func loadModel(lang string) (*vosk.VoskModel, error) {
 	return model, nil
 }
 
-func SpeechToTextNative(audio io.Reader, lang string) (string, error) {
+func loadRecognizer(lang string, guildId string) (*vosk.VoskRecognizer, error) {
+	rec, ok := recognizers[guildId]
+	if !ok {
+		model, err := loadModel(lang)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load vosk model %s: %v", lang, err)
+		}
+		rec, err = vosk.NewRecognizer(model, 48000.0)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create recognizer for model %s in guild %s: %v", lang, guildId, err)
+		}
+		// grammar := fmt.Sprintf(`["[unk]", "rolando:%f"]`, 20.0)
+		// rec.SetGrm(grammar)
+		rec.SetWords(1)
+		recognizers[guildId] = rec
+	}
+	return rec, nil
+}
+
+func FreeRecognizer(guildId string) {
+	rec, ok := recognizers[guildId]
+	if !ok {
+		// NTD
+		logger.Warnf("Tried to free a non-existent recognizer for guildId %s, ignoring", guildId)
+		return
+	}
+	rec.Free()
+	delete(recognizers, guildId)
+}
+
+func SpeechToTextNative(audio io.Reader, lang string, guildId string) (string, error) {
 	var bytes []byte
 	_, err := audio.Read(bytes)
 	if err != nil {
 		return "", err
 	}
-	return SpeechToTextNativeFromBytes(bytes, lang)
+	return SpeechToTextNativeFromBytes(bytes, lang, guildId)
 }
 
-func SpeechToTextNativeFromBytes(bytes []byte, lang string) (string, error) {
-	rec, ok := recognizers[lang]
-	if !ok {
-		return "", fmt.Errorf("no recognizer for language %s", lang)
+func SpeechToTextNativeFromBytes(bytes []byte, lang string, guildId string) (string, error) {
+	rec, err := loadRecognizer(lang, guildId)
+	if err != nil {
+		return "", err
 	}
 	rec.AcceptWaveform(bytes)
-	jsonStr := rec.Result()
+	jsonStr := rec.PartialResult()
 	var result struct {
-		Text string `json:"text"`
+		Text string `json:"partial"`
 	}
-	err := json.Unmarshal([]byte(jsonStr), &result)
+	err = json.Unmarshal([]byte(jsonStr), &result)
 	if err != nil {
 		return "", err
 	}
