@@ -15,6 +15,10 @@
       </template>
     </v-card>
     <v-divider class="my-4" />
+    <div class="d-flex flex-wrap pb-5">
+      <v-select v-model="sortBy" :items="sortByOptions"  :item-props="true" label="Sort by" class="mr-4" variant="outlined" hide-details
+        filled />
+    </div>
     <div class="d-flex flex-wrap ga-3">
       <v-card v-for="guild in guilds" :key="guild.id" flat class="max-w-card"
         :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
@@ -27,16 +31,16 @@
           <span class="text-sm"><b>{{ guild.approximate_member_count }}</b> members</span>
         </template>
         <template #text>
-          <div v-if="getChain(guild.id)">
+          <div v-if="guild.chain">
             <v-row justify="center" class="pa-3 pb-0">
               <span>
-                {{ formatBytes(getChain(guild.id)?.bytes ?? 0) }} /
-                {{ formatBytes(1024 ** 2 * (getChain(guild.id)?.max_size_mb ?? 0)) }}
+                {{ formatBytes(guild.chain?.bytes ?? 0) }} /
+                {{ formatBytes(1024 ** 2 * (guild.chain?.max_size_mb ?? 0)) }}
               </span>
             </v-row>
             <v-row justify="space-between" class="pa-3">
               <v-col cols="12">
-                <v-row v-for="(field, key) in getAnalyticsForGuild(guild.id)" :key="key" justify="space-between">
+                <v-row v-for="(field, key) in getAnalyticsForGuild(guild.chain)" :key="key" justify="space-between">
                   <span class="text-xs">{{ key }}</span>
                   <span class="text-xs">{{ field }}</span>
                 </v-row>
@@ -57,11 +61,11 @@
                 <v-btn v-bind="props" icon="far fa-copy" size="small" @click="copyToClipboard(guild.id)" />
               </v-tooltip>
               <v-tooltip #activator="{ props }" text="Check data" location="bottom">
-                <v-btn v-if="!!getChain(guild.id)" v-bind="props" :href="`/data/${guild.id}`" target="_blank"
+                <v-btn v-if="!!guild.chain" v-bind="props" :href="`/data/${guild.id}`" target="_blank"
                   icon="far fa-file-lines" size="small" />
               </v-tooltip>
-              <template v-if="!!getChain(guild.id)">
-                <guild-edit-btn :guild="guild" :chain="getChain(guild.id)!" @confirm="updateChain" />
+              <template v-if="!!guild.chain">
+                <guild-edit-btn :guild="guild" :chain="guild.chain!" @confirm="updateChain" />
               </template>
             </v-col>
             <v-col cols="2" class="d-flex justify-end">
@@ -84,10 +88,9 @@
 
 <script lang="ts">
 import { useGetAllChainsAnalytics, type ChainAnalytics } from '@/api/analytics';
-import { leaveGuild, updateChainDocument, useGetBotGuilds, useGetBotResources, useGetBotUser } from '@/api/bot';
+import { leaveGuild, updateChainDocument, useGetBotGuilds, useGetBotResources, useGetBotUser, type BotGuild } from '@/api/bot';
 import { useAuthStore } from '@/stores/auth';
 import { formatBytes, formatNumber, formatTime, guildIconUrl } from '@/utils/format';
-import { differenceWith, isEqual, keyBy, reduce, toPairs } from 'lodash';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 export default {
@@ -126,13 +129,40 @@ export default {
 
       onBeforeUnmount(() => clearInterval(interval));
     });
+    const sortBy = ref<keyof FilterKeysByValueType<ChainAnalytics, number>>("bytes");
+
+    const sortByOptions = ref<{
+      value: keyof FilterKeysByValueType<ChainAnalytics, number>;
+      title: string;
+    }[]>([
+      { value: "bytes", title: "Size" },
+      { value: "gifs", title: "Gifs" },
+      { value: "images", title: "Images" },
+      { value: "videos", title: "Videos" },
+      { value: "messages", title: "Messages" },
+      { value: "words", title: "Words" },
+      { value: "complexity_score", title: "Complexity" },
+      { value: "n_gram_size", title: "N-Gram Size" },
+      { value: "reply_rate", title: "Reply Rate" },
+      { value: "vc_join_rate", title: "VC Join Rate" },
+    ]);
 
     const uptime = computed(() => formatTime(elapsedSeconds.value));
-
+    const guilds = computed(() => {
+      const chainMap = new Map<string, ChainAnalytics>(
+        (chainsQuery.data.value ?? []).map(c => [c.id, c]),
+      );
+      const guilds: (BotGuild & { chain: ChainAnalytics | null })[] = [];
+      for (const guild of botGuildsQuery.data.value ?? []) {
+        const chain = chainMap.get(guild.id) ?? null;
+        guilds.push({ ...guild, chain });
+      }
+      return guilds.sort((a, b) => (b.chain?.[sortBy.value] ?? -1) - (a.chain?.[sortBy.value] ?? -1));
+    });
     return {
       botUser: botUserQuery.data,
       inviteLink: import.meta.env.VITE_DISCORD_SERVER_INVITE,
-      guilds: botGuildsQuery.data,
+      guilds: guilds,
       chains: chainsQuery.data,
       chainsRefetch: chainsQuery.refetch,
       resources: botResourcesQuery.data,
@@ -143,6 +173,8 @@ export default {
       botGuildsQuery,
       windowOpen: window.open,
       userGuilds: auth.user?.guilds ?? [],
+      sortBy,
+      sortByOptions,
     };
   },
   computed: {
@@ -192,6 +224,7 @@ export default {
     updateChain: async function (chain: globalThis.Ref<ChainAnalytics>) {
       try {
         const res = await updateChainDocument(this.token, chain.value.id, {
+          premium: chain.value.premium,
           pings: chain.value.pings_enabled,
           trained: chain.value.trained,
           reply_rate: chain.value.reply_rate,
@@ -212,11 +245,8 @@ export default {
       }
 
     },
-    getChain(guildId: string) {
-      return this.chains?.find(c => c.id === guildId);
-    },
-    getAnalyticsForGuild(guildId: string) {
-      const chain = this.chains?.find(c => c.id === guildId);
+
+    getAnalyticsForGuild(chain: ChainAnalytics | null) {
       if (!chain) return null;
       return {
         Gifs: formatNumber(chain.gifs),
