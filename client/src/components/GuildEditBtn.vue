@@ -12,6 +12,7 @@
         <v-col>
           <v-switch v-model="fields.pings_enabled" label="Enable pings" inset dense color="primary" />
           <v-switch v-model="fields.trained" label="Trained" inset dense color="primary" />
+          <v-switch v-model="fields.premium" label="Premium" inset dense color="primary" />
           <v-text-field v-model="fields.reply_rate" type="number" label="Reply Rate" outlined dense />
           <v-text-field v-model="fields.n_gram_size" type="number" label="N Gram Size" outlined dense />
           <v-text-field v-model="fields.max_size_mb" type="number" label="Max Size (MB)" outlined dense />
@@ -37,7 +38,7 @@ import { guildIconUrl } from '@/utils/format';
 import { ref, type PropType } from 'vue';
 
 export default defineComponent({
-  name: 'GuildInviteBtn',
+  name: 'GuildEditBtn',
   props: {
     guild: {
       type: Object as PropType<BotGuild>,

@@ -7,27 +7,27 @@ import (
 )
 
 type ChainAnalytics struct {
-	ComplexityScore string
-	Gifs            string
-	Images          string
-	Videos          string
-	ReplyRate       string
-	NGramSize       string
-	Words           string
-	Messages        string
-	Size            string
+	ComplexityScore string `json:"complexity_score"`
+	Gifs            string `json:"gifs"`
+	Images          string `json:"images"`
+	Videos          string `json:"videos"`
+	ReplyRate       string `json:"reply_rate"`
+	NGramSize       string `json:"n_gram_size"`
+	Words           string `json:"words"`
+	Messages        string `json:"messages"`
+	Size            string `json:"bytes"`
 }
 
 type NumericChainAnalytics struct {
-	ComplexityScore int
-	Gifs            int
-	Images          int
-	Videos          int
-	ReplyRate       int
-	NGramSize       int
-	Words           int
-	Messages        uint32
-	Size            uint64
+	ComplexityScore int    `json:"complexity_score"`
+	Gifs            int    `json:"gifs"`
+	Images          int    `json:"images"`
+	Videos          int    `json:"videos"`
+	ReplyRate       int    `json:"reply_rate"`
+	NGramSize       int    `json:"n_gram_size"`
+	Words           int    `json:"words"`
+	Messages        uint32 `json:"messages"`
+	Size            uint64 `json:"bytes"`
 }
 
 type MarkovChainAnalyzer struct {

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/vue-query";
 import type { Page, PageMeta } from "./common";
 
 export interface ChainAnalytics {
+  premium?: boolean;
   bytes: number;
   complexity_score: number;
   gifs: number;
