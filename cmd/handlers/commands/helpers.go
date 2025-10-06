@@ -50,6 +50,7 @@ func (h *SlashCommandsHandler) withGuildSubscription(skuId string, cb SlashComma
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		canUse := h.guildSubscriptionCheck(s, i, skuId)
 		if !canUse {
+			logger.Warnf("Guild %s is not subscribed to SKU %s", i.GuildID, skuId)
 			premiumButton := &discordgo.Button{
 				Style: discordgo.PremiumButton,
 				SKUID: skuId,

@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"fmt"
 	"rolando/internal/logger"
 	"rolando/internal/model"
 	"rolando/internal/utils"
@@ -89,15 +90,48 @@ func shouldSendRandomMessage(replyRate int) bool {
 
 // Generate a message based on chain probabilities
 func (h *MessageHandler) getMessage(chain *model.MarkovChain) (string, error) {
+	// Generate a random number between 4 and 25 (inclusive).
 	random := utils.GetRandom(4, 25)
+
 	switch {
+	// (21/22 or approx. 95.5%) to just talk.
 	case random <= 21:
 		return chain.Talk(random), nil
+
+	// (2/22 or approx. 9.1%) for a GIF
 	case random <= 23:
-		return chain.MediaStore.GetMedia("gif")
+		return h.tryGetMediaOrTalk(chain, "gif", random)
+
+	// (1/22 or approx. 4.5%) for an Image
 	case random <= 24:
-		return chain.MediaStore.GetMedia("image")
+		return h.tryGetMediaOrTalk(chain, "image", random)
+
+	// (1/22 or approx. 4.5%) for a Video
 	default:
-		return chain.MediaStore.GetMedia("video")
+		return h.tryGetMediaOrTalk(chain, "video", random)
 	}
+}
+
+// tryGetMediaOrTalk attempts to retrieve a specific type of media;
+// if unavailable, it falls back to generating a text message.
+func (h *MessageHandler) tryGetMediaOrTalk(chain *model.MarkovChain, mediaType string, random int) (string, error) {
+	var hasMedia bool
+
+	switch mediaType {
+	case "gif":
+		hasMedia = len(chain.MediaStore.Gifs) > 0
+	case "image":
+		hasMedia = len(chain.MediaStore.Images) > 0
+	case "video":
+		hasMedia = len(chain.MediaStore.Videos) > 0
+	default:
+		return "", fmt.Errorf("unsupported media type: %s", mediaType)
+	}
+
+	if hasMedia {
+		return chain.MediaStore.GetMedia(mediaType)
+	}
+
+	// Fallback to text generation if media is not available.
+	return chain.Talk(random), nil
 }
