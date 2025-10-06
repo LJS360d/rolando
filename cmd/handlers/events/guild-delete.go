@@ -12,7 +12,15 @@ func (h *EventsHandler) onGuildDelete(s *discordgo.Session, e *discordgo.Event) 
 	if !ok {
 		return
 	}
-	logger.Infof("Left guild %s", guildDelete.Name)
+	chainDoc, err := h.ChainsService.GetChainDocument(guildDelete.ID)
+	var guildname string
+	if err != nil {
+		logger.Warnf("Chain document not present for guild %s: %s", guildDelete.ID, err)
+		guildname = guildDelete.ID
+	} else {
+		guildname = chainDoc.Name
+	}
+	logger.Infof("Left guild '%s'", guildname)
 	h.ChainsService.DeleteChain(guildDelete.ID)
 	UpdatePresence(s)
 }
