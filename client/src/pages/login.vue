@@ -1,25 +1,29 @@
 <template>
-  <v-col
-    cols="12"
-    centered
-  >
-    <v-progress-circular
-      color="primary"
-      indeterminate
-      :size="64"
-      :width="6"
-    />
-  </v-col>
+  <v-container class="pa-4 h-100">
+    <v-container v-if="!error" class="d-flex justify-center align-center h-100">
+      <v-progress-circular indeterminate color="primary" size="128" width="12" />
+    </v-container>
+    <v-container v-else>
+      <v-alert type="error" class="text-body-2">
+        Login error:
+        <div class="my-5 text-h5">
+          {{ error }}
+        </div>
+        <v-btn color="red-500" @click="router.replace('/')">Go back to Home</v-btn>
+      </v-alert>
+    </v-container>
+  </v-container>
 </template>
 
-<script setup lang="js">
+<script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
+const error = ref<string | null>(null);
 const fragment = window.location.hash.substring(1);
 if (!fragment) {
-  router.replace('/');
+  error.value = 'Access token not found, make sure your OAUTH2_URL has response_type=token';
 }
 
 const params = new URLSearchParams(fragment);
@@ -34,18 +38,20 @@ if (accessToken) {
     },
   })
     .then(async (res) => {
+      const body = await res.json();
       if (res.ok) {
-        const body = await res.json();
         authStore.setAuth(accessToken, { ...body.user, is_owner: body.is_owner, guilds: body.guilds });
-        router.replace('/'); // Redirect after login
+        router.replace('/admin');
       } else {
-        router.replace('/'); // Redirect on error
+        error.value = body.error || res.statusText;
       }
     })
     .catch(() => {
-      router.replace('/'); // Redirect on fetch failure
+      error.value = 'Unexpected error, please report it to the creator on Discord.';
     });
-} else {
-  router.replace('/');
+} else if (fragment) {
+  const params = new URLSearchParams(fragment);
+  const queryObject = Object.fromEntries(params.entries());
+  error.value = JSON.stringify(queryObject, null, 2);
 }
 </script>

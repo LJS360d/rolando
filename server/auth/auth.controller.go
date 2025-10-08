@@ -27,16 +27,12 @@ func (s *AuthController) GetUser(c *gin.Context) {
 		return
 	}
 	var guilds []string
-	// Loop through all cached guilds
-	for _, guild := range s.ds.State.Guilds {
-		_, err := s.ds.State.Member(guild.ID, user.ID)
-		if err != nil {
-			_, err = s.ds.GuildMember(guild.ID, user.ID)
-			if err != nil {
-				// User is not a member of this guild
-				continue
-			}
-		}
+	userGuilds, err := FetchUserGuilds(token, false)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	for _, guild := range *userGuilds {
 		guilds = append(guilds, guild.ID)
 	}
 
