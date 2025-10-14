@@ -1,6 +1,7 @@
 package events
 
 import (
+	"rolando/internal/config"
 	"rolando/internal/logger"
 	"rolando/internal/tts"
 	"rolando/internal/utils"
@@ -40,6 +41,10 @@ func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Ev
 	chainDoc, err := h.ChainsService.GetChainDocument(voiceStateUpdate.GuildID)
 	if err != nil {
 		logger.Errorf("Failed to fetch chain document for guild %s: %v", voiceStateUpdate.GuildID, err)
+		return
+	}
+	hasVcFeatures := GuildSubscriptionCheck(s, voiceStateUpdate.Member, chainDoc, config.VoiceChatFeaturesSKU)
+	if !hasVcFeatures {
 		return
 	}
 	if chainDoc.VcJoinRate == 0 {
