@@ -94,7 +94,6 @@ func (h *SlashCommandsHandler) guildSubscriptionCheck(s *discordgo.Session, i *d
 			return true
 		}
 	}
-	logger.Infof("Performing guild subscription check for sku '%s'", skuId)
 	guildID := i.GuildID
 	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
 	if err != nil {
@@ -102,8 +101,10 @@ func (h *SlashCommandsHandler) guildSubscriptionCheck(s *discordgo.Session, i *d
 		return false
 	}
 	if chainDoc.Premium {
+		logger.Infof("Guild '%s' is premium, skipping guild subscription check", chainDoc.Name)
 		return true
 	}
+	logger.Infof("Performing guild subscription check for sku '%s' in guild '%s'", skuId, chainDoc.Name)
 	// Check if the guild has the SKU
 	for _, ent := range i.Entitlements {
 		if ent.SKUID == skuId && ent.EndsAt != nil && ent.EndsAt.After(time.Now()) {
