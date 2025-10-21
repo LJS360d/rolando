@@ -32,7 +32,10 @@ func (s *HttpServer) Start() {
 	if config.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	r := gin.Default()
+	r := gin.New()
+	r.Use(
+		gin.Recovery(),
+	)
 
 	analyticsController := analytics.NewController(s.ChainsService, s.DiscordSession)
 	botController := bot.NewController(s.ChainsService, s.DiscordSession)
