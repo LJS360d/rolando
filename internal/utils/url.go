@@ -23,7 +23,20 @@ func IsGif(url string) bool {
 
 func IsImage(url string) bool {
 	supportedExtensions := []string{"png", "jpg", "jpeg", "webp"}
-	supportedDomains := []string{"imgur.com"}
+	supportedDomains := []string{
+		"imgur.com",
+		"i.imgur.com",
+		"pinterest.com",
+		"pin.it",
+		"pixiv.net",
+		"pximg.net",
+		"flickr.com",
+		"staticflickr.com",
+		// why?
+		"twitter.com",
+		"x.com",
+		"fixvx.com",
+	}
 	return isSupportedUrl(strings.TrimSpace(url), supportedExtensions, supportedDomains)
 }
 
