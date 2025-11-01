@@ -20,12 +20,13 @@ func (h *SlashCommandsHandler) trainCommand(s *discordgo.Session, i *discordgo.I
 	}
 	const cooldown = 30 * time.Minute
 
-	isOwner := slices.Contains(config.OwnerIDs, i.Member.User.ID)
-	// Check if the server has been trained before (TrainedAt will be non-zero if set) bot owners skip the cooldown
-	if chainDoc.TrainedAt != nil && !chainDoc.TrainedAt.IsZero() && !isOwner {
+	// Check if the server has been trained before (TrainedAt will be non-zero if set)
+	if chainDoc.TrainedAt != nil && !chainDoc.TrainedAt.IsZero() {
 		timeSinceTrain := time.Now().Sub(*chainDoc.TrainedAt)
 
-		if timeSinceTrain < cooldown {
+		isOwner := slices.Contains(config.OwnerIDs, i.Member.User.ID)
+		// bot owners skip the cooldown
+		if timeSinceTrain < cooldown && !isOwner {
 			// Still in the cooldown period
 			remainingTime := cooldown - timeSinceTrain
 
