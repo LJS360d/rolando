@@ -183,23 +183,24 @@ func (cs *ChainsService) DeleteChain(id string) error {
 	return nil
 }
 
-// LoadChains loads all chains from the repository into memory.
+// LoadChains loads all chains from the repository into memory in parallel.
 func (cs *ChainsService) LoadChains() error {
 	logger.Infof("Loading chains...")
+	startTime := time.Now()
 	chains, err := cs.chainsRepo.GetAll()
 	if err != nil {
 		return err
 	}
 
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	startTime := time.Now()
-	for _, chain := range chains {
+	err = utils.ParallelTaskRunner(chains, func(chain *repositories.Chain) error {
 		messages, err := cs.GetChainMessages(chain.ID)
 		if err != nil {
 			logger.Errorf("Error loading messages for chain %s: %v", chain.ID, err)
-			continue
+			return err
 		}
+
+		// The chainsMap is a shared resource, so we must lock before writing
+		cs.mu.Lock()
 		cs.chainsMap[chain.ID] = model.NewMarkovChain(
 			chain.ID,
 			chain.ReplyRate,
@@ -208,7 +209,13 @@ func (cs *ChainsService) LoadChains() error {
 			messages,
 			cs.messagesRepo,
 		)
+		cs.mu.Unlock()
+		return nil
+	})
+	if err != nil {
+		return err
 	}
+
 	logger.Infof("Loaded %d chains in %s", len(cs.chainsMap), time.Since(startTime))
 	return nil
 }

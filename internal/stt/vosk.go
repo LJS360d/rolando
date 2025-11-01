@@ -6,7 +6,9 @@ import (
 	"io"
 	"rolando/cmd/data"
 	"rolando/internal/logger"
+	"rolando/internal/utils"
 	"sync"
+	"time"
 
 	vosk "github.com/alphacep/vosk-api/go"
 )
@@ -20,13 +22,19 @@ var (
 
 func init() {
 	vosk.SetLogLevel(-1)
-	for _, lang := range data.Langs {
+	startTime := time.Now()
+	err := utils.ParallelTaskRunner(data.Langs, func(lang string) error {
 		_, err := loadModel(lang)
 		if err != nil {
-			logger.Fatalf("Error loading model %s: %v", lang, err)
+			return fmt.Errorf("error loading model %s: %v", lang, err)
 		}
 		logger.Debugf("Loaded vosk model '%s'", lang)
+		return nil
+	})
+	if err != nil {
+		logger.Fatalf("Error loading models: %v", err)
 	}
+	logger.Infof("Loaded %d models in %s", len(data.Langs), time.Since(startTime))
 }
 
 func loadModel(lang string) (*vosk.VoskModel, error) {
