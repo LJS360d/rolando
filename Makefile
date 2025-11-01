@@ -1,6 +1,6 @@
 .PHONY: all run-docker build clean dev run lint clean
 
-VERSION         := 3.8.1
+VERSION         := 3.9.0
 BUILD_DIR       := bin
 MAIN_PACKAGE    := ./cmd
 ENV             ?= production

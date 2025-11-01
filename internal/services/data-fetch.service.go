@@ -72,7 +72,7 @@ func (d *DataFetchService) fetchChannelMessages(channel *discordgo.Channel) ([]s
 	errorCount := 0
 
 	for len(messages) < d.MessageLimit {
-		batch, err := d.getMessageBatch(channel.ID, lastMessageID)
+		newLastMessageID, batch, err := d.getMessageBatch(channel.ID, lastMessageID)
 		if err != nil {
 			errorCount++
 			if errorCount > d.MaxFetchErrors {
@@ -85,34 +85,34 @@ func (d *DataFetchService) fetchChannelMessages(channel *discordgo.Channel) ([]s
 		if len(batch) == 0 {
 			break
 		}
-		batchMessages := make([]string, len(batch))
-		for i, msg := range batch {
-			batchMessages[i] = msg.Content
-		}
-		go d.ChainService.UpdateChainState(channel.GuildID, batchMessages)
-		go d.messagesRepo.AddMessagesToGuild(channel.GuildID, batchMessages)
-		messages = append(messages, batchMessages...)
-		lastMessageID = batch[len(batch)-1].ID
+		go d.ChainService.UpdateChainState(channel.GuildID, batch)
+		go d.messagesRepo.AddMessagesToGuild(channel.GuildID, batch)
+		messages = append(messages, batch...)
+		lastMessageID = newLastMessageID
 	}
 
 	logger.Infof("Fetched %d messages from channel #%s", len(messages), channel.Name)
 	return messages, nil
 }
 
-func (d *DataFetchService) getMessageBatch(channelID, lastMessageID string) ([]*discordgo.Message, error) {
-
+func (d *DataFetchService) getMessageBatch(channelID, lastMessageID string) (string, []string, error) {
 	messages, err := d.Session.ChannelMessages(channelID, 100, lastMessageID, "", "")
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-
-	var cleanMessages []*discordgo.Message
+	if len(messages) == 0 {
+		return "", []string{}, nil
+	}
+	var cleanMessages []string
 	for _, msg := range messages {
 		if len(strings.Fields(msg.Content)) > 1 || d.containsURL(msg.Content) {
-			cleanMessages = append(cleanMessages, msg)
+			cleanMessages = append(cleanMessages, msg.Content)
+			for _, attachment := range msg.Attachments {
+				cleanMessages = append(cleanMessages, attachment.URL)
+			}
 		}
 	}
-	return cleanMessages, nil
+	return messages[len(messages)-1].ID, cleanMessages, nil
 }
 
 func (d *DataFetchService) containsURL(content string) bool {

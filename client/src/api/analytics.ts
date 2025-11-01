@@ -15,8 +15,9 @@ export interface ChainAnalytics {
   reply_rate: number;
   n_gram_size: number;
   vc_join_rate: number;
+  reaction_rate: number;
   tts_language: string;
-  trained: boolean;
+  trained_at: string;
   videos: number;
   words: number;
 }
