@@ -98,6 +98,21 @@ func NewSlashCommandsHandler(
 		},
 		{
 			Command: &discordgo.ApplicationCommand{
+				Name:        "reactionrate",
+				Description: "View or set the reaction rate",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Name:        "rate",
+						Description: "the rate to set (leave empty to view)",
+						Required:    false,
+					},
+				},
+			},
+			Handler: handler.reactionRateCommand,
+		},
+		{
+			Command: &discordgo.ApplicationCommand{
 				Name:        "cohesion",
 				Description: "View or set the cohesion value; A higher value makes sentences more coherent",
 				Options: []*discordgo.ApplicationCommandOption{

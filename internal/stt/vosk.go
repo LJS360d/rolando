@@ -34,7 +34,7 @@ func init() {
 	if err != nil {
 		logger.Fatalf("Error loading models: %v", err)
 	}
-	logger.Infof("Loaded %d models in %s", len(data.Langs), time.Since(startTime))
+	logger.Infof("Loaded %d vosk models in %s", len(data.Langs), time.Since(startTime))
 }
 
 func loadModel(lang string) (*vosk.VoskModel, error) {

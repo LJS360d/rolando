@@ -158,10 +158,19 @@ func (cs *ChainsService) UpdateChainMeta(id string, fields map[string]any) (*rep
 	if pingsRaw, ok := fields["pings"]; ok {
 		pings, ok := pingsRaw.(bool)
 		if !ok {
-			return nil, errors.New("pings must be a boolean")
+			return nil, errors.New("pings must be a boolean " + err.Error())
 		}
 		chain.Pings = pings
 	}
+	// TODO implement when max_size of a chain becomes actually relevant
+	// MaxSizeMb immediate update
+	// if MaxSizeMbRaw, ok := fields["max_size_mb"]; ok {
+	// 	maxSizeMb, ok := MaxSizeMbRaw.(int)
+	// 	if !ok {
+	// 		return nil, errors.New("max_size_mb must be an integer " + err.Error())
+	// 	}
+	// 	chain.MaxSizeMb = maxSizeMb
+	// }
 	return cs.chainsRepo.UpdateChain(id, fields)
 }
 
