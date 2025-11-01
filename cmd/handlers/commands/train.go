@@ -50,7 +50,7 @@ func (h *SlashCommandsHandler) trainCommand(s *discordgo.Session, i *discordgo.I
 		confirmRetrainButton := &discordgo.Button{
 			Label:    "Confirm Re-train",
 			Style:    discordgo.DangerButton,
-			CustomID: "confirm-retrain",
+			CustomID: "confirm-train-again",
 		}
 
 		retrainActionRow := &discordgo.ActionsRow{
