@@ -13,8 +13,6 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 	if m.Author == nil || m.Author.Bot {
 		return // do not process bot messages
 	}
-	// Access guild and content
-	content := m.Content
 	guild, err := s.Guild(m.GuildID)
 
 	// Skip processing if no guild (should never happen)
@@ -30,9 +28,20 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 	}
 
 	// Update chain state if message content is valid
-	if len(content) > 3 {
-		if _, err := h.ChainsService.UpdateChainState(guild.ID, []string{content}); err != nil {
+	if len(m.Content) > 3 {
+		if _, err := h.ChainsService.UpdateChainState(guild.ID, []string{m.Content}); err != nil {
 			logger.Errorf("Failed to update chain state in '%s': %v", guild.Name, err)
+		}
+	}
+	if len(m.Attachments) > 0 {
+		for _, attachment := range m.Attachments {
+			if attachment == nil {
+				// should never happen but just in case
+				continue
+			}
+			if _, err := h.ChainsService.UpdateChainState(guild.ID, []string{attachment.URL}); err != nil {
+				logger.Errorf("Failed to add attachment to chain state in '%s': %v", guild.Name, err)
+			}
 		}
 	}
 
