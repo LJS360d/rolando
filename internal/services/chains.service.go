@@ -176,11 +176,15 @@ func (cs *ChainsService) UpdateChainMeta(id string, fields map[string]any) (*rep
 
 // DeleteChain removes a chain from memory and the repository.
 func (cs *ChainsService) DeleteChain(id string) error {
+	chainDoc, err := cs.chainsRepo.GetChainByID(id)
+	if err != nil {
+		return err
+	}
 	logger.Warnf("Deleting chain: %s", id)
 	cs.mu.Lock()
 	delete(cs.chainsMap, id)
 	cs.mu.Unlock()
-	err := cs.chainsRepo.DeleteChain(id)
+	err = cs.chainsRepo.DeleteChain(chainDoc.ID)
 	if err != nil {
 		return err
 	}
@@ -188,7 +192,7 @@ func (cs *ChainsService) DeleteChain(id string) error {
 	if err != nil {
 		return err
 	}
-	logger.Infof("Chain %s and associated messages deleted successfully", id)
+	logger.Infof("Chain %s and associated messages deleted successfully", chainDoc.Name)
 	return nil
 }
 

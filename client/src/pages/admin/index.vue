@@ -144,6 +144,7 @@ export default {
       { value: "complexity_score", title: "Complexity" },
       { value: "n_gram_size", title: "N-Gram Size" },
       { value: "reply_rate", title: "Reply Rate" },
+      { value: "reaction_rate", title: "Reaction Rate" },
       { value: "vc_join_rate", title: "VC Join Rate" },
     ]);
 
@@ -226,8 +227,8 @@ export default {
         const res = await updateChainDocument(this.token, chain.value.id, {
           premium: chain.value.premium,
           pings: chain.value.pings_enabled,
-          trained: chain.value.trained,
           reply_rate: chain.value.reply_rate,
+          reaction_rate: chain.value.reaction_rate,
           n_gram_size: chain.value.n_gram_size,
           max_size_mb: chain.value.max_size_mb,
         });
@@ -243,7 +244,6 @@ export default {
         this.snackbar.message = `Failed to update chain '${chain.value.name}': ${error}`;
         this.snackbar.color = "error";
       }
-
     },
 
     getAnalyticsForGuild(chain: ChainAnalytics | null) {
@@ -257,6 +257,7 @@ export default {
         Complexity: formatNumber(chain.complexity_score),
         "N Gram Size": String(chain.n_gram_size),
         "Reply Rate": !chain.reply_rate ? "0%" : `${chain.reply_rate} | ${(1 / chain.reply_rate * 100).toPrecision(3)}% `,
+        "Reaction Rate": !chain.reaction_rate ? "0%" : `${chain.reaction_rate} | ${(1 / chain.reaction_rate * 100).toPrecision(3)}% `,
         "VC Join Rate": !chain.vc_join_rate ? "0%" : `${chain.vc_join_rate} | ${(1 / chain.vc_join_rate * 100).toPrecision(3)}% `,
       };
     },

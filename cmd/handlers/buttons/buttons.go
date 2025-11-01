@@ -35,6 +35,7 @@ func NewButtonsHandler(client *discordgo.Session, dataFetchService *services.Dat
 // Register button handlers in the map
 func (h *ButtonsHandler) registerButtons() {
 	h.Handlers["confirm-train"] = h.onConfirmTrain
+	h.Handlers["confirm-train-again"] = h.onConfirmTrainAgain
 }
 
 // Entry point for handling button interactions
