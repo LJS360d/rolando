@@ -8,17 +8,18 @@ import (
 )
 
 type Chain struct {
-	ID          string    `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`
-	ReplyRate   int       `gorm:"default:10" json:"reply_rate"`
-	VcJoinRate  int       `gorm:"default:100" json:"vc_join_rate"`
-	MaxSizeMb   int       `gorm:"default:25" json:"max_size_mb"`
-	NGramSize   int       `gorm:"default:2" json:"n_gram_size"`
-	TTSLanguage string    `gorm:"default:'en'" json:"tts_language"`
-	Pings       bool      `gorm:"default:true" json:"pings"`
-	Trained     bool      `gorm:"default:false" json:"trained"`
-	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
-	Premium     bool      `gorm:"default:false" json:"premium"`
+	ID           string    `gorm:"primaryKey" json:"id"`
+	Name         string    `gorm:"not null" json:"name"`
+	ReplyRate    int       `gorm:"default:10" json:"reply_rate"`
+	ReactionRate int       `gorm:"default:30" json:"reaction_rate"`
+	VcJoinRate   int       `gorm:"default:100" json:"vc_join_rate"`
+	MaxSizeMb    int       `gorm:"default:25" json:"max_size_mb"`
+	NGramSize    int       `gorm:"default:2" json:"n_gram_size"`
+	TTSLanguage  string    `gorm:"default:'en'" json:"tts_language"`
+	Pings        bool      `gorm:"default:true" json:"pings"`
+	Trained      bool      `gorm:"default:false" json:"trained"`
+	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	Premium      bool      `gorm:"default:false" json:"premium"`
 }
 
 type ChainsRepository struct {
