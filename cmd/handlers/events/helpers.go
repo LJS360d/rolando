@@ -20,7 +20,6 @@ func GuildSubscriptionCheck(s *discordgo.Session, member *discordgo.Member, chai
 			return true
 		}
 	}
-	logger.Infof("Performing guild subscription check for sku '%s'", skuId)
 
 	if chainDoc.Premium {
 		return true
