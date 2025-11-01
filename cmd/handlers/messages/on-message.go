@@ -122,7 +122,7 @@ func (h *MessageHandler) handleReaction(s *discord.Session, m *discord.Message, 
 	emojiPool := slices.Clone(data.EmojiUnicodes)
 	// add guild custom emojis to the base pool
 	for _, emoji := range guildEmojis {
-		emojiPool = append(emojiPool, emoji.MessageFormat())
+		emojiPool = append(emojiPool, emoji.APIName())
 	}
 
 	randEmoji := emojiPool[rand.Intn(len(emojiPool))]
