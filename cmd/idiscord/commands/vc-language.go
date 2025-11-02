@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"rolando/cmd/data"
+	"rolando/internal/data"
 
 	"github.com/bwmarrin/discordgo"
 )

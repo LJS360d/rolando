@@ -2,7 +2,7 @@ package commands
 
 import (
 	"fmt"
-	"rolando/internal/utils"
+	"rolando/cmd/idiscord/helpers"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -45,7 +45,7 @@ func (h *SlashCommandsHandler) channelsCommand(s *discordgo.Session, i *discordg
 	))
 
 	for _, ch := range channels {
-		hasAccess := utils.HasGuildTextChannelAccess(s, s.State.User.ID, ch)
+		hasAccess := helpers.HasGuildTextChannelAccess(s, s.State.User.ID, ch)
 		fmt.Fprintf(responseBuilder, "%s <#%s>\n", accessEmote(hasAccess), ch.ID)
 	}
 

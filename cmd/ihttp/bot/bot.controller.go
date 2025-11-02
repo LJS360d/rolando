@@ -2,10 +2,10 @@ package bot
 
 import (
 	"fmt"
+	"rolando/cmd/idiscord/services"
+	"rolando/cmd/ihttp/auth"
 	"rolando/internal/config"
 	"rolando/internal/logger"
-	"rolando/internal/services"
-	"rolando/server/auth"
 	"runtime"
 	"sync"
 

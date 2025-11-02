@@ -1,9 +1,9 @@
 package services
 
 import (
+	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
 	"rolando/internal/repositories"
-	"rolando/internal/utils"
 	"strings"
 	"sync"
 
@@ -38,7 +38,7 @@ func (d *DataFetchService) FetchAllGuildMessages(guildID string) ([]string, erro
 	var wg sync.WaitGroup
 	messageCh := make(chan []string, len(guild.Channels))
 	for _, channel := range guild.Channels {
-		if !utils.HasGuildTextChannelAccess(d.Session, d.Session.State.User.ID, channel) {
+		if !helpers.HasGuildTextChannelAccess(d.Session, d.Session.State.User.ID, channel) {
 			continue
 		}
 

@@ -1,14 +1,14 @@
-package server
+package ihttp
 
 import (
+	"rolando/cmd/idiscord/services"
+	"rolando/cmd/ihttp/analytics"
+	"rolando/cmd/ihttp/auth"
+	"rolando/cmd/ihttp/bot"
+	"rolando/cmd/ihttp/data"
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"rolando/internal/repositories"
-	"rolando/internal/services"
-	"rolando/server/analytics"
-	"rolando/server/auth"
-	"rolando/server/bot"
-	"rolando/server/data"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gin-gonic/gin"

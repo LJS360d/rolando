@@ -5,16 +5,16 @@ import (
 	"os/signal"
 	"rolando/internal/config"
 	"rolando/internal/logger"
-	"rolando/server"
 	"syscall"
 	"time"
 
-	"rolando/cmd/handlers/buttons"
-	"rolando/cmd/handlers/commands"
-	"rolando/cmd/handlers/events"
-	"rolando/cmd/handlers/messages"
+	"rolando/cmd/idiscord/buttons"
+	"rolando/cmd/idiscord/commands"
+	"rolando/cmd/idiscord/events"
+	"rolando/cmd/idiscord/messages"
+	"rolando/cmd/idiscord/services"
+	"rolando/cmd/ihttp"
 	"rolando/internal/repositories"
-	"rolando/internal/services"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -68,7 +68,7 @@ func main() {
 	ds.AddHandler(eventsHandler.OnEventCreate)
 	logger.Infof("Logged in as %s", ds.State.User.String())
 	if config.RunHttpServer {
-		srv := server.NewHttpServer(ds, chainsService, messagesRepo)
+		srv := ihttp.NewHttpServer(ds, chainsService, messagesRepo)
 		srv.Start()
 	}
 	logger.Infof("Startup time: %s", time.Since(config.StartupTime).String())

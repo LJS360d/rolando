@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"rolando/cmd/data"
+	"rolando/internal/data"
 	"rolando/internal/logger"
 	"rolando/internal/utils"
 	"sync"

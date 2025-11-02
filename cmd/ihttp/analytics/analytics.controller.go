@@ -1,10 +1,10 @@
 package analytics
 
 import (
+	"rolando/cmd/idiscord/services"
+	"rolando/cmd/ihttp/auth"
 	"rolando/internal/model"
 	"rolando/internal/repositories"
-	"rolando/internal/services"
-	"rolando/server/auth"
 	"strconv"
 
 	"github.com/bwmarrin/discordgo"

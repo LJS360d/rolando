@@ -1,8 +1,8 @@
 package data
 
 import (
+	"rolando/cmd/ihttp/auth"
 	"rolando/internal/repositories"
-	"rolando/server/auth"
 	"strconv"
 
 	"github.com/bwmarrin/discordgo"
