@@ -1,6 +1,7 @@
 package events
 
 import (
+	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"rolando/internal/tts"
@@ -67,7 +68,7 @@ func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Ev
 			logger.Errorf("Failed to generate TTS decoder: %v", err)
 			return
 		}
-		if err := utils.StreamAudioDecoder(vc, d); err != nil {
+		if err := helpers.StreamAudioDecoder(vc, d); err != nil {
 			logger.Errorf("Failed to stream audio: %v", err)
 		}
 		err = vc.Disconnect()

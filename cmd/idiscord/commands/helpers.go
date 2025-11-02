@@ -88,12 +88,12 @@ func (h *SlashCommandsHandler) guildSubscriptionCheck(s *discordgo.Session, i *d
 		return true
 	}
 	// pass if the user is a bot owner
-	// for _, ownerID := range config.OwnerIDs {
-	// 	if i.Member.User.ID == ownerID {
-	// 		logger.Infof("User %s is an owner, skipping guild subscription check", i.Member.User.GlobalName)
-	// 		return true
-	// 	}
-	// }
+	for _, ownerID := range config.OwnerIDs {
+		if i.Member.User.ID == ownerID {
+			logger.Infof("User %s is an owner, skipping guild subscription check", i.Member.User.GlobalName)
+			return true
+		}
+	}
 	guildID := i.GuildID
 	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
 	if err != nil {

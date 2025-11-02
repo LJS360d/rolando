@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
 	"rolando/internal/model"
 	"rolando/internal/repositories"
@@ -72,7 +73,7 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 		logger.Errorf("Failed to generate TTS decoder: %v", err)
 		return
 	}
-	if err := utils.StreamAudioDecoder(vc, d); err != nil {
+	if err := helpers.StreamAudioDecoder(vc, d); err != nil {
 		logger.Errorf("Failed to stream audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
 	}
 
@@ -192,7 +193,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 						logger.Errorf("Failed to generate random TTS decoder in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
 						return
 					}
-					if err := utils.StreamAudioDecoder(vc, d); err != nil {
+					if err := helpers.StreamAudioDecoder(vc, d); err != nil {
 						logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
 					}
 				}()

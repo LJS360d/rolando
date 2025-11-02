@@ -2,9 +2,9 @@ package commands
 
 import (
 	"reflect"
+	"rolando/cmd/idiscord/services"
 	"rolando/internal/config"
 	"rolando/internal/logger"
-	"rolando/internal/services"
 	"slices"
 	"time"
 

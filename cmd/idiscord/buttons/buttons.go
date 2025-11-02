@@ -1,8 +1,8 @@
 package buttons
 
 import (
+	"rolando/cmd/idiscord/services"
 	"rolando/internal/logger"
-	"rolando/internal/services"
 	"time"
 
 	"github.com/bwmarrin/discordgo"

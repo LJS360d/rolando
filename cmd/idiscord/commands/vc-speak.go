@@ -1,9 +1,9 @@
 package commands
 
 import (
+	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
 	"rolando/internal/tts"
-	"rolando/internal/utils"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -66,7 +66,7 @@ func (h *SlashCommandsHandler) vcSpeakCommand(s *discordgo.Session, i *discordgo
 		logger.Errorf("Failed to generate TTS decoder: %v", err)
 		return
 	}
-	if err := utils.StreamAudioDecoder(vc, d); err != nil {
+	if err := helpers.StreamAudioDecoder(vc, d); err != nil {
 		logger.Errorf("Failed to stream audio: %v", err)
 	}
 	err = vc.Disconnect()

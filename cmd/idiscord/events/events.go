@@ -1,8 +1,8 @@
 package events
 
 import (
+	"rolando/cmd/idiscord/services"
 	"rolando/internal/logger"
-	"rolando/internal/services"
 	"strconv"
 
 	"github.com/bwmarrin/discordgo"

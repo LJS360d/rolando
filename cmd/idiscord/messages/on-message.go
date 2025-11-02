@@ -3,7 +3,8 @@ package messages
 import (
 	"fmt"
 	"math/rand"
-	"rolando/cmd/data"
+	"rolando/cmd/idiscord/helpers"
+	"rolando/internal/data"
 	"rolando/internal/logger"
 	"rolando/internal/model"
 	"rolando/internal/utils"
@@ -26,7 +27,7 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 
 	channel, err := s.State.Channel(m.ChannelID)
 	// Consolidate access check
-	if err != nil || !utils.HasGuildTextChannelAccess(s, s.State.User.ID, channel) {
+	if err != nil || !helpers.HasGuildTextChannelAccess(s, s.State.User.ID, channel) {
 		return
 	}
 
@@ -65,7 +66,7 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 
 		// Must use the fetched chain/chainDoc from *this* goroutine
 
-		if utils.MentionsUser(m.Message, s.State.User.ID, guild) {
+		if helpers.MentionsUser(m.Message, s.State.User.ID, guild) {
 			h.handleReply(s, m.Message, chain)
 		}
 		if ratedChoice(chain.ReplyRate) {

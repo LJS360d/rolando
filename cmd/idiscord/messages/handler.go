@@ -1,7 +1,7 @@
 package messages
 
 import (
-	"rolando/internal/services"
+	"rolando/cmd/idiscord/services"
 
 	discord "github.com/bwmarrin/discordgo"
 )
