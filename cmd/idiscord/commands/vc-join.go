@@ -149,6 +149,27 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 	}()
 
 	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if !vc.Ready {
+					logger.Warnf("Voice connection no longer ready, initiating cleanup...")
+					select {
+					case done <- struct{}{}:
+					default:
+					}
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	go func() {
 		pcmChan := make(chan *discordgo.Packet)
 		go dgvoice.ReceivePCM(vc, pcmChan)
 
@@ -156,8 +177,16 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 			select {
 			case packet, ok := <-pcmChan:
 				if !ok || packet == nil {
-					// Connection dropped or dgvoice finished. Signal shutdown.
 					logger.Warnf("PCM channel closed. initiating cleanup...")
+					select {
+					case done <- struct{}{}:
+					default:
+					}
+					return
+				}
+
+				if !vc.Ready {
+					logger.Warnf("Voice connection lost during PCM processing, initiating cleanup...")
 					select {
 					case done <- struct{}{}:
 					default:
@@ -188,6 +217,12 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 				go func() {
 					ttsMutex.Lock()
 					defer ttsMutex.Unlock()
+
+					if !vc.Ready {
+						logger.Warnf("Voice connection not ready before streaming, skipping...")
+						return
+					}
+
 					d, err := tts.GenerateTTSDecoder(chain.TalkFiltered(10), chainDoc.TTSLanguage)
 					if err != nil {
 						logger.Errorf("Failed to generate random TTS decoder in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
@@ -195,6 +230,10 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 					}
 					if err := helpers.StreamAudioDecoder(vc, d); err != nil {
 						logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
+						select {
+						case done <- struct{}{}:
+						default:
+						}
 					}
 				}()
 
