@@ -85,6 +85,9 @@ func (h *MessageHandler) handleReply(s *discord.Session, m *discord.Message, cha
 		logger.Errorf("Failed to generate text for mention reply in '%s': %v", m.GuildID, err)
 		return
 	}
+	if len(message) == 0 {
+		return
+	}
 
 	sendData := &discord.MessageSend{
 		Content: message,
