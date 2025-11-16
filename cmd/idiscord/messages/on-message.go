@@ -70,7 +70,7 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 			h.handleReply(s, m.Message, chain)
 		}
 		if ratedChoice(chain.ReplyRate) {
-			h.handleRandomMessage(s, m.ChannelID, guild.Name, chain)
+			h.handleRandomMessage(s, m.Message, guild.Name, chain)
 		}
 		if ratedChoice(chainDoc.ReactionRate) {
 			h.handleReaction(s, m.Message, guild.Name)
@@ -102,14 +102,38 @@ func (h *MessageHandler) handleReply(s *discord.Session, m *discord.Message, cha
 	}
 }
 
-// handleRandomMessage sends a non-reply message.
-func (h *MessageHandler) handleRandomMessage(s *discord.Session, channelID, guildName string, chain *model.MarkovChain) {
+// handleRandomMessage sends a non-reply/quiet-reply message.
+func (h *MessageHandler) handleRandomMessage(s *discord.Session, m *discord.Message, guildName string, chain *model.MarkovChain) {
 	message, err := h.getMessage(chain)
 	if err != nil {
 		logger.Errorf("Failed to generate text for random message in '%s': %v", guildName, err)
 		return
 	}
-	if _, err = h.Client.ChannelMessageSend(channelID, message); err != nil {
+	if ratedChoice(10) /* 10% */ {
+		// the message replies to the original message without pinging the user
+		sendData := &discord.MessageSend{
+			Content: message,
+			Reference: &discord.MessageReference{
+				MessageID: m.ID,
+				ChannelID: m.ChannelID,
+				GuildID:   m.GuildID,
+			},
+			AllowedMentions: &discord.MessageAllowedMentions{
+				Parse: []discord.AllowedMentionType{
+					discord.AllowedMentionTypeUsers,
+					discord.AllowedMentionTypeRoles,
+					discord.AllowedMentionTypeEveryone,
+				},
+				RepliedUser: false,
+			},
+		}
+		if _, err = h.Client.ChannelMessageSendComplex(m.ChannelID, sendData); err != nil {
+			logger.Errorf("Failed to send mention reply in '%s': %v", m.GuildID, err)
+		}
+		return
+	}
+
+	if _, err = h.Client.ChannelMessageSend(m.ChannelID, message); err != nil {
 		logger.Errorf("Failed to send random message in '%s': %v", guildName, err)
 	}
 }
