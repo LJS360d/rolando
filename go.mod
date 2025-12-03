@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/bwmarrin/dgvoice v0.0.0-20210225172318-caaac756e02e
-	github.com/bwmarrin/discordgo v0.29.1-0.20250921100450-b2bf06886f03
+	github.com/bwmarrin/discordgo v0.29.1-0.20251122142503-22e5cd898d08
 	github.com/gin-gonic/gin v1.10.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/joho/godotenv v1.5.1

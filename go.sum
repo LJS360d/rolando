@@ -4,6 +4,8 @@ github.com/bwmarrin/dgvoice v0.0.0-20210225172318-caaac756e02e h1:IdfGDWLNL/ZAHd
 github.com/bwmarrin/dgvoice v0.0.0-20210225172318-caaac756e02e/go.mod h1:DT3heoMAQGrOExZ3Rb3TBOQ4Bm+wD4H48KFnt1YfLoQ=
 github.com/bwmarrin/discordgo v0.29.1-0.20250921100450-b2bf06886f03 h1:CNJmuSXUx3x3XHBMaXgS24FvoDQDDWkwf+FHvPhRGr8=
 github.com/bwmarrin/discordgo v0.29.1-0.20250921100450-b2bf06886f03/go.mod h1:NJZpH+1AfhIcyQsPeuBKsUtYrRnjkyu0kIVMCHkZtRY=
+github.com/bwmarrin/discordgo v0.29.1-0.20251122142503-22e5cd898d08 h1:v+a1yTM20JsWfytr/MzNaq8LUNyqKC3F3KhF5vOqooE=
+github.com/bwmarrin/discordgo v0.29.1-0.20251122142503-22e5cd898d08/go.mod h1:NJZpH+1AfhIcyQsPeuBKsUtYrRnjkyu0kIVMCHkZtRY=
 github.com/bytedance/sonic v1.12.6 h1:/isNmCUF2x3Sh8RAp/4mh4ZGkcFAX/hLrzrK3AvpRzk=
 github.com/bytedance/sonic v1.12.6/go.mod h1:B8Gt/XvtZ3Fqj+iSKMypzymZxw/FVwgIGKzMzT9r/rk=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=
