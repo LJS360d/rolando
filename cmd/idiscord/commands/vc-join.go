@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"rolando/cmd/idiscord/helpers"
@@ -15,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmarrin/dgvoice"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -39,9 +39,11 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 		return
 	}
 
+	vcCtx, _ /* vcClose */ := context.WithCancel(context.Background())
+
 	// step 2: join the voice channel
-	vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, false)
-	if err != nil || !vc.Ready {
+	vc, err := s.ChannelVoiceJoin(vcCtx, i.GuildID, voiceState.ChannelID, false, false)
+	if err != nil || vc.Status != discordgo.VoiceConnectionStatusReady {
 		channel, _ := s.State.Channel(voiceState.ChannelID)
 		content := fmt.Sprintf("Failed to join the voice channel: %s", channel.Name)
 		logger.Errorln(content, err)
@@ -78,7 +80,7 @@ func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.
 	}
 
 	// step 5: start listening in the vc
-	listenVc(s, i, vc, voiceChannel, chainDoc, chain)
+	listenVc(s, i, vc, vcCtx, voiceChannel, chainDoc, chain)
 }
 
 func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.Member, error) {
@@ -103,7 +105,7 @@ func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.M
 	return users, nil
 }
 
-func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordgo.VoiceConnection, voiceChannel *discordgo.Channel, chainDoc *repositories.Chain, chain *model.MarkovChain) {
+func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordgo.VoiceConnection, vcCtx context.Context, voiceChannel *discordgo.Channel, chainDoc *repositories.Chain, chain *model.MarkovChain) {
 	var ttsMutex sync.Mutex
 	done := make(chan struct{})
 
@@ -123,7 +125,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 			return
 		}
 
-		currentUsers, _ := getVCUsers(s, i.GuildID, vc.ChannelID)
+		currentUsers, _ := getVCUsers(s, i.GuildID, voiceChannel.ID)
 		if len(currentUsers) < 1 { // All other users have left
 			select {
 			case done <- struct{}{}: // Send signal if possible
@@ -140,7 +142,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 		default: // Don't block if already sent/closed
 		}
 		close(done)
-		err := vc.Disconnect()
+		err := vc.Disconnect(vcCtx)
 		if err != nil {
 			logger.Warnf("Failed to disconnect from voice channel (already disconnected?): %v", err)
 		}
@@ -155,7 +157,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 		for {
 			select {
 			case <-ticker.C:
-				if !vc.Ready {
+				if vc.Status != discordgo.VoiceConnectionStatusReady {
 					logger.Warnf("Voice connection no longer ready, initiating cleanup...")
 					select {
 					case done <- struct{}{}:
@@ -170,8 +172,9 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 	}()
 
 	go func() {
-		pcmChan := make(chan *discordgo.Packet)
-		go dgvoice.ReceivePCM(vc, pcmChan)
+		receiver := helpers.NewVoiceReceiver()
+		pcmChan := make(chan *helpers.PCMPacket, 10)
+		go receiver.ReceivePCM(vc, pcmChan)
 
 		for {
 			select {
@@ -185,7 +188,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 					return
 				}
 
-				if !vc.Ready {
+				if vc.Status != discordgo.VoiceConnectionStatusReady {
 					logger.Warnf("Voice connection lost during PCM processing, initiating cleanup...")
 					select {
 					case done <- struct{}{}:
@@ -194,7 +197,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 					return
 				}
 
-				pcm := packet.PCM
+				pcm := packet.Sequence
 				var audioData bytes.Buffer
 				binary.Write(&audioData, binary.LittleEndian, pcm)
 				text, err := stt.SpeechToTextNative(&audioData, chainDoc.TTSLanguage, chainDoc.ID)
@@ -218,7 +221,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 					ttsMutex.Lock()
 					defer ttsMutex.Unlock()
 
-					if !vc.Ready {
+					if vc.Status != discordgo.VoiceConnectionStatusReady {
 						logger.Warnf("Voice connection not ready before streaming, skipping...")
 						return
 					}

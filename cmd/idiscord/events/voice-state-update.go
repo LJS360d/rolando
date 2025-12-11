@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/config"
 	"rolando/internal/logger"
@@ -57,7 +58,8 @@ func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Ev
 	}
 	go func() {
 		time.Sleep(time.Duration(2 * time.Second))
-		vc, err := s.ChannelVoiceJoin(voiceStateUpdate.GuildID, voiceStateUpdate.ChannelID, false, false)
+		vcCtx, _ /* vcClose */ := context.WithCancel(context.Background())
+		vc, err := s.ChannelVoiceJoin(vcCtx, voiceStateUpdate.GuildID, voiceStateUpdate.ChannelID, false, false)
 		if err != nil {
 			logger.Errorf("Failed to join voice channel '%s': %v", channel.Name, err)
 			return
@@ -71,12 +73,12 @@ func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Ev
 		if err := helpers.StreamAudioDecoder(vc, d); err != nil {
 			logger.Errorf("Failed to stream audio: %v", err)
 		}
-		err = vc.Disconnect()
-		vc.Close()
+		err = vc.Disconnect(vcCtx)
+		// vcClose()
 		if err != nil {
 			logger.Errorf("Failed to disconnect from voice channel '%s' in '%s': %v", channel.Name, chainDoc.Name, err)
 		}
-		vc.Close()
+		/// vcClose()
 		logger.Infof("Randomly spoke in voice channel '%s' in '%s'", channel.Name, chainDoc.Name)
 	}()
 }

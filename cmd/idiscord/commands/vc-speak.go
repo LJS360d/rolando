@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
 	"rolando/internal/tts"
@@ -26,6 +27,7 @@ func (h *SlashCommandsHandler) vcSpeakCommand(s *discordgo.Session, i *discordgo
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
+	vcCtx, _ /* vcClose */ := context.WithCancel(context.Background())
 
 	var vc *discordgo.VoiceConnection
 	vc, exists := s.VoiceConnections[voiceState.GuildID]
@@ -35,8 +37,8 @@ func (h *SlashCommandsHandler) vcSpeakCommand(s *discordgo.Session, i *discordgo
 			Content: &content,
 		})
 		// join the voice channel
-		vc, err = s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, false)
-		if err != nil || !vc.Ready {
+		vc, err = s.ChannelVoiceJoin(vcCtx, i.GuildID, voiceState.ChannelID, false, false)
+		if err != nil || vc.Status != discordgo.VoiceConnectionStatusReady {
 			content := "You must be in a voice channel to use this command."
 			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 				Content: &content,
@@ -69,9 +71,9 @@ func (h *SlashCommandsHandler) vcSpeakCommand(s *discordgo.Session, i *discordgo
 	if err := helpers.StreamAudioDecoder(vc, d); err != nil {
 		logger.Errorf("Failed to stream audio: %v", err)
 	}
-	err = vc.Disconnect()
+	err = vc.Disconnect(vcCtx)
 	if err != nil {
 		logger.Errorf("Failed to disconnect from voice channel: %v", err)
 	}
-	vc.Close()
+	// vcClose()
 }

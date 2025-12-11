@@ -9,6 +9,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// TODO:
+// the lines with
+//
+// Flags:   discordgo.MessageFlagsEphemeral,
+//
+// have been commented out because the discordgo fork from tvanriel is not fully up to date with
+// bwmarrin/discordgo@master, these lines should be uncommented when PR https://github.com/bwmarrin/discordgo/pull/1593
+// is merged and released into the upstream, and also remove the replace in the go.mod
+
 // Handle 'confirm-train-again' button interaction
 func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Defer the update
@@ -22,7 +31,7 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.
 		errMsg := "Failed to fetch current chain document for this server. Please try again later."
 		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Content: &errMsg,
-			Flags:   discordgo.MessageFlagsEphemeral,
+			// Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		return
 	}
@@ -36,7 +45,7 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.
 		errMsg := "Unable to determine user ID for this interaction. Please try again later."
 		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Content: &errMsg,
-			Flags:   discordgo.MessageFlagsEphemeral,
+			// Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		return
 	}
@@ -44,7 +53,7 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.
 	cnt := "Deleting fetched data from this server.\nThis might take a while.."
 	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Content: &cnt,
-		Flags:   discordgo.MessageFlagsEphemeral,
+		// Flags:   discordgo.MessageFlagsEphemeral,
 	})
 
 	// recreate the chain
@@ -57,7 +66,7 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.
 		errMsg := "Failed to delete chain data for this server. Please try again later."
 		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Content: &errMsg,
-			Flags:   discordgo.MessageFlagsEphemeral,
+			// Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		return
 	}
@@ -68,7 +77,7 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.
 		errMsg := "Failed to recreate a new chain for this server. Please try again later."
 		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Content: &errMsg,
-			Flags:   discordgo.MessageFlagsEphemeral,
+			// Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		return
 	}

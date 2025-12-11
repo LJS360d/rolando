@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
 	"rolando/internal/tts"
@@ -39,7 +40,7 @@ func (h *SlashCommandsHandler) vcLeaveCommand(s *discordgo.Session, i *discordgo
 	} else {
 		logger.Infof("Spoke Bye Bye message in vc, leaving...")
 	}
-	err = vc.Disconnect()
+	err = vc.Disconnect(context.Background())
 	if err != nil {
 		logger.Errorf("Failed to disconnect from voice channel: %v", err)
 	}
