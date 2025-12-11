@@ -108,39 +108,38 @@ func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.M
 func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordgo.VoiceConnection, vcCtx context.Context, voiceChannel *discordgo.Channel, chainDoc *repositories.Chain, chain *model.MarkovChain) {
 	var ttsMutex sync.Mutex
 	done := make(chan struct{})
+	var once sync.Once
+	triggerCleanup := func() {
+		once.Do(func() {
+			select {
+			case done <- struct{}{}: // Send signal to unblock the main function's select
+			default: // Don't block
+			}
+		})
+	}
 
 	freeCleanupHandler := s.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
 		if vs.GuildID != i.GuildID {
-			// not the guild we are working in, ignore
 			return
 		}
 
 		if vs.UserID == s.State.User.ID {
-			// the bot leaving through other means (kicked, /vc-leave, lost connection, etc.) shutdown
 			logger.Infof("Left voice channel '%s' in '%s', initiating cleanup...", voiceChannel.Name, chainDoc.Name)
-			select {
-			case done <- struct{}{}: // Send signal if possible
-			default: // Don't block if already sent/closed
-			}
+			triggerCleanup()
 			return
 		}
 
 		currentUsers, _ := getVCUsers(s, i.GuildID, voiceChannel.ID)
 		if len(currentUsers) < 1 { // All other users have left
-			select {
-			case done <- struct{}{}: // Send signal if possible
-			default: // Don't block if already sent/closed
-			}
+			triggerCleanup()
 		}
 	})
 
 	// use the 'done' channel to instruct other goroutines to stop *before* cleanup.
 	defer func() {
 		freeCleanupHandler()
-		select {
-		case done <- struct{}{}: // Send signal if possible
-		default: // Don't block if already sent/closed
-		}
+		// It's safe to close here because the main function (where this defer runs)
+		// is about to exit. All goroutines that listen to 'done' will unblock.
 		close(done)
 		err := vc.Disconnect(vcCtx)
 		if err != nil {
@@ -159,10 +158,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 			case <-ticker.C:
 				if vc.Status != discordgo.VoiceConnectionStatusReady {
 					logger.Warnf("Voice connection no longer ready, initiating cleanup...")
-					select {
-					case done <- struct{}{}:
-					default:
-					}
+					triggerCleanup()
 					return
 				}
 			case <-done:
@@ -181,19 +177,13 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 			case packet, ok := <-pcmChan:
 				if !ok || packet == nil {
 					logger.Warnf("PCM channel closed. initiating cleanup...")
-					select {
-					case done <- struct{}{}:
-					default:
-					}
+					triggerCleanup()
 					return
 				}
 
 				if vc.Status != discordgo.VoiceConnectionStatusReady {
 					logger.Warnf("Voice connection lost during PCM processing, initiating cleanup...")
-					select {
-					case done <- struct{}{}:
-					default:
-					}
+					triggerCleanup()
 					return
 				}
 
@@ -233,10 +223,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 					}
 					if err := helpers.StreamAudioDecoder(vc, d); err != nil {
 						logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
-						select {
-						case done <- struct{}{}:
-						default:
-						}
+						triggerCleanup()
 					}
 				}()
 
