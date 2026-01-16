@@ -10,8 +10,8 @@
       </template>
       <template #text>
         <memory-usage-bar v-if="chains && resources"
-          :current="resources?.memory.stack_in_use + resources?.memory.heap_alloc" :max="resources?.memory.total_alloc"
-          :peak="resources?.memory.sys" :blocks="computedBlocks" />
+          :current="resources?.memory.stack_in_use + resources?.memory.heap_alloc" :max="resources?.memory.sys"
+          :peak="resources?.memory.heap_sys" :blocks="computedBlocks" />
       </template>
     </v-card>
     <v-divider class="my-4" />
