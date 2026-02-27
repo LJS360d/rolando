@@ -94,7 +94,7 @@
 
 <script lang="ts">
 import { useGetAllChainsAnalytics, type ChainAnalytics } from '@/api/analytics';
-import { leaveGuild, updateChainDocument, useGetBotGuilds, useGetBotResources, useGetBotUser, type BotGuild } from '@/api/bot';
+import { leaveGuild, updateChainDocument, useGetBotGuilds, useGetBotResources, useGetBotUser, type BotGuildWithChain } from '@/api/bot';
 import type { PageMeta } from '@/api/common';
 import { useAuthStore } from '@/stores/auth';
 import { formatBytes, formatNumber, formatTime, guildIconUrl } from '@/utils/format';
@@ -111,10 +111,12 @@ export default {
       totalItems: 0,
       totalPages: 0,
     });
-    const botGuildsQuery = useGetBotGuilds(auth.token!, pagination);
+    const sortBy = ref<string>("bytes");
+    const botGuildsQuery = useGetBotGuilds(auth.token!, pagination, sortBy);
     const chainsQuery = useGetAllChainsAnalytics(auth.token!);
     watch(() => pagination.value?.page, () => { botGuildsQuery.refetch(); }, { immediate: true });
     watch(() => pagination.value?.pageSize, () => { botGuildsQuery.refetch(); }, { immediate: true });
+    watch(sortBy, () => { botGuildsQuery.refetch(); }, { immediate: true });
     const snackbar = ref({
       visible: false,
       message: "",
@@ -144,12 +146,7 @@ export default {
 
       onBeforeUnmount(() => clearInterval(interval));
     });
-    const sortBy = ref<keyof FilterKeysByValueType<ChainAnalytics, number>>("bytes");
-
-    const sortByOptions = ref<{
-      value: keyof FilterKeysByValueType<ChainAnalytics, number>;
-      title: string;
-    }[]>([
+    const sortByOptions = ref<{ value: string; title: string }[]>([
       { value: "bytes", title: "Size" },
       { value: "gifs", title: "Gifs" },
       { value: "images", title: "Images" },
@@ -161,21 +158,11 @@ export default {
       { value: "reply_rate", title: "Reply Rate" },
       { value: "reaction_rate", title: "Reaction Rate" },
       { value: "vc_join_rate", title: "VC Join Rate" },
+      { value: "approximate_member_count", title: "Members" },
     ]);
 
     const uptime = computed(() => formatTime(elapsedSeconds.value));
-    const guilds = computed(() => {
-      const chainMap = new Map<string, ChainAnalytics>(
-        (chainsQuery.data.value ?? []).map(c => [c.id, c]),
-      );
-      const pageData = botGuildsQuery.data.value?.data ?? [];
-      const guilds: (BotGuild & { chain: ChainAnalytics | null })[] = [];
-      for (const guild of pageData) {
-        const chain = chainMap.get(guild.id) ?? null;
-        guilds.push({ ...guild, chain });
-      }
-      return guilds.sort((a, b) => (b.chain?.[sortBy.value] ?? -1) - (a.chain?.[sortBy.value] ?? -1));
-    });
+    const guilds = computed<BotGuildWithChain[]>(() => botGuildsQuery.data.value?.data ?? []);
     const totalGuilds = computed(() => botGuildsQuery.data.value?.meta?.totalItems ?? guilds.value.length);
     return {
       botUser: botUserQuery.data,

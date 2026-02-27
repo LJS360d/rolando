@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/vue-query";
+import type { ChainAnalytics } from "./analytics";
 import type { Page, PageMeta } from "./common";
 
 export interface BotUser {
@@ -59,6 +60,8 @@ export interface BotGuild {
   approximate_presence_count: number;
 }
 
+export type BotGuildWithChain = BotGuild & { chain: ChainAnalytics | null };
+
 export function useGetBotGuildsAll(token: string) {
   return useQuery({
     queryKey: ["/bot/guilds/all"],
@@ -74,20 +77,26 @@ export function useGetBotGuildsAll(token: string) {
   });
 }
 
-export function useGetBotGuilds(token: string, pagination: globalThis.Ref<PageMeta>) {
+export function useGetBotGuilds(
+  token: string,
+  pagination: globalThis.Ref<PageMeta>,
+  sortBy: globalThis.Ref<string>
+) {
   return useQuery({
-    queryKey: ["/bot/guilds", pagination.value.page, pagination.value.pageSize],
+    queryKey: ["/bot/guilds", pagination.value.page, pagination.value.pageSize, sortBy.value],
     queryFn: async () => {
-      const response = await fetch(
-        `/api/bot/guilds?page=${pagination.value.page}&pageSize=${pagination.value.pageSize}`,
-        {
-          headers: {
-            Authorization: token
-          }
+      const params = new URLSearchParams({
+        page: String(pagination.value.page),
+        pageSize: String(pagination.value.pageSize),
+        sortBy: sortBy.value || "bytes"
+      });
+      const response = await fetch(`/api/bot/guilds?${params}`, {
+        headers: {
+          Authorization: token
         }
-      );
+      });
       if (!response.ok) throw new Error("Failed to fetch bot guilds");
-      const res = await response.json() as Page<BotGuild[]>;
+      const res = await response.json() as Page<BotGuildWithChain[]>;
       pagination.value = res.meta;
       return res;
     },

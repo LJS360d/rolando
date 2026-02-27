@@ -125,6 +125,25 @@ func (s *AnalyticsController) GetChainsAnalyticsPaginated(c *gin.Context) {
 	})
 }
 
+// BuildAllChainsAnalyticsMap returns a map of chain ID to serializable analytics for all chains.
+// Used by the bot controller for server-side sorting of guilds by chain metrics.
+func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService) (map[string]gin.H, error) {
+	chains, err := chainsService.GetAllChains()
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]gin.H, len(chains))
+	for _, chain := range chains {
+		chainDoc, err := chainsService.GetChainDocument(chain.ID)
+		if err != nil {
+			continue
+		}
+		rawAnalytics := model.NewMarkovChainAnalyzer(chain).GetRawAnalytics()
+		m[chain.ID] = getSerializableAnalytics(&rawAnalytics, chainDoc)
+	}
+	return m, nil
+}
+
 // ------------ Helpers ---------------
 
 func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDoc *repositories.Chain) gin.H {

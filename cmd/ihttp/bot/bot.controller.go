@@ -3,10 +3,12 @@ package bot
 import (
 	"fmt"
 	"rolando/cmd/idiscord/services"
+	"rolando/cmd/ihttp/analytics"
 	"rolando/cmd/ihttp/auth"
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -90,7 +92,56 @@ func (s *BotController) Broadcast(c *gin.Context) {
 	c.JSON(200, gin.H{"content": req.Content})
 }
 
-// GET /bot/guilds, requires owner authorization
+const discordUserGuildsLimit = 200
+
+func fetchAllUserGuilds(ds *discordgo.Session) ([]*discordgo.UserGuild, error) {
+	var all []*discordgo.UserGuild
+	afterID := ""
+	for {
+		page, err := ds.UserGuilds(discordUserGuildsLimit, "", afterID, true)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		if len(page) < discordUserGuildsLimit {
+			break
+		}
+		afterID = page[len(page)-1].ID
+	}
+	return all, nil
+}
+
+func sortKeyGuildWithChain(g *discordgo.UserGuild, chain gin.H, sortBy string) float64 {
+	if sortBy == "approximate_member_count" {
+		return float64(g.ApproximateMemberCount)
+	}
+	if sortBy == "approximate_presence_count" {
+		return float64(g.ApproximatePresenceCount)
+	}
+	if chain == nil {
+		return -1
+	}
+	v, ok := chain[sortBy]
+	if !ok {
+		return -1
+	}
+	switch x := v.(type) {
+	case int:
+		return float64(x)
+	case int64:
+		return float64(x)
+	case uint32:
+		return float64(x)
+	case uint64:
+		return float64(x)
+	case float64:
+		return x
+	default:
+		return -1
+	}
+}
+
+// GET /bot/guilds, requires owner authorization. Query: page, pageSize, sortBy (chain or approximate_member_count).
 func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	errCode, err := auth.EnsureOwner(c, s.ds)
 	if err != nil {
@@ -105,30 +156,66 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	if err != nil || page < 1 {
 		page = 1
 	}
+	sortBy := c.Query("sortBy")
+	if sortBy == "" {
+		sortBy = "bytes"
+	}
 
-	all := s.ds.State.Guilds
-	total := int64(len(all))
+	allGuilds, err := fetchAllUserGuilds(s.ds)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	chainMap, err := analytics.BuildAllChainsAnalyticsMap(s.chainsService)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	type guildWithChain struct {
+		Guild   *discordgo.UserGuild
+		Chain   gin.H
+		SortKey float64
+	}
+	merged := make([]guildWithChain, 0, len(allGuilds))
+	for _, g := range allGuilds {
+		chain := chainMap[g.ID]
+		merged = append(merged, guildWithChain{
+			Guild:   g,
+			Chain:   chain,
+			SortKey: sortKeyGuildWithChain(g, chain, sortBy),
+		})
+	}
+	sort.Slice(merged, func(i, j int) bool { return merged[i].SortKey > merged[j].SortKey })
+
+	total := int64(len(merged))
 	offset := (page - 1) * pageSize
-	if offset > len(all) {
-		offset = len(all)
+	if offset > len(merged) {
+		offset = len(merged)
 	}
 	end := offset + pageSize
-	if end > len(all) {
-		end = len(all)
+	if end > len(merged) {
+		end = len(merged)
 	}
-	window := all[offset:end]
-	pageData := make([]*discordgo.UserGuild, 0, len(window))
-	for _, g := range window {
-		pageData = append(pageData, &discordgo.UserGuild{
-			ID:                       g.ID,
-			Name:                     g.Name,
-			Icon:                     g.Icon,
-			Features:                 g.Features,
-			Owner:                    g.Owner,
-			Permissions:              g.Permissions,
-			ApproximateMemberCount:   g.ApproximateMemberCount,
-			ApproximatePresenceCount: g.ApproximatePresenceCount,
-		})
+	window := merged[offset:end]
+	pageData := make([]gin.H, 0, len(window))
+	for _, m := range window {
+		item := gin.H{
+			"id":                         m.Guild.ID,
+			"name":                       m.Guild.Name,
+			"icon":                       m.Guild.Icon,
+			"owner":                      m.Guild.Owner,
+			"permissions":                m.Guild.Permissions,
+			"features":                   m.Guild.Features,
+			"approximate_member_count":   m.Guild.ApproximateMemberCount,
+			"approximate_presence_count": m.Guild.ApproximatePresenceCount,
+		}
+		if m.Chain != nil {
+			item["chain"] = m.Chain
+		} else {
+			item["chain"] = nil
+		}
+		pageData = append(pageData, item)
 	}
 
 	c.JSON(200, gin.H{
@@ -149,21 +236,12 @@ func (s *BotController) GetBotGuildsAll(c *gin.Context) {
 		c.JSON(errCode, gin.H{"error": err.Error()})
 		return
 	}
-	all := s.ds.State.Guilds
-	out := make([]*discordgo.UserGuild, 0, len(all))
-	for _, g := range all {
-		out = append(out, &discordgo.UserGuild{
-			ID:                       g.ID,
-			Name:                     g.Name,
-			Icon:                     g.Icon,
-			Features:                 g.Features,
-			Owner:                    g.Owner,
-			Permissions:              g.Permissions,
-			ApproximateMemberCount:   g.ApproximateMemberCount,
-			ApproximatePresenceCount: g.ApproximatePresenceCount,
-		})
+	all, err := fetchAllUserGuilds(s.ds)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
 	}
-	c.JSON(200, out)
+	c.JSON(200, all)
 }
 
 // GET /bot/guilds/:guildId, requires member authorization
