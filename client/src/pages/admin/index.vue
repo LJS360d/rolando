@@ -6,7 +6,7 @@
       </template>
       <template #subtitle>
         <span class="text-sm mr-4">Uptime: <b>{{ uptime }}</b></span>
-        <span class="text-sm">Currently part of <b>{{ guilds?.length }}</b> guilds</span>
+        <span class="text-sm">Currently part of <b>{{ totalGuilds }}</b> guilds</span>
       </template>
       <template #text>
         <memory-usage-bar v-if="chains && resources"
@@ -19,6 +19,9 @@
       <v-select v-model="sortBy" :items="sortByOptions"  :item-props="true" label="Sort by" class="mr-4" variant="outlined" hide-details
         filled />
     </div>
+    <template v-if="pagination?.totalPages > 1">
+      <app-paginator :pagination="pagination" />
+    </template>
     <div class="d-flex flex-wrap ga-3">
       <v-card v-for="guild in guilds" :key="guild.id" flat class="max-w-card"
         :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
@@ -78,6 +81,9 @@
         </template>
       </v-card>
     </div>
+    <template v-if="pagination?.totalPages > 1">
+      <app-paginator :pagination="pagination" />
+    </template>
     <app-dialog :model-value="dialog.visible" :message="dialog.text" :title="dialog.title" @confirm="dialog.confirm"
       @cancel="dialog.cancel" />
     <v-snackbar v-model="snackbar.visible" :color="snackbar.color" :timeout="3000" bottom>
@@ -89,6 +95,7 @@
 <script lang="ts">
 import { useGetAllChainsAnalytics, type ChainAnalytics } from '@/api/analytics';
 import { leaveGuild, updateChainDocument, useGetBotGuilds, useGetBotResources, useGetBotUser, type BotGuild } from '@/api/bot';
+import type { PageMeta } from '@/api/common';
 import { useAuthStore } from '@/stores/auth';
 import { formatBytes, formatNumber, formatTime, guildIconUrl } from '@/utils/format';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -98,8 +105,16 @@ export default {
     const auth = useAuthStore();
     const botUserQuery = useGetBotUser();
     const botResourcesQuery = useGetBotResources();
-    const botGuildsQuery = useGetBotGuilds(auth.token!);
+    const pagination = ref<PageMeta>({
+      page: 1,
+      pageSize: 50,
+      totalItems: 0,
+      totalPages: 0,
+    });
+    const botGuildsQuery = useGetBotGuilds(auth.token!, pagination);
     const chainsQuery = useGetAllChainsAnalytics(auth.token!);
+    watch(() => pagination.value?.page, () => { botGuildsQuery.refetch(); }, { immediate: true });
+    watch(() => pagination.value?.pageSize, () => { botGuildsQuery.refetch(); }, { immediate: true });
     const snackbar = ref({
       visible: false,
       message: "",
@@ -153,17 +168,21 @@ export default {
       const chainMap = new Map<string, ChainAnalytics>(
         (chainsQuery.data.value ?? []).map(c => [c.id, c]),
       );
+      const pageData = botGuildsQuery.data.value?.data ?? [];
       const guilds: (BotGuild & { chain: ChainAnalytics | null })[] = [];
-      for (const guild of botGuildsQuery.data.value ?? []) {
+      for (const guild of pageData) {
         const chain = chainMap.get(guild.id) ?? null;
         guilds.push({ ...guild, chain });
       }
       return guilds.sort((a, b) => (b.chain?.[sortBy.value] ?? -1) - (a.chain?.[sortBy.value] ?? -1));
     });
+    const totalGuilds = computed(() => botGuildsQuery.data.value?.meta?.totalItems ?? guilds.value.length);
     return {
       botUser: botUserQuery.data,
       inviteLink: import.meta.env.VITE_DISCORD_SERVER_INVITE,
       guilds: guilds,
+      totalGuilds,
+      pagination,
       chains: chainsQuery.data,
       chainsRefetch: chainsQuery.refetch,
       resources: botResourcesQuery.data,

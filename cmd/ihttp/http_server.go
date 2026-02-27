@@ -52,7 +52,8 @@ func (s *HttpServer) Start() {
 	r.GET("/data/:chain", dataController.GetDataPaginated)
 
 	r.GET("/bot/user", botController.GetBotUser)
-	r.GET("/bot/guilds", botController.GetBotGuilds)
+	r.GET("/bot/guilds", botController.GetBotGuildsPaginated)
+	r.GET("/bot/guilds/all", botController.GetBotGuildsAll)
 	r.GET("/bot/guilds/:guildId", botController.GetGuild)
 	r.PUT("/bot/guilds/:guildId", botController.UpdateChainDoc)
 	r.DELETE("/bot/guilds/:guildId", botController.LeaveGuild)

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/vue-query";
+import type { Page, PageMeta } from "./common";
 
 export interface BotUser {
   accent_color: number;
@@ -58,17 +59,37 @@ export interface BotGuild {
   approximate_presence_count: number;
 }
 
-export function useGetBotGuilds(token: string) {
+export function useGetBotGuildsAll(token: string) {
   return useQuery({
-    queryKey: ["/bot/guilds"],
+    queryKey: ["/bot/guilds/all"],
     queryFn: async () => {
-      const response = await fetch(`/api/bot/guilds`, {
+      const response = await fetch(`/api/bot/guilds/all`, {
         headers: {
           Authorization: token
         }
       });
       if (!response.ok) throw new Error("Failed to fetch bot guilds");
       return response.json() as Promise<BotGuild[]>;
+    },
+  });
+}
+
+export function useGetBotGuilds(token: string, pagination: globalThis.Ref<PageMeta>) {
+  return useQuery({
+    queryKey: ["/bot/guilds", pagination.value.page, pagination.value.pageSize],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/bot/guilds?page=${pagination.value.page}&pageSize=${pagination.value.pageSize}`,
+        {
+          headers: {
+            Authorization: token
+          }
+        }
+      );
+      if (!response.ok) throw new Error("Failed to fetch bot guilds");
+      const res = await response.json() as Page<BotGuild[]>;
+      pagination.value = res.meta;
+      return res;
     },
   });
 }

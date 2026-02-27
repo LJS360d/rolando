@@ -7,6 +7,7 @@ import (
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"runtime"
+	"strconv"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -90,19 +91,79 @@ func (s *BotController) Broadcast(c *gin.Context) {
 }
 
 // GET /bot/guilds, requires owner authorization
-func (s *BotController) GetBotGuilds(c *gin.Context) {
+func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	errCode, err := auth.EnsureOwner(c, s.ds)
 	if err != nil {
 		c.JSON(errCode, gin.H{"error": err.Error()})
 		return
 	}
-	guilds, err := s.ds.UserGuilds(200, "", "", true)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
+	pageSize, err := strconv.Atoi(c.Query("pageSize"))
+	if err != nil || pageSize <= 0 {
+		pageSize = 24
+	}
+	page, err := strconv.Atoi(c.Query("page"))
+	if err != nil || page < 1 {
+		page = 1
 	}
 
-	c.JSON(200, guilds)
+	all := s.ds.State.Guilds
+	total := int64(len(all))
+	offset := (page - 1) * pageSize
+	if offset > len(all) {
+		offset = len(all)
+	}
+	end := offset + pageSize
+	if end > len(all) {
+		end = len(all)
+	}
+	window := all[offset:end]
+	pageData := make([]*discordgo.UserGuild, 0, len(window))
+	for _, g := range window {
+		pageData = append(pageData, &discordgo.UserGuild{
+			ID:                       g.ID,
+			Name:                     g.Name,
+			Icon:                     g.Icon,
+			Features:                 g.Features,
+			Owner:                    g.Owner,
+			Permissions:              g.Permissions,
+			ApproximateMemberCount:   g.ApproximateMemberCount,
+			ApproximatePresenceCount: g.ApproximatePresenceCount,
+		})
+	}
+
+	c.JSON(200, gin.H{
+		"data": pageData,
+		"meta": gin.H{
+			"page":       page,
+			"pageSize":   pageSize,
+			"totalItems": total,
+			"totalPages": (total + int64(pageSize) - 1) / int64(pageSize),
+		},
+	})
+}
+
+// GET /bot/guilds/all, requires owner authorization
+func (s *BotController) GetBotGuildsAll(c *gin.Context) {
+	errCode, err := auth.EnsureOwner(c, s.ds)
+	if err != nil {
+		c.JSON(errCode, gin.H{"error": err.Error()})
+		return
+	}
+	all := s.ds.State.Guilds
+	out := make([]*discordgo.UserGuild, 0, len(all))
+	for _, g := range all {
+		out = append(out, &discordgo.UserGuild{
+			ID:                       g.ID,
+			Name:                     g.Name,
+			Icon:                     g.Icon,
+			Features:                 g.Features,
+			Owner:                    g.Owner,
+			Permissions:              g.Permissions,
+			ApproximateMemberCount:   g.ApproximateMemberCount,
+			ApproximatePresenceCount: g.ApproximatePresenceCount,
+		})
+	}
+	c.JSON(200, out)
 }
 
 // GET /bot/guilds/:guildId, requires member authorization
