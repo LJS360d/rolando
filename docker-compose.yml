@@ -6,7 +6,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/root/data
+      - ./data:/home/appuser/data
     environment:
       - SERVER_ADDRESS=0.0.0.0:8080
     networks:

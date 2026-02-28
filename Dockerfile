@@ -32,7 +32,7 @@ COPY --from=builder --chown=appuser:appgroup /app/.env .
 COPY --from=builder --chown=appuser:appgroup /app/vosk ./vosk
 ENV LD_LIBRARY_PATH="/home/appuser/vosk/lib:$LD_LIBRARY_PATH" \
     GO_ENV="production" \
-    DATABASE_PATH=/home/appuser/$COMPOSE_PROJECT_NAME.db \
+    DATABASE_PATH=/home/appuser/data/$COMPOSE_PROJECT_NAME.db \
     PATH="/home/appuser:$PATH"
 
 USER appuser
