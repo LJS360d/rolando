@@ -1,10 +1,17 @@
 <template>
   <v-container class="pa-4">
-    <v-row v-if="!isLoading && !isError">
-
-    </v-row>
-    <v-progress-circular v-else-if="!isError" indeterminate color="primary" size="64" />
-    <v-alert v-else type="error" class="text-body-2">
+    <v-row v-if="!isLoading && !isError" />
+    <v-progress-circular
+      v-else-if="!isError"
+      indeterminate
+      color="primary"
+      size="64"
+    />
+    <v-alert
+      v-else
+      type="error"
+      class="text-body-2"
+    >
       Oops, big error occured, please report it the creator on <a :href="discordServerInvite">the discord</a>
     </v-alert>
   </v-container>

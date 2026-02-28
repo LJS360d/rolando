@@ -1,0 +1,29 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Build outputs
+dist/
+target/
+*.log
+
+# IDEs and Editors
+.vscode/
+.idea/
+.editorconfig
+*.swp
+*.swo
+
+# Version Control
+.git/
+.gitignore
+.gitattributes
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Test files (optional, but keeps the build context light)
+tests/
+coverage/
+cypress/

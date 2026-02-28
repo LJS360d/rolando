@@ -2,6 +2,7 @@ package utils
 
 import (
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -48,18 +49,5 @@ func IsVideo(url string) bool {
 
 func isSupportedUrl(url string, extensions []string, domains []string) bool {
 	domain, extension := ExtractUrlInfo(url)
-
-	for _, ext := range extensions {
-		if extension == ext {
-			return true
-		}
-	}
-
-	for _, d := range domains {
-		if domain == d {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(extensions, extension) || slices.Contains(domains, domain)
 }

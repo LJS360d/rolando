@@ -45,7 +45,7 @@ func FormatNumber(number float64) string {
 }
 
 // MeasureSize calculates the memory usage of an object in bytes
-func MeasureSize(obj interface{}) uintptr {
+func MeasureSize(obj any) uintptr {
 	visited := make(map[uintptr]bool)
 	return deepSize(reflect.ValueOf(obj), visited)
 }
@@ -56,7 +56,7 @@ func deepSize(v reflect.Value, visited map[uintptr]bool) uintptr {
 	}
 
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		ptr := v.Pointer()
 		if ptr != 0 && !visited[ptr] {
 			visited[ptr] = true

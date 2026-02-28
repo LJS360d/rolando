@@ -96,17 +96,17 @@ const discordUserGuildsLimit = 200
 
 func fetchAllUserGuilds(ds *discordgo.Session) ([]*discordgo.UserGuild, error) {
 	var all []*discordgo.UserGuild
-	afterID := ""
-	for {
-		page, err := ds.UserGuilds(discordUserGuildsLimit, "", afterID, true)
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, page...)
-		if len(page) < discordUserGuildsLimit {
-			break
-		}
-		afterID = page[len(page)-1].ID
+	for _, sg := range ds.State.Guilds {
+		all = append(all, &discordgo.UserGuild{
+			ID:                       sg.ID,
+			Name:                     sg.Name,
+			Icon:                     sg.Icon,
+			Owner:                    sg.Owner,
+			Permissions:              sg.Permissions,
+			Features:                 sg.Features,
+			ApproximateMemberCount:   sg.MemberCount,
+			ApproximatePresenceCount: len(sg.Presences),
+		})
 	}
 	return all, nil
 }
@@ -141,7 +141,7 @@ func sortKeyGuildWithChain(g *discordgo.UserGuild, chain gin.H, sortBy string) f
 	}
 }
 
-// GET /bot/guilds, requires owner authorization. Query: page, pageSize, sortBy (chain or approximate_member_count).
+// GET /bot/guilds, requires owner authorization
 func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	errCode, err := auth.EnsureOwner(c, s.ds)
 	if err != nil {
@@ -150,16 +150,13 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	}
 	pageSize, err := strconv.Atoi(c.Query("pageSize"))
 	if err != nil || pageSize <= 0 {
-		pageSize = 24
+		pageSize = 10
 	}
 	page, err := strconv.Atoi(c.Query("page"))
 	if err != nil || page < 1 {
 		page = 1
 	}
 	sortBy := c.Query("sortBy")
-	if sortBy == "" {
-		sortBy = "bytes"
-	}
 
 	allGuilds, err := fetchAllUserGuilds(s.ds)
 	if err != nil {
@@ -189,14 +186,8 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	sort.Slice(merged, func(i, j int) bool { return merged[i].SortKey > merged[j].SortKey })
 
 	total := int64(len(merged))
-	offset := (page - 1) * pageSize
-	if offset > len(merged) {
-		offset = len(merged)
-	}
-	end := offset + pageSize
-	if end > len(merged) {
-		end = len(merged)
-	}
+	offset := min((page-1)*pageSize, len(merged))
+	end := min(offset+pageSize, len(merged))
 	window := merged[offset:end]
 	pageData := make([]gin.H, 0, len(window))
 	for _, m := range window {

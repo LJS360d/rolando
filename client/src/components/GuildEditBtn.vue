@@ -1,6 +1,13 @@
 <template>
-  <v-btn icon="fas fa-edit" size="small" @click="open = true" />
-  <v-dialog v-model="open" :max-width="425">
+  <v-btn
+    icon="fas fa-edit"
+    size="small"
+    @click="open = true"
+  />
+  <v-dialog
+    v-model="open"
+    :max-width="425"
+  >
     <v-card :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
       <template #title>
         <span class="font-weight-light">Edit Guild</span>
@@ -10,12 +17,48 @@
       </template>
       <template #text>
         <v-col>
-          <v-switch v-model="fields.pings_enabled" label="Enable pings" inset dense color="primary" />
-          <v-switch v-model="fields.premium" label="Premium" inset dense color="primary" />
-          <v-text-field v-model="fields.reply_rate" type="number" label="Reply Rate" outlined dense />
-          <v-text-field v-model="fields.reaction_rate" type="number" label="Reaction Rate" outlined dense />
-          <v-text-field v-model="fields.n_gram_size" type="number" label="N Gram Size" outlined dense />
-          <v-text-field v-model="fields.max_size_mb" type="number" label="Max Size (MB)" outlined dense />
+          <v-switch
+            v-model="fields.pings_enabled"
+            label="Enable pings"
+            inset
+            dense
+            color="primary"
+          />
+          <v-switch
+            v-model="fields.premium"
+            label="Premium"
+            inset
+            dense
+            color="primary"
+          />
+          <v-text-field
+            v-model="fields.reply_rate"
+            type="number"
+            label="Reply Rate"
+            outlined
+            dense
+          />
+          <v-text-field
+            v-model="fields.reaction_rate"
+            type="number"
+            label="Reaction Rate"
+            outlined
+            dense
+          />
+          <v-text-field
+            v-model="fields.n_gram_size"
+            type="number"
+            label="N Gram Size"
+            outlined
+            dense
+          />
+          <v-text-field
+            v-model="fields.max_size_mb"
+            type="number"
+            label="Max Size (MB)"
+            outlined
+            dense
+          />
         </v-col>
       </template>
       <v-card-actions>
@@ -23,7 +66,10 @@
         <v-btn @click="open = false">
           Cancel
         </v-btn>
-        <v-btn color="primary" @click="confirm">
+        <v-btn
+          color="primary"
+          @click="confirm"
+        >
           Confirm
         </v-btn>
       </v-card-actions>
@@ -54,7 +100,7 @@ export default defineComponent({
     const open = ref(false)
     const fields = ref<Partial<ChainAnalytics>>({ ...(props.chain ? props.chain : {}) });
     const confirm = async () => {
-      emit('confirm', fields);
+      emit('confirm', fields.value);
       open.value = false;
     };
 

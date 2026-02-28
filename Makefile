@@ -1,6 +1,6 @@
 .PHONY: all run-docker build clean dev run lint clean
 
-VERSION         := 3.10.4
+VERSION         := 3.11.0
 BUILD_DIR       := bin
 MAIN_PACKAGE    := ./cmd
 ENV             ?= production
@@ -18,12 +18,10 @@ VOSK_MODEL_ES := vosk-model-small-es-0.42
 ifeq ($(OS),Windows_NT)
   EXE   := .exe
   RM     = del
-  CMD   := .cmd
   VOSK_ARCHIVE := vosk-win64-0.3.45
 else
   EXE   :=
   RM     = rm -rf
-  CMD   :=
   VOSK_ARCHIVE := vosk-linux-x86_64-0.3.45
 endif
 
@@ -110,5 +108,3 @@ $(VOSK_MODELS):
 	@unzip $(VOSK_MODEL_DE).zip -d vosk/models
 	@mv vosk/models/$(VOSK_MODEL_DE)/ vosk/models/de
 	@rm $(VOSK_MODEL_DE).zip
-
-

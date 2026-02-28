@@ -5,33 +5,66 @@
         <span class="font-weight-light">{{ botUser?.global_name }}</span>
       </template>
       <template #subtitle>
-        <span class="text-sm mr-4">Uptime: <b>{{ uptime }}</b></span>
-        <span class="text-sm">Currently part of <b>{{ totalGuilds }}</b> guilds</span>
+        <span class="text-sm mr-4"
+          >Uptime: <b>{{ uptime }}</b></span
+        >
+        <span class="text-sm"
+          >Currently part of <b>{{ totalGuilds }}</b> guilds</span
+        >
       </template>
       <template #text>
-        <memory-usage-bar v-if="chains && resources"
-          :current="resources?.memory.stack_in_use + resources?.memory.heap_alloc" :max="resources?.memory.sys"
-          :peak="resources?.memory.heap_sys" :blocks="computedBlocks" />
+        <memory-usage-bar
+          v-if="chains && resources"
+          :current="
+            resources?.memory.stack_in_use + resources?.memory.heap_alloc
+          "
+          :max="resources?.memory.sys"
+          :peak="resources?.memory.heap_sys"
+          :blocks="computedBlocks"
+        />
       </template>
     </v-card>
     <v-divider class="my-4" />
     <div class="d-flex flex-wrap pb-5">
-      <v-select v-model="sortBy" :items="sortByOptions"  :item-props="true" label="Sort by" class="mr-4" variant="outlined" hide-details
-        filled />
+      <v-select
+        v-model="sortBy"
+        :items="sortByOptions"
+        :item-props="true"
+        label="Sort by"
+        class="mr-4"
+        variant="outlined"
+        hide-details
+        filled
+      />
     </div>
     <template v-if="pagination?.totalPages > 1">
       <app-paginator :pagination="pagination" />
     </template>
     <div class="d-flex flex-wrap ga-3">
-      <v-card v-for="guild in guilds" :key="guild.id" flat class="max-w-card"
-        :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
-        <v-icon v-if="userGuilds.includes(guild.id)" class="position-absolute" icon="fas fa-star" size="12"
-          style="top: 4px; left: 4px;" title="You are a member of this server" />
+      <v-card
+        v-for="guild in guilds"
+        :key="guild.id"
+        flat
+        class="max-w-card"
+        :prepend-avatar="guildIconUrl(guild.id, guild.icon)"
+      >
+        <v-icon
+          v-if="userGuilds.includes(guild.id)"
+          class="position-absolute"
+          icon="fas fa-star"
+          size="12"
+          style="top: 4px; left: 4px"
+          title="You are a member of this server"
+        />
         <template #title>
-          <span class="font-weight-light" :title="guild.name">{{ guild.name }}</span>
+          <span class="font-weight-light" :title="guild.name">{{
+            guild.name
+          }}</span>
         </template>
         <template #subtitle>
-          <span class="text-sm"><b>{{ guild.approximate_member_count }}</b> members</span>
+          <span class="text-sm"
+            ><b>{{ guild.approximate_member_count }}</b> members</span
+          >
         </template>
         <template #text>
           <div v-if="guild.chain">
@@ -43,7 +76,11 @@
             </v-row>
             <v-row justify="space-between" class="pa-3">
               <v-col cols="12">
-                <v-row v-for="(field, key) in getAnalyticsForGuild(guild.chain)" :key="key" justify="space-between">
+                <v-row
+                  v-for="(field, key) in getAnalyticsForGuild(guild.chain)"
+                  :key="key"
+                  justify="space-between"
+                >
                   <span class="text-xs">{{ key }}</span>
                   <span class="text-xs">{{ field }}</span>
                 </v-row>
@@ -57,24 +94,57 @@
         <template #actions>
           <v-row justify="space-between">
             <v-col cols="8">
-              <v-tooltip #activator="{ props }" text="Invite to server" location="bottom">
+              <v-tooltip
+                #activator="{ props }"
+                text="Invite to server"
+                location="bottom"
+              >
                 <guild-invite-btn :guild-id="guild.id" v-bind="props" />
               </v-tooltip>
-              <v-tooltip #activator="{ props }" text="Copy ID" location="bottom">
-                <v-btn v-bind="props" icon="far fa-copy" size="small" @click="copyToClipboard(guild.id)" />
+              <v-tooltip
+                #activator="{ props }"
+                text="Copy ID"
+                location="bottom"
+              >
+                <v-btn
+                  v-bind="props"
+                  icon="far fa-copy"
+                  size="small"
+                  @click="copyToClipboard(guild.id)"
+                />
               </v-tooltip>
-              <v-tooltip #activator="{ props }" text="Check data" location="bottom">
-                <v-btn v-if="!!guild.chain" v-bind="props" :href="`/data/${guild.id}`" target="_blank"
-                  icon="far fa-file-lines" size="small" />
+              <v-tooltip
+                #activator="{ props }"
+                text="Check data"
+                location="bottom"
+              >
+                <v-btn
+                  v-if="!!guild.chain"
+                  v-bind="props"
+                  :href="`/data/${guild.id}`"
+                  target="_blank"
+                  icon="far fa-file-lines"
+                  size="small"
+                />
               </v-tooltip>
               <template v-if="!!guild.chain">
-                <guild-edit-btn :guild="guild" :chain="guild.chain!" @confirm="updateChain" />
+                <guild-edit-btn
+                  :guild="guild"
+                  :chain="guild.chain!"
+                  @confirm="updateChain"
+                />
               </template>
             </v-col>
             <v-col cols="2" class="d-flex justify-end">
               <v-tooltip #activator="{ props }" text="Leave" location="bottom">
-                <v-btn v-bind="props" class="justify-self-end" color="red" icon="fas fa-right-from-bracket" size="small"
-                  @click="() => openConfirmLeaveGuild(guild.name, guild.id)" />
+                <v-btn
+                  v-bind="props"
+                  class="justify-self-end"
+                  color="red"
+                  icon="fas fa-right-from-bracket"
+                  size="small"
+                  @click="() => openConfirmLeaveGuild(guild.name, guild.id)"
+                />
               </v-tooltip>
             </v-col>
           </v-row>
@@ -84,21 +154,43 @@
     <template v-if="pagination?.totalPages > 1">
       <app-paginator :pagination="pagination" />
     </template>
-    <app-dialog :model-value="dialog.visible" :message="dialog.text" :title="dialog.title" @confirm="dialog.confirm"
-      @cancel="dialog.cancel" />
-    <v-snackbar v-model="snackbar.visible" :color="snackbar.color" :timeout="3000" bottom>
+    <app-dialog
+      :model-value="dialog.visible"
+      :message="dialog.text"
+      :title="dialog.title"
+      @confirm="dialog.confirm"
+      @cancel="dialog.cancel"
+    />
+    <v-snackbar
+      v-model="snackbar.visible"
+      :color="snackbar.color"
+      :timeout="3000"
+      bottom
+    >
       {{ snackbar.message }}
     </v-snackbar>
   </v-container>
 </template>
 
 <script lang="ts">
-import { useGetAllChainsAnalytics, type ChainAnalytics } from '@/api/analytics';
-import { leaveGuild, updateChainDocument, useGetBotGuilds, useGetBotResources, useGetBotUser, type BotGuildWithChain } from '@/api/bot';
-import type { PageMeta } from '@/api/common';
-import { useAuthStore } from '@/stores/auth';
-import { formatBytes, formatNumber, formatTime, guildIconUrl } from '@/utils/format';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useGetAllChainsAnalytics, type ChainAnalytics } from "@/api/analytics";
+import {
+  leaveGuild,
+  updateChainDocument,
+  useGetBotGuilds,
+  useGetBotResources,
+  useGetBotUser,
+  type BotGuildWithChain,
+} from "@/api/bot";
+import type { PageMeta } from "@/api/common";
+import { useAuthStore } from "@/stores/auth";
+import {
+  formatBytes,
+  formatNumber,
+  formatTime,
+  guildIconUrl,
+} from "@/utils/format";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 export default {
   setup() {
@@ -107,16 +199,34 @@ export default {
     const botResourcesQuery = useGetBotResources();
     const pagination = ref<PageMeta>({
       page: 1,
-      pageSize: 50,
+      pageSize: 1000,
       totalItems: 0,
       totalPages: 0,
     });
     const sortBy = ref<string>("bytes");
     const botGuildsQuery = useGetBotGuilds(auth.token!, pagination, sortBy);
     const chainsQuery = useGetAllChainsAnalytics(auth.token!);
-    watch(() => pagination.value?.page, () => { botGuildsQuery.refetch(); }, { immediate: true });
-    watch(() => pagination.value?.pageSize, () => { botGuildsQuery.refetch(); }, { immediate: true });
-    watch(sortBy, () => { botGuildsQuery.refetch(); }, { immediate: true });
+    watch(
+      () => pagination.value?.page,
+      () => {
+        botGuildsQuery.refetch();
+      },
+      { immediate: true },
+    );
+    watch(
+      () => pagination.value?.pageSize,
+      () => {
+        botGuildsQuery.refetch();
+      },
+      { immediate: true },
+    );
+    watch(
+      sortBy,
+      () => {
+        botGuildsQuery.refetch();
+      },
+      { immediate: true },
+    );
     const snackbar = ref({
       visible: false,
       message: "",
@@ -133,11 +243,15 @@ export default {
     });
     const elapsedSeconds = ref(0);
     // Watch for changes in the startup time and update elapsedSeconds accordingly
-    watch(() => botResourcesQuery.data?.value?.startup_timestamp_unix, (newTime) => {
-      if (newTime) {
-        elapsedSeconds.value = Math.floor(Date.now() / 1000) - newTime;
-      }
-    }, { immediate: true });
+    watch(
+      () => botResourcesQuery.data?.value?.startup_timestamp_unix,
+      (newTime) => {
+        if (newTime) {
+          elapsedSeconds.value = Math.floor(Date.now() / 1000) - newTime;
+        }
+      },
+      { immediate: true },
+    );
 
     onMounted(() => {
       const interval = setInterval(() => {
@@ -162,8 +276,12 @@ export default {
     ]);
 
     const uptime = computed(() => formatTime(elapsedSeconds.value));
-    const guilds = computed<BotGuildWithChain[]>(() => botGuildsQuery.data.value?.data ?? []);
-    const totalGuilds = computed(() => botGuildsQuery.data.value?.meta?.totalItems ?? guilds.value.length);
+    const guilds = computed<BotGuildWithChain[]>(
+      () => botGuildsQuery.data.value?.data ?? [],
+    );
+    const totalGuilds = computed(
+      () => botGuildsQuery.data.value?.meta?.totalItems ?? guilds.value.length,
+    );
     return {
       botUser: botUserQuery.data,
       inviteLink: import.meta.env.VITE_DISCORD_SERVER_INVITE,
@@ -186,14 +304,15 @@ export default {
   },
   computed: {
     computedBlocks() {
-      return this.chains?.map(c => Number(c.bytes)) || [];
+      return this.chains?.map((c) => Number(c.bytes)) || [];
     },
   },
   methods: {
     formatBytes,
     guildIconUrl,
     copyToClipboard(text: string) {
-      navigator.clipboard.writeText(text)
+      navigator.clipboard
+        .writeText(text)
         .then(() => {
           this.snackbar.visible = true;
           this.snackbar.message = "Copied to clipboard";
@@ -211,7 +330,7 @@ export default {
       this.dialog.text = `Are you sure you want to leave '${name}'?`;
       this.dialog.confirm = async () => {
         try {
-          const res = await leaveGuild(this.token, id)
+          const res = await leaveGuild(this.token, id);
           if (res.status !== 204) {
             throw new Error("Failed to leave guild");
           }
@@ -262,9 +381,15 @@ export default {
         Words: formatNumber(chain.words),
         Complexity: formatNumber(chain.complexity_score),
         "N Gram Size": String(chain.n_gram_size),
-        "Reply Rate": !chain.reply_rate ? "0%" : `${chain.reply_rate} | ${(1 / chain.reply_rate * 100).toPrecision(3)}% `,
-        "Reaction Rate": !chain.reaction_rate ? "0%" : `${chain.reaction_rate} | ${(1 / chain.reaction_rate * 100).toPrecision(3)}% `,
-        "VC Join Rate": !chain.vc_join_rate ? "0%" : `${chain.vc_join_rate} | ${(1 / chain.vc_join_rate * 100).toPrecision(3)}% `,
+        "Reply Rate": !chain.reply_rate
+          ? "0%"
+          : `${chain.reply_rate} | ${((1 / chain.reply_rate) * 100).toPrecision(3)}% `,
+        "Reaction Rate": !chain.reaction_rate
+          ? "0%"
+          : `${chain.reaction_rate} | ${((1 / chain.reaction_rate) * 100).toPrecision(3)}% `,
+        "VC Join Rate": !chain.vc_join_rate
+          ? "0%"
+          : `${chain.vc_join_rate} | ${((1 / chain.vc_join_rate) * 100).toPrecision(3)}% `,
       };
     },
   },

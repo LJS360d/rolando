@@ -1,15 +1,31 @@
 <template>
   <v-container class="pa-4 h-100">
-    <v-container v-if="!error" class="d-flex justify-center align-center h-100">
-      <v-progress-circular indeterminate color="primary" size="128" width="12" />
+    <v-container
+      v-if="!error"
+      class="d-flex justify-center align-center h-100"
+    >
+      <v-progress-circular
+        indeterminate
+        color="primary"
+        size="128"
+        width="12"
+      />
     </v-container>
     <v-container v-else>
-      <v-alert type="error" class="text-body-2">
+      <v-alert
+        type="error"
+        class="text-body-2"
+      >
         Login error:
         <div class="my-5 text-h5">
           {{ error }}
         </div>
-        <v-btn color="red-500" @click="router.replace('/')">Go back to Home</v-btn>
+        <v-btn
+          color="red-500"
+          @click="router.replace('/')"
+        >
+          Go back to Home
+        </v-btn>
       </v-alert>
     </v-container>
   </v-container>

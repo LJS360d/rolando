@@ -105,60 +105,60 @@ func Fatal(msg string, fields ...zap.Field) {
 
 // sugared logger format methods
 
-func Debugf(template string, args ...interface{}) {
+func Debugf(template string, args ...any) {
 	logger.Sugar().Debugf(template, args...)
 }
 
-func Infof(template string, args ...interface{}) {
+func Infof(template string, args ...any) {
 	logger.Sugar().Infof(template, args...)
 }
 
-func Warnf(template string, args ...interface{}) {
+func Warnf(template string, args ...any) {
 	logger.Sugar().Warnf(template, args...)
 }
 
-func Errorf(template string, args ...interface{}) {
+func Errorf(template string, args ...any) {
 	logger.Sugar().Errorf(template, args...)
 }
 
-func DPanicf(template string, args ...interface{}) {
+func DPanicf(template string, args ...any) {
 	logger.Sugar().DPanicf(template, args...)
 }
 
-func Panicf(template string, args ...interface{}) {
+func Panicf(template string, args ...any) {
 	logger.Sugar().Panicf(template, args...)
 }
 
-func Fatalf(template string, args ...interface{}) {
+func Fatalf(template string, args ...any) {
 	logger.Sugar().Fatalf(template, args...)
 }
 
 // sugared logger ln methods
 
-func Debugln(args ...interface{}) {
+func Debugln(args ...any) {
 	logger.Sugar().Debugln(args...)
 }
 
-func Infoln(args ...interface{}) {
+func Infoln(args ...any) {
 	logger.Sugar().Infoln(args...)
 }
 
-func Warnln(args ...interface{}) {
+func Warnln(args ...any) {
 	logger.Sugar().Warnln(args...)
 }
 
-func Errorln(args ...interface{}) {
+func Errorln(args ...any) {
 	logger.Sugar().Errorln(args...)
 }
 
-func DPanicln(args ...interface{}) {
+func DPanicln(args ...any) {
 	logger.Sugar().DPanicln(args...)
 }
 
-func Panicln(args ...interface{}) {
+func Panicln(args ...any) {
 	logger.Sugar().Panicln(args...)
 }
 
-func Fatalln(args ...interface{}) {
+func Fatalln(args ...any) {
 	logger.Sugar().Fatalln(args...)
 }

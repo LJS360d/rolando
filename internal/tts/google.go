@@ -16,10 +16,7 @@ import (
 func CreateSpeechBuff(text string, lang string) (io.Reader, error) {
 	data := []rune(text)
 
-	chunkSize := len(data)
-	if len(data) > 32 {
-		chunkSize = 32
-	}
+	chunkSize := min(len(data), 32)
 
 	urls := make([]string, 0)
 	for prev, i := 0, 0; i < len(data); i++ {

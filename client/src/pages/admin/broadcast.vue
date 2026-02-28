@@ -1,11 +1,25 @@
 <template>
-  <v-container class="pa-2" min-width="100%">
-    <v-form ref="broadcastForm" class="d-flex justify-around" @submit.prevent="onFormSubmit">
+  <v-container
+    class="pa-2"
+    min-width="100%"
+  >
+    <v-form
+      ref="broadcastForm"
+      class="d-flex justify-around"
+      @submit.prevent="onFormSubmit"
+    >
       <v-row justify="space-between">
         <v-col cols="6">
           <div class="d-flex flex-wrap ga-3">
-            <v-card v-for="guild in guilds" :id="`guild:${guild.id}`" :key="guild.id" :data-name="guild.name"
-              max-width="180" width="100%" :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
+            <v-card
+              v-for="guild in guilds"
+              :id="`guild:${guild.id}`"
+              :key="guild.id"
+              :data-name="guild.name"
+              max-width="180"
+              width="100%"
+              :prepend-avatar="guildIconUrl(guild.id, guild.icon)"
+            >
               <template #title>
                 <span class="font-weight-light">{{ guild.name }}</span>
               </template>
@@ -20,37 +34,75 @@
               -->
               <template #actions>
                 <div class="px-2">
-                  <v-switch v-model="selectedGuilds[guild.id]" color="primary" inset />
+                  <v-switch
+                    v-model="selectedGuilds[guild.id]"
+                    color="primary"
+                    inset
+                  />
                 </div>
               </template>
             </v-card>
           </div>
         </v-col>
-        <v-col id="right-col" cols="5" class="ma-2 h-min sticky top-0">
+        <v-col
+          id="right-col"
+          cols="5"
+          class="ma-2 h-min sticky top-0"
+        >
           <v-row>
             <span>Guilds: <b>{{ selectedGuildsCount }}</b> / <b>{{ guilds?.length }}</b></span>
           </v-row>
-          <v-row align="center" class="ga-5">
-            <v-btn small outlined color="secondary" @click="toggleAllSelection">
+          <v-row
+            align="center"
+            class="ga-5"
+          >
+            <v-btn
+              small
+              outlined
+              color="secondary"
+              @click="toggleAllSelection"
+            >
               {{ (selectedGuildsCount === guilds?.length) ? "Deselect" : "Select" }} All
             </v-btn>
-            <v-text-field v-model="searchText" label="Search" @input="searchGuild" />
+            <v-text-field
+              v-model="searchText"
+              label="Search"
+              @input="searchGuild"
+            />
           </v-row>
           <v-row>
-            <v-textarea v-model="message" label="Message" rows="6" />
+            <v-textarea
+              v-model="message"
+              label="Message"
+              rows="6"
+            />
           </v-row>
           <v-row>
-            <v-switch v-model="keepAfterSubmit" color="primary" label="Keep after submit" inset />
+            <v-switch
+              v-model="keepAfterSubmit"
+              color="primary"
+              label="Keep after submit"
+              inset
+            />
           </v-row>
           <v-row>
-            <v-btn class="w-100" type="submit" color="primary">
+            <v-btn
+              class="w-100"
+              type="submit"
+              color="primary"
+            >
               Submit
             </v-btn>
           </v-row>
         </v-col>
       </v-row>
     </v-form>
-    <v-snackbar v-model="snackbar.visible" :color="snackbar.color" :timeout="3000" bottom>
+    <v-snackbar
+      v-model="snackbar.visible"
+      :color="snackbar.color"
+      :timeout="3000"
+      bottom
+    >
       {{ snackbar.message }}
     </v-snackbar>
   </v-container>

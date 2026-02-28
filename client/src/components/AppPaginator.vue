@@ -4,7 +4,7 @@
       v-model="pagination.pageSize"
       :items="[10, 25, 50, 100, 250, 500, 1000]"
       label="Page size"
-      style="width: min-content;"
+      style="width: min-content"
       class="w-min"
     />
     <v-pagination

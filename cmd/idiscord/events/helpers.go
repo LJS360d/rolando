@@ -4,6 +4,7 @@ import (
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"rolando/internal/repositories"
+	"slices"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -14,11 +15,9 @@ func GuildSubscriptionCheck(s *discordgo.Session, member *discordgo.Member, chai
 		return true
 	}
 	// pass if the user is a bot owner
-	for _, ownerID := range config.OwnerIDs {
-		if member.User.ID == ownerID {
-			logger.Infof("User %s is an owner, skipping guild subscription check", member.User.GlobalName)
-			return true
-		}
+	if slices.Contains(config.OwnerIDs, member.User.ID) {
+		logger.Infof("User %s is an owner, skipping guild subscription check (event)", member.User.GlobalName)
+		return true
 	}
 
 	if chainDoc.Premium {

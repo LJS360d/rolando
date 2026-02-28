@@ -47,7 +47,7 @@ func (mc *MarkovChain) generateText(startPrefix string, length int) string {
 	currentPrefixTokens := strings.Fields(startPrefix)
 	generatedTokens = append(generatedTokens, currentPrefixTokens...)
 
-	for i := 0; i < length; i++ {
+	for range length {
 		// Backoff loop: if the current N-gram prefix doesn't exist,
 		// we shorten the prefix and try again.
 		var nextWords map[string]int

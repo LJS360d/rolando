@@ -1,41 +1,46 @@
 // Plugins
-import AutoImport from 'unplugin-auto-import/vite'
-import Components from 'unplugin-vue-components/vite'
-import Fonts from 'unplugin-fonts/vite'
-import Layouts from 'vite-plugin-vue-layouts'
-import Vue from '@vitejs/plugin-vue'
-import VueRouter from 'unplugin-vue-router/vite'
-import Vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
+import AutoImport from "unplugin-auto-import/vite";
+import Components from "unplugin-vue-components/vite";
+import Fonts from "unplugin-fonts/vite";
+import Layouts from "vite-plugin-vue-layouts";
+import Vue from "@vitejs/plugin-vue";
+import VueRouter from "unplugin-vue-router/vite";
+import Vuetify, { transformAssetUrls } from "vite-plugin-vuetify";
 
 // Utilities
-import { defineConfig, loadEnv } from 'vite'
-import { fileURLToPath, URL } from 'node:url'
+import { defineConfig, loadEnv } from "vite";
+import { fileURLToPath, URL } from "url";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
-  console.log(`Using env variables: ${Object.keys(env).join(', ')}`);
+  console.log(
+    `Using env variables: ${Object.entries(env)
+      .filter(([_key, value]) => value != "")
+      .map(([key]) => key)
+      .join(", ")}`,
+  );
   return {
     plugins: [
       VueRouter({
-        dts: 'src/typed-router.d.ts',
+        dts: "src/typed-router.d.ts",
       }),
       Layouts(),
       AutoImport({
         imports: [
-          'vue',
+          "vue",
           {
-            'vue-router/auto': ['useRoute', 'useRouter'],
-          }
+            "vue-router/auto": ["useRoute", "useRouter"],
+          },
         ],
-        dts: 'src/auto-imports.d.ts',
-        eslintrc: {
-          enabled: true,
-        },
+        dts: "src/auto-imports.d.ts",
         vueTemplate: true,
+        eslintrc: {
+          enabled: false,
+        },
       }),
       Components({
-        dts: 'src/components.d.ts',
+        dts: "src/components.d.ts",
       }),
       Vue({
         template: { transformAssetUrls },
@@ -44,48 +49,42 @@ export default defineConfig(({ mode }) => {
       Vuetify({
         autoImport: true,
         styles: {
-          configFile: 'src/styles/settings.scss',
+          configFile: "src/styles/settings.scss",
         },
       }),
       Fonts({
         google: {
-          families: [{
-            name: 'Roboto',
-            styles: 'wght@100;300;400;500;700;900',
-          }],
+          families: [
+            {
+              name: "Roboto",
+              styles: "wght@100;300;400;500;700;900",
+            },
+          ],
         },
       }),
     ],
     resolve: {
       alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        "@": fileURLToPath(new URL("./src", import.meta.url)),
       },
-      extensions: [
-        '.js',
-        '.json',
-        '.jsx',
-        '.mjs',
-        '.ts',
-        '.tsx',
-        '.vue',
-      ],
+      extensions: [".js", ".json", ".jsx", ".mjs", ".ts", ".tsx", ".vue"],
     },
     server: {
       port: 3000,
       proxy: {
-        '/api': {
-          target: env.VITE_API_URL || 'http://localhost:8080',
+        "/api": {
+          target: env.VITE_API_URL || "http://localhost:8080",
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
+          rewrite: (path) => path.replace(/^\/api/, ""),
         },
       },
     },
     css: {
       preprocessorOptions: {
         sass: {
-          api: 'modern-compiler',
+          api: "modern-compiler",
         },
       },
     },
-  }
-})
+  };
+});

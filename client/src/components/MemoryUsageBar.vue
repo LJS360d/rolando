@@ -1,7 +1,7 @@
 <template>
   <template v-if="isDataAvailable">
     <div
-      style="height: 20px;"
+      style="height: 20px"
       class="position-relative d-flex justify-end pa-0 ma-0 w-full"
     >
       <span class="text-caption">
@@ -9,7 +9,7 @@
       </span>
       <span
         class="position-absolute bottom-0 w-max-content text-caption"
-        :style="{ left: ((current / max) * (100) - 1.5) + '%' }"
+        :style="{ left: (current / max) * 100 - 1.5 + '%' }"
       >
         {{ formatBytes(current) }}
       </span>
@@ -23,7 +23,7 @@
     >
       <div
         class="mem-breakpoint bg-light-blue"
-        :style="{ left: (current / max) * (100) + '%' }"
+        :style="{ left: (current / max) * 100 + '%' }"
       />
       <!-- Peak line -->
       <v-tooltip
@@ -34,7 +34,7 @@
         <div
           v-bind="props"
           class="mem-breakpoint bg-red"
-          :style="{ left: (peak / max) * (100) + '%' }"
+          :style="{ left: (peak / max) * 100 + '%' }"
         />
       </v-tooltip>
       <!-- Memory blocks -->
@@ -44,19 +44,19 @@
         :v-if="!!block"
         class="memory-block"
         :style="{
-          width: ((block) / max) * (100) + '%',
+          width: (block / max) * 100 + '%',
           backgroundColor: getBlockColor(index),
         }"
       />
     </v-progress-linear>
     <div
-      style="height: 20px;"
+      style="height: 20px"
       class="position-relative d-flex justify-end pa-0 ma-0 w-full"
     >
       <!-- Peak label -->
       <span
         class="position-absolute w-max-content text-caption"
-        :style="{ left: ((peak / max) * (100) - 1.5) + '%' }"
+        :style="{ left: (peak / max) * 100 - 1.5 + '%' }"
       >
         {{ formatBytes(peak) }}
       </span>
@@ -73,11 +73,11 @@
 </template>
 
 <script lang="ts">
-import { formatBytes } from '@/utils/format';
-import { defineComponent, type PropType } from 'vue';
+import { formatBytes } from "@/utils/format";
+import { defineComponent, type PropType } from "vue";
 
 export default defineComponent({
-  name: 'MemoryUsageBar',
+  name: "MemoryUsageBar",
   props: {
     max: {
       type: Number,
@@ -94,6 +94,7 @@ export default defineComponent({
     blocks: {
       type: Array as PropType<number[]>,
       required: false,
+      default: () => [],
     },
   },
   computed: {
@@ -104,7 +105,13 @@ export default defineComponent({
   methods: {
     formatBytes,
     getBlockColor(index: number): string {
-      const colors = ['#4caf5069', '#ffeb3b69', '#f4433669', '#2196f369', '#9c27b069'];
+      const colors = [
+        "#4caf5069",
+        "#ffeb3b69",
+        "#f4433669",
+        "#2196f369",
+        "#9c27b069",
+      ];
       return colors[index % colors.length];
     },
   },

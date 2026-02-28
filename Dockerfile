@@ -1,28 +1,23 @@
-FROM golang:1.23-bullseye AS builder
-
-# build dependencies, including libopus-dev and libopusfile-dev
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# syntax=docker/dockerfile:1
+FROM golang:1.26-trixie AS builder
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libopus-dev \
     libopusfile-dev \
-    pkg-config \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
+    pkg-config
 WORKDIR /app
-
 COPY go.mod go.sum ./
 RUN go mod download
-
 COPY . .
-
 RUN make build
 
-FROM debian:12-slim
-
-WORKDIR /root/
-
-# runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+FROM debian:13-slim AS runner
+RUN groupadd -r appgroup && useradd -r -g appgroup -m -d /home/appuser appuser
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     libsqlite3-0 \
     libopusfile0 \
@@ -31,12 +26,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/bin/main .
-COPY --from=builder /app/.env .
-COPY --from=builder /app/vosk /root/vosk
-ENV LD_LIBRARY_PATH="/root/vosk/lib:$LD_LIBRARY_PATH"
-ENV GO_ENV="production"
+WORKDIR /home/appuser
+COPY --from=builder --chown=appuser:appgroup /app/bin/main .
+COPY --from=builder --chown=appuser:appgroup /app/.env .
+COPY --from=builder --chown=appuser:appgroup /app/vosk ./vosk
+ENV LD_LIBRARY_PATH="/home/appuser/vosk/lib:$LD_LIBRARY_PATH" \
+    GO_ENV="production" \
+    DATABASE_PATH=/home/appuser/$COMPOSE_PROJECT_NAME.db \
+    PATH="/home/appuser:$PATH"
 
+USER appuser
 EXPOSE 8080
-
-CMD ["./main"]
+ENTRYPOINT ["./main"]

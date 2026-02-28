@@ -35,7 +35,7 @@ func ParallelTaskRunner[T any](input []T, loader func(T) error) error {
 	var wg sync.WaitGroup
 
 	// Spawn worker goroutines
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
