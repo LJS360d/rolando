@@ -27,3 +27,7 @@ Thumbs.db
 tests/
 coverage/
 cypress/
+
+.env.development
+README.md
+mise.toml

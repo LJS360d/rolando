@@ -1,0 +1,20 @@
+*.log
+
+# IDEs and Editors
+.vscode/
+.idea/
+.editorconfig
+*.swp
+*.swo
+
+# Version Control
+.git/
+.gitignore
+.gitattributes
+
+client/
+
+.env.example
+LICENSE
+README.md
+mise.toml
