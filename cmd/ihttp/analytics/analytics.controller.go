@@ -3,6 +3,7 @@ package analytics
 import (
 	"rolando/cmd/idiscord/services"
 	"rolando/cmd/ihttp/auth"
+	"rolando/internal/logger"
 	"rolando/internal/model"
 	"rolando/internal/repositories"
 	"strconv"
@@ -36,6 +37,10 @@ func (s *AnalyticsController) GetChainAnalytics(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	if chainDoc == nil {
+		c.JSON(404, gin.H{"error": "chain not found"})
+		return
+	}
 	chain, err := s.chainsService.GetChain(chainDoc.ID)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -61,14 +66,21 @@ func (s *AnalyticsController) GetAllChainsAnalytics(c *gin.Context) {
 	}
 	allAnalytics := make([]gin.H, 0)
 	for _, chain := range chains {
+		if chain == nil {
+			logger.Warnf("nil chain detected in GetAllChainsAnalytics, skipping...")
+			continue
+		}
 		analyzer := model.NewMarkovChainAnalyzer(chain)
 		chainDoc, err := s.chainsService.GetChainDocument(chain.ID)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
+		if chainDoc == nil {
+			logger.Warnf("GetChainDocument returned nil for chain %s, skipping", chain.ID)
+			continue
+		}
 
-		// Get the analytics data
 		rawAnalytics := analyzer.GetRawAnalytics()
 		chainAnalytics := getSerializableAnalytics(&rawAnalytics, chainDoc)
 		allAnalytics = append(allAnalytics, chainAnalytics)
@@ -107,8 +119,11 @@ func (s *AnalyticsController) GetChainsAnalyticsPaginated(c *gin.Context) {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
+		if chainDoc == nil {
+			logger.Warnf("GetChainDocument returned nil for chain %s, skipping", chain.ID)
+			continue
+		}
 
-		// Get the analytics data
 		rawAnalytics := analyzer.GetRawAnalytics()
 		chainAnalytics := getSerializableAnalytics(&rawAnalytics, chainDoc)
 		content = append(content, chainAnalytics)
@@ -125,6 +140,8 @@ func (s *AnalyticsController) GetChainsAnalyticsPaginated(c *gin.Context) {
 	})
 }
 
+// ------------ Helpers ---------------
+
 // BuildAllChainsAnalyticsMap returns a map of chain ID to serializable analytics for all chains.
 // Used by the bot controller for server-side sorting of guilds by chain metrics.
 func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService) (map[string]gin.H, error) {
@@ -135,7 +152,7 @@ func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService) (map[stri
 	m := make(map[string]gin.H, len(chains))
 	for _, chain := range chains {
 		chainDoc, err := chainsService.GetChainDocument(chain.ID)
-		if err != nil {
+		if err != nil || chainDoc == nil {
 			continue
 		}
 		rawAnalytics := model.NewMarkovChainAnalyzer(chain).GetRawAnalytics()
@@ -143,8 +160,6 @@ func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService) (map[stri
 	}
 	return m, nil
 }
-
-// ------------ Helpers ---------------
 
 func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDoc *repositories.Chain) gin.H {
 	return gin.H{
