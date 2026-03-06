@@ -2,7 +2,6 @@ package helpers
 
 import (
 	"errors"
-	"slices"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -13,27 +12,16 @@ func HasGuildTextChannelAccess(ds *discordgo.Session, userId string, channel *di
 		return false
 	}
 
-	botMember, err := ds.State.Member(channel.GuildID, ds.State.User.ID)
-	if err == nil && botMember != nil {
-		perms := botMember.Permissions
-		canRead := perms&discordgo.PermissionReadMessageHistory != 0
-		canSend := perms&discordgo.PermissionSendMessages != 0
-		canView := perms&discordgo.PermissionViewChannel != 0
-		canReact := perms&discordgo.PermissionAddReactions != 0
-		return canRead && canSend && canView && canReact
-	}
-
 	permissions, err := ds.UserChannelPermissions(userId, channel.ID)
 	if err != nil {
 		return false
 	}
 
-	canRead := permissions&discordgo.PermissionReadMessageHistory != 0
-	canSend := permissions&discordgo.PermissionSendMessages != 0
-	canView := permissions&discordgo.PermissionViewChannel != 0
-	canReact := permissions&discordgo.PermissionAddReactions != 0
+	canReadChannel := permissions&discordgo.PermissionReadMessageHistory != 0
+	canAccessChannel := permissions&discordgo.PermissionSendMessages != 0
+	canViewChannel := permissions&discordgo.PermissionViewChannel != 0
 
-	return canRead && canSend && canView && canReact
+	return canReadChannel && canAccessChannel && canViewChannel
 }
 
 // MentionsUser checks if the user is mentioned in the message.
@@ -50,8 +38,10 @@ func MentionsUser(message *discordgo.Message, userID string, guild *discordgo.Gu
 		botMember, err := guildMember(guild, userID)
 		if err == nil {
 			for _, roleID := range message.MentionRoles {
-				if slices.Contains(botMember.Roles, roleID) {
-					return true
+				for _, botRole := range botMember.Roles {
+					if botRole == roleID {
+						return true
+					}
 				}
 			}
 		}
