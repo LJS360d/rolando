@@ -12,7 +12,10 @@ import Config
 # Configure Mix tasks and generators
 config :rolando,
   ecto_repos: [Rolando.Repo],
-  analytics_adapter: Rolando.Analytics.SQLAdapter
+  analytics_adapter: Rolando.Analytics.SQLAdapter,
+  train_channel_max_concurrency: 6,
+  train_message_limit_per_channel: 750_000,
+  train_max_fetch_errors_per_channel: 5
 
 # Configure the mailer
 #

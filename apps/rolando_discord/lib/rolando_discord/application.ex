@@ -14,11 +14,10 @@ defmodule RolandoDiscord.Application do
       # Subscriber for resyncing commands
       RolandoDiscord.CommandsResyncSubscriber,
 
-      # Discord Consumers
-      # RolandoDiscord.Consumers.Message,   # on message listener
-      RolandoDiscord.Consumers.Interaction, # slash commands
-      # RolandoDiscord.Consumers.Component  # button components
-      # RolandoDiscord.Consumers.Events,    # other discord ws events
+      RolandoDiscord.Consumers.SlashCommand,
+      RolandoDiscord.Consumers.Component,
+      RolandoDiscord.Consumers.Message,
+      RolandoDiscord.Consumers.Event,
     ]
 
     opts = [strategy: :one_for_one, name: RolandoDiscord.Supervisor]

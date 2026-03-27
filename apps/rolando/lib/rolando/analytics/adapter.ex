@@ -4,4 +4,5 @@ defmodule Rolando.Analytics.Adapter do
   store (e.g. event stream, external analytics service).
   """
   @callback guilds_count() :: non_neg_integer()
+  @callback persist_event(map()) :: {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()}
 end

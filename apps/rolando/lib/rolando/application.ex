@@ -12,9 +12,11 @@ defmodule Rolando.Application do
       {Ecto.Migrator,
        repos: Application.fetch_env!(:rolando, :ecto_repos), skip: skip_migrations?()},
       {DNSCluster, query: Application.get_env(:rolando, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Rolando.PubSub}
-      # Start a worker by calling: Rolando.Worker.start_link(arg)
-      # {Rolando.Worker, arg}
+      {Phoenix.PubSub, name: Rolando.PubSub},
+      {Registry, keys: :unique, name: Rolando.Chains.Registry},
+      {DynamicSupervisor, strategy: :one_for_one, name: Rolando.Chains.DynamicSupervisor},
+      {Task.Supervisor, name: Rolando.TaskSupervisor},
+      Rolando.AnalyticsSubscriber
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Rolando.Supervisor)

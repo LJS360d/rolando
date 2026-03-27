@@ -4,23 +4,27 @@ Last updated: 2025-03-27
 
 ## Current repo state (`rolando_umbrella`)
 
-- Umbrella with apps including `:rolando` (Ecto + SQLite in `mix.exs`), `:rolando_web`, `:rolando_discord` — early scaffolding; **no feature parity** with Go yet.
+- Umbrella with apps including `:rolando` (Ecto + SQLite in `mix.exs`), `:rolando_web`, `:rolando_discord`. **Train pipeline (slash + buttons + background fetch + Markov snapshot)** is implemented; other commands still stubs.
 - **Config**: `config/config.exs` Ueberauth Discord provider; `dev.exs` / `test.exs` `:assets_base_url`; `runtime.exs` uses **Dotenvy** (`source!` + `env!`) for Nostrum, Ueberauth OAuth, owner IDs, `PORT`, prod `DATABASE_PATH`. Root `mix.exs` defines **`rolando_umbrella` release**.
 - Project rules: Phoenix 1.8 patterns, `Req` for HTTP, `mix precommit` at end of change batches.
 
 ## Discord slash commands
 
-- `apps/rolando_discord/lib/rolando_discord/commands.ex`: `commands/0` mirrors `rolando-go/cmd/idiscord/commands/commands.go` (names, descriptions, options, `vc-language` choices). Sync still via `bulk_overwrite_global_commands` — **handlers/interaction routing not implemented**.
+- `commands/0` still mirrors Go for the full registry. **Implemented**: `/train`, `/channels`. **Routing**: slash and component logic live in `RolandoDiscord.Consumers.SlashCommand` and `RolandoDiscord.Consumers.Component` (shared helpers in `InteractionHelpers`); `Consumers.Message` and `Consumers.Event` are stubs for future parity.
+
+## Train / data (landed)
+
+- **DB**: `guilds`, `guild_chains` (metadata + `trained_at` + JSON `chain_state`), `training_messages` (append-only lines), `users` + `analytics_events` (for analytics subscriber). Migration: `priv/repo/migrations/*_add_guild_chains_and_training_messages.exs`.
+- **Core**: `Rolando.Markov` (n-gram ingest + JSON snapshot), `Rolando.Chains` + `Rolando.Chains.GuildChainServer` (Registry + DynamicSupervisor under `Rolando.Supervisor`), `Rolando.Messages` batch insert.
+- **Discord**: `RolandoDiscord.Permissions` (admin/owner, bot text-channel access = view + send + history, guild text + announcement), `RolandoDiscord.Train` (bounded `Task.async_stream` over channels, pagination, line filter matching Go).
+- **Analytics**: `Rolando.Analytics.track_event/1` → PubSub `analytics_events` → `Rolando.AnalyticsSubscriber` → SQL `analytics_events` rows (`train_started`, `train_completed`, `train_failed`).
 
 ## Immediate focus (next implementation phase)
 
-1. **Messages pipeline (Core)**
-   - Port *behavior* of `MessagesRepository` + `DataFetchService` concepts: guild-scoped text + attachment URLs, pagination, bulk insert, delete by exact content / substring (used for dead media cleanup), counts.
-   - **Do not** mirror Go’s unbounded `GetAllGuildMessages` for large guilds in production; design streaming/batch APIs and storage layout suitable for column store + Postgres metadata.
+1. **Remaining slash commands** from `commands.ex` (gif, image, video, analytics, togglepings, replyrate, reactionrate, cohesion, opinion, wipe, vc subtree).
 
 2. **Markov + media (Core)**
-   - Port `model.MarkovChain` (n-grams, backoff generation, `Talk` / seed / `TalkFiltered`, `Delete`, ping stripping) and `MediaUrlsStore` (gif/image/video classification, HEAD validation, DB cleanup on invalid URL).
-   - Plan **Horde**-supervised chain workers per guild (or sharded keyspace); **Redis** optional backend for prod for shared/merged state across nodes.
+   - Generation (`Talk`, seed, filtered), `Delete`, ping stripping; **MediaUrlsStore** and live message learning (`on_message`).
 
 3. **Deferred**
    - Vosk STT: investigate Elixir-friendly or sidecar **self-hosted** alternatives; keep interface abstract.

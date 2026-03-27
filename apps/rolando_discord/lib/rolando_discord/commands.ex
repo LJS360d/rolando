@@ -8,7 +8,8 @@ defmodule RolandoDiscord.Commands do
       %{
         name: "train",
         description:
-          "Fetches all available messages in the server to be used as training data"
+          "Fetches all available messages in the server to be used as training data",
+        dm_permission: false
       },
       %{name: "gif", description: "Returns a gif from the ones it knows"},
       %{name: "image", description: "Returns an image from the ones it knows"},
