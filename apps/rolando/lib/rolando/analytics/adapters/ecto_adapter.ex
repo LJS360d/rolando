@@ -9,7 +9,7 @@ defmodule Rolando.Analytics.EctoAdapter do
   end
 
   @impl true
-  def persist_event(attrs) when is_map(attrs) do
+  def persist_event(attrs) do
     %AnalyticsEvent{}
     |> AnalyticsEvent.changeset(attrs)
     |> Repo.insert()

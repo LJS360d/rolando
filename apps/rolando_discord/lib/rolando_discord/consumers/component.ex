@@ -18,8 +18,8 @@ defmodule RolandoDiscord.Consumers.Component do
   alias RolandoDiscord.Permissions
   alias RolandoDiscord.Train
 
+  # type 3 = InteractionType.message_component()
   def handle_event({:INTERACTION_CREATE, %{type: 3} = interaction, _ws_state}) do
-    # type 3 = InteractionType.message_component()
     case interaction.data do
       %{custom_id: "confirm-train"} -> confirm_train_first(interaction)
       %{custom_id: "confirm-train-again"} -> confirm_train_retrain(interaction)
@@ -41,7 +41,7 @@ defmodule RolandoDiscord.Consumers.Component do
         })
 
       # Ensure guild exists in our system
-      guild = GuildCache.get!(guild_id) |> Map.put(:id, to_string(guild_id))
+      guild = GuildCache.get!(guild_id) |> InteractionHelpers.to_guild_schema()
       {:ok, _guild} = Guilds.get_or_create(guild)
 
       # Ensure config exists for this guild
@@ -79,7 +79,7 @@ defmodule RolandoDiscord.Consumers.Component do
         })
 
       # Ensure guild exists
-      guild = GuildCache.get!(guild_id) |> Map.put(:id, to_string(guild_id))
+      guild = GuildCache.get!(guild_id) |> InteractionHelpers.to_guild_schema()
       {:ok, _guild} = Guilds.get_or_create(guild)
 
       # Delete existing weights (reset for retraining)

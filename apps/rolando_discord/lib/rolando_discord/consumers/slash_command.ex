@@ -97,8 +97,9 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
   defp handle_command("train", %I{guild_id: guild_id} = i) do
     if Permissions.admin_or_owner?(i) do
       # Ensure guild exists in our system
-      guild = GuildCache.get!(guild_id) |> Map.put(:id, to_string(guild_id))
-      {:ok, _guild} = Guilds.get_or_create(guild)
+      guild_schema = GuildCache.get!(guild_id) |> InteractionHelpers.to_guild_schema()
+
+      {:ok, _guild} = Guilds.get_or_create(guild_schema)
 
       # Ensure config exists for this guild (creates with defaults if not exists)
       {:ok, config} = GuildConfig.get_or_create(to_string(guild_id))

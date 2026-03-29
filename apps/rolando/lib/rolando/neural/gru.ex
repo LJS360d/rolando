@@ -7,7 +7,8 @@ defmodule Rolando.Neural.GRU do
 
   @spec load_nifs :: :ok | {:error, atom()}
   defp load_nifs do
-    :erlang.load_nif(Application.app_dir(:rolando, "priv/nif"), 0)
+    path = :filename.join(:code.priv_dir(:rolando), "nif")
+    :erlang.load_nif(path, 0)
   end
 
   @doc """
@@ -19,7 +20,7 @@ defmodule Rolando.Neural.GRU do
   """
   @spec create_weights(input_size :: non_neg_integer(), hidden_size :: non_neg_integer()) ::
           binary() | {:error, atom()}
-  def create_weights(_input_size, _hidden_size), do: raise("NIF not loaded")
+  def create_weights(_input_size, _hidden_size), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Forward pass through GRU for a single timestep.
@@ -34,7 +35,7 @@ defmodule Rolando.Neural.GRU do
   """
   @spec forward(input :: [float()], h_prev :: [float()], weights :: binary()) ::
           [float()] | {:error, atom()}
-  def forward(_input, _h_prev, _weights), do: raise("NIF not loaded")
+  def forward(_input, _h_prev, _weights), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Forward pass through GRU for a sequence.
@@ -49,19 +50,19 @@ defmodule Rolando.Neural.GRU do
   """
   @spec forward_sequence(inputs :: [[float()]], initial_h :: [float()], weights :: binary()) ::
           [[float()]] | {:error, atom()}
-  def forward_sequence(_inputs, _initial_h, _weights), do: raise("NIF not loaded")
+  def forward_sequence(_inputs, _initial_h, _weights), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Get hidden size from weights binary.
   """
   @spec hidden_size(weights :: binary()) :: non_neg_integer()
-  def hidden_size(_weights), do: raise("NIF not loaded")
+  def hidden_size(_weights), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Get input size from weights binary.
   """
   @spec input_size(weights :: binary()) :: non_neg_integer()
-  def input_size(_weights), do: raise("NIF not loaded")
+  def input_size(_weights), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Create a new hidden state vector initialized to zeros.

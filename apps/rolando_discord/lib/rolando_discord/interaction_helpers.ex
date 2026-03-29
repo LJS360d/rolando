@@ -2,6 +2,8 @@ defmodule RolandoDiscord.InteractionHelpers do
   @moduledoc false
 
   alias Nostrum.Struct.Interaction, as: I
+  alias Nostrum.Struct.Guild
+  alias Rolando.Schema.Guild, as: GuildSchema
 
   def cooldown_mins, do: 30
 
@@ -28,5 +30,14 @@ defmodule RolandoDiscord.InteractionHelpers do
     Enum.any?(owners, fn o ->
       String.trim(o) != "" and to_string(user_id) == String.trim(o)
     end)
+  end
+
+  def to_guild_schema(%Guild{} = guild) do
+    %GuildSchema{
+      id: to_string(guild.id),
+      name: guild.name,
+      platform: "discord",
+      image_url: Guild.icon_url(guild)
+    }
   end
 end

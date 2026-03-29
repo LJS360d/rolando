@@ -6,9 +6,10 @@ defmodule Rolando.Neural.Quantizer do
 
   @on_load :load_nifs
 
-  @spec load_nifs :: :ok
+  @spec load_nifs :: :ok | {:error, atom()}
   defp load_nifs do
-    :erlang.load_nif(Application.app_dir(:rolando, "priv/nif"), 0)
+    path = :filename.join(:code.priv_dir(:rolando), "nif")
+    :erlang.load_nif(path, 0)
   end
 
   @doc """
@@ -30,7 +31,8 @@ defmodule Rolando.Neural.Quantizer do
   """
   @spec quantize([float()], threshold :: float() | nil, stochastic :: boolean() | nil) ::
           {[integer()], float(), float(), float()} | {:error, atom()}
-  def quantize(_weights, _threshold \\ nil, _stochastic \\ false), do: raise("NIF not loaded")
+  def quantize(_weights, _threshold \\ nil, _stochastic \\ false),
+    do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Dequantize ternary values back to float32.
@@ -48,7 +50,7 @@ defmodule Rolando.Neural.Quantizer do
       [0.5, -0.5, 0.0, 0.5]
   """
   @spec dequantize([integer()], float()) :: [float()] | {:error, atom()}
-  def dequantize(_ternary_values, _scale), do: raise("NIF not loaded")
+  def dequantize(_ternary_values, _scale), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Quantize a map of weight matrices.
@@ -68,7 +70,7 @@ defmodule Rolando.Neural.Quantizer do
   """
   @spec quantize_weights(%{String.t() => [float()]}, :standard | :bitnet) ::
           %{String.t() => {[integer()], float(), float(), float()}} | {:error, atom()}
-  def quantize_weights(_weights_map, _precision_mode), do: raise("NIF not loaded")
+  def quantize_weights(_weights_map, _precision_mode), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Dequantize a map of ternary matrices back to float32.
@@ -81,7 +83,7 @@ defmodule Rolando.Neural.Quantizer do
   """
   @spec dequantize_weights(%{String.t() => {[integer()], float(), float(), float()}}) ::
           %{String.t() => [float()]} | {:error, atom()}
-  def dequantize_weights(_quantized_map), do: raise("NIF not loaded")
+  def dequantize_weights(_quantized_map), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Compute quantization statistics.
@@ -95,7 +97,7 @@ defmodule Rolando.Neural.Quantizer do
     - {compression_ratio, sparsity}
   """
   @spec compute_stats([float()], [integer()], float()) :: {float(), float()} | {:error, atom()}
-  def compute_stats(_original, _quantized, _scale), do: raise("NIF not loaded")
+  def compute_stats(_original, _quantized, _scale), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Compute threshold from weight vector (mean absolute value).
