@@ -5,8 +5,7 @@ defmodule RolandoDiscord.Train do
 
   alias Nostrum.Api.{Channel, Message}
   alias Rolando.Analytics
-  alias Rolando.Chains
-  alias Rolando.Messages
+  alias Rolando.Contexts.{GuildConfig, MediaStore}
   alias RolandoDiscord.Permissions
 
   def run(opts) do
@@ -20,10 +19,11 @@ defmodule RolandoDiscord.Train do
       user_mention = Keyword.fetch!(opts, :user_mention)
       gid = to_string(guild_id)
 
-      _ = Chains.update_trained_at(guild_id, nil)
+      # Reset trained_at timestamp on failure
+      _ = GuildConfig.update_trained_at(to_string(guild_id), nil)
 
-      Analytics.track_event(%{
-        event_type: "train_failed",
+      Analytics.track(%{
+        name: "train_failed",
         guild_id: gid,
         channel_id: to_string(channel_id),
         meta: %{"exception" => Exception.message(e)}
@@ -48,8 +48,8 @@ defmodule RolandoDiscord.Train do
     msg_limit = Application.get_env(:rolando, :train_message_limit_per_channel, 750_000)
     max_err = Application.get_env(:rolando, :train_max_fetch_errors_per_channel, 5)
 
-    Analytics.track_event(%{
-      event_type: "train_started",
+    Analytics.track(%{
+      name: "train_started",
       guild_id: gid,
       channel_id: to_string(channel_id),
       meta: %{}
@@ -70,7 +70,9 @@ defmodule RolandoDiscord.Train do
         ordered: false
       )
       |> Enum.reduce(0, fn
-        {:ok, n}, acc -> acc + n
+        {:ok, n}, acc ->
+          acc + n
+
         {:exit, reason}, acc ->
           Logger.error("Train channel task exit: #{inspect(reason)}")
           acc
@@ -80,10 +82,11 @@ defmodule RolandoDiscord.Train do
     elapsed_s = max(elapsed_ms / 1000, 0.001)
     msgs_per_s = Float.round(total / elapsed_s, 2)
 
-    _ = Chains.snapshot_to_repo(guild_id)
+    # TODO: Initialize neural network weights after message collection
+    # This will be implemented as part of the neural training pipeline
 
-    Analytics.track_event(%{
-      event_type: "train_completed",
+    Analytics.track(%{
+      name: "train_completed",
       guild_id: gid,
       channel_id: to_string(channel_id),
       meta: %{
@@ -130,12 +133,12 @@ defmodule RolandoDiscord.Train do
           {:ok, messages} ->
             oldest = List.last(messages)
             next_before = oldest.id
-            lines = extract_lines(messages)
+            {text_content, media_urls} = extract_content_and_media(messages)
 
-            :ok = Messages.insert_training_lines(guild_id, channel_id, lines)
-            :ok = Chains.apply_training_batch(guild_id, lines)
+            # Store extracted media in the media store for neural network training
+            store_media_for_training(guild_id, channel_id, media_urls)
 
-            added = length(lines)
+            added = length(text_content)
             new_total = total + added
 
             loop_fetch(guild_id, channel_id, next_before, 0, new_total, max_err, limit)
@@ -152,15 +155,48 @@ defmodule RolandoDiscord.Train do
     end
   end
 
-  defp extract_lines(messages) do
-    Enum.flat_map(messages, fn m ->
-      if line_acceptable?(m.content) do
-        urls = Enum.map(m.attachments || [], & &1.url)
-        [m.content | urls]
+  defp extract_content_and_media(messages) do
+    Enum.reduce(messages, {[], []}, fn message, {text_acc, media_acc} ->
+      if line_acceptable?(message.content) do
+        urls = Enum.map(message.attachments || [], & &1.url)
+        {[message.content | text_acc], urls ++ media_acc}
       else
-        []
+        {text_acc, media_acc}
       end
     end)
+  end
+
+  defp store_media_for_training(guild_id, _channel_id, media_urls) do
+    gid = to_string(guild_id)
+
+    Enum.each(media_urls, fn url ->
+      # Store media metadata for neural network processing
+      MediaStore.create(%{
+        guild_id: gid,
+        url: url,
+        media_type: detect_media_type(url),
+        context_hash: ""
+      })
+    end)
+  end
+
+  defp detect_media_type(url) do
+    cond do
+      String.contains?(url, ".jpg") or String.contains?(url, ".jpeg") or
+        String.contains?(url, ".png") or String.contains?(url, ".gif") ->
+        :image
+
+      String.contains?(url, ".mp4") or String.contains?(url, ".mov") or
+          String.contains?(url, ".avi") ->
+        :video
+
+      String.contains?(url, ".mp3") or String.contains?(url, ".wav") or
+          String.contains?(url, ".ogg") ->
+        :gif
+
+      true ->
+        :other
+    end
   end
 
   defp line_acceptable?(content) do

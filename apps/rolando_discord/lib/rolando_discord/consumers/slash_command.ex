@@ -12,84 +12,105 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
   alias Nostrum.Constants.InteractionCallbackType
   alias Nostrum.Struct.Interaction, as: I
 
-  alias Rolando.Chains
+  alias Rolando.Analytics
+  alias Rolando.Contexts.{Guilds, GuildConfig}
   alias RolandoDiscord.InteractionHelpers
   alias RolandoDiscord.Permissions
+  require Logger
 
-  def handle_event({:INTERACTION_CREATE, %{type: 2} = interaction, _ws_state}) do
-    # type 2 = InteractionType.application_command()
-    case interaction.data do
-      %{name: "train"} -> train_slash(interaction)
-      %{name: "channels"} -> channels_slash(interaction)
-      _ -> :noop
+  defp track_analytics(i, event_name, opts) do
+    meta = Keyword.get(opts, :meta, %{})
+    level = Keyword.get(opts, :level, :info)
+
+    Analytics.track(%{
+      event: event_name,
+      guild_id: to_string(i.guild_id),
+      channel_id: to_string(i.channel_id),
+      user_id: to_string(i.user.id),
+      meta: meta,
+      level: level
+    })
+  end
+
+  # type 2 = InteractionType.application_command()
+  def handle_event({:INTERACTION_CREATE, %I{type: 2} = i, _ws_state}) do
+    track_analytics(i, "slash_command", meta: %{name: i.data.name})
+
+    case handle_command(i.data.name, i) do
+      {:ok, _} ->
+        track_analytics(i, "slash_command_complete", meta: %{name: i.data.name})
+
+      {:error, err} ->
+        track_analytics(i, "slash_command_fail", meta: %{error: inspect(err)}, level: :error)
+
+      :noop ->
+        :ok
     end
   end
 
-  def handle_event(_event) do
-    :noop
-  end
+  def handle_event(_event), do: :noop
 
-  defp channels_slash(%I{guild_id: nil}), do: :noop
+  defp handle_command("channels", %I{guild_id: nil}), do: :noop
 
-  defp channels_slash(%I{guild_id: guild_id} = i) do
+  defp handle_command("channels", %I{guild_id: guild_id} = i) do
     if Permissions.admin_or_owner?(i) do
-      lines =
-        Permissions.list_channels_for_display(guild_id)
-        |> Enum.map(fn ch ->
-          ok = Permissions.bot_can_fetch_text_channel?(guild_id, ch)
-          em = if(ok, do: ":green_circle:", else: ":red_circle:")
-          "#{em} <##{ch.id}>"
-        end)
+      # defer
+      case Interaction.create_response(i, %{
+             type: InteractionCallbackType.deferred_channel_message_with_source()
+           }) do
+        {:ok} ->
+          lines =
+            Permissions.list_channels_for_display(guild_id)
+            |> Enum.map(fn ch ->
+              ok = Permissions.can_fetch_text_channel?(guild_id, ch)
+              em = if(ok, do: ":green_circle:", else: ":red_circle:")
+              "#{em} <##{ch.id}>"
+            end)
 
-      header =
-        "Channels the bot has access to are marked with: :green_circle:\nWhile channels with no access are marked with: :red_circle:\nMake a channel accessible by giving **ALL** these permissions:\n`View Channel` `Send Messages` `Read Message History`\n\n"
+          header =
+            "Channels the bot has access to are marked with: :green_circle:\nWhile channels with no access are marked with: :red_circle:\nMake a channel accessible by giving **ALL** these permissions:\n`View Channel` `Send Messages` `Read Message History`\n\n"
 
-      content =
-        case lines do
-          [] -> header <> "No available channels to display."
-          _ -> header <> Enum.join(lines, "\n")
-        end
+          content =
+            case lines do
+              [] -> header <> "No available channels to display."
+              _ -> header <> Enum.join(lines, "\n")
+            end
 
-      _ =
-        Interaction.create_response(i, %{
-          type: InteractionCallbackType.channel_message_with_source(),
-          data: %{content: content}
-        })
+          Interaction.edit_response(i, %{
+            content: content
+          })
+
+        err ->
+          err
+      end
     else
-      _ =
-        Interaction.create_response(i, %{
-          type: InteractionCallbackType.channel_message_with_source(),
-          data: %{content: "You are not authorized to use this command.", flags: 64}
-        })
+      Interaction.create_response(i, %{
+        type: InteractionCallbackType.channel_message_with_source(),
+        ephemeral: true,
+        data: %{content: "You are not authorized to use this command.", flags: 64}
+      })
     end
-
-    :ok
   end
 
-  defp train_slash(%I{guild_id: nil}), do: :noop
+  defp handle_command("train", %I{guild_id: nil}), do: :noop
 
-  defp train_slash(%I{guild_id: guild_id} = i) do
+  defp handle_command("train", %I{guild_id: guild_id} = i) do
     if Permissions.admin_or_owner?(i) do
-      guild = GuildCache.get!(guild_id)
-      guild_name = guild.name
-      _ = Chains.upsert_guild(guild_id, guild_name)
+      # Ensure guild exists in our system
+      guild = GuildCache.get!(guild_id) |> Map.put(:id, to_string(guild_id))
+      {:ok, _guild} = Guilds.get_or_create(guild)
 
-      _ =
-        case Chains.get_chain_document(guild_id) do
-          {:error, :not_found} -> Chains.create_chain(guild_id, guild_name)
-          {:ok, _} -> :ok
-        end
-
-      {:ok, chain} = Chains.get_chain_document(guild_id)
+      # Ensure config exists for this guild (creates with defaults if not exists)
+      {:ok, config} = GuildConfig.get_or_create(to_string(guild_id))
       owner? = InteractionHelpers.owner_user?(i)
       cd = InteractionHelpers.cooldown_mins()
 
       cond do
-        chain.trained_at != nil &&
-            InteractionHelpers.train_cooldown_active?(chain.trained_at) && !owner? ->
+        config.trained_at != nil &&
+          InteractionHelpers.train_cooldown_active?(config.trained_at) && !owner? ->
           remaining =
             DateTime.diff(
-              DateTime.add(chain.trained_at, cd, :minute),
+              DateTime.add(config.trained_at, cd, :minute),
               DateTime.utc_now(),
               :second
             )
@@ -103,14 +124,14 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
               type: InteractionCallbackType.channel_message_with_source(),
               data: %{
                 content:
-                  "Message fetching was last performed on **#{InteractionHelpers.fmt_dt(chain.trained_at)}**.\nThe train command has a **#{cd} minutes cooldown** to prevent abuse. Please wait **#{rem_str}** before trying again.",
+                  "Message fetching was last performed on **#{InteractionHelpers.fmt_dt(config.trained_at)}**.\nThe train command has a **#{cd} minutes cooldown** to prevent abuse. Please wait **#{rem_str}** before trying again.",
                 flags: 64
               }
             })
 
-        chain.trained_at != nil &&
-            (!InteractionHelpers.train_cooldown_active?(chain.trained_at) || owner?) ->
-          trained_fmt = InteractionHelpers.fmt_dt(chain.trained_at)
+        config.trained_at != nil &&
+            (!InteractionHelpers.train_cooldown_active?(config.trained_at) || owner?) ->
+          trained_fmt = InteractionHelpers.fmt_dt(config.trained_at)
 
           _ =
             Interaction.create_response(i, %{

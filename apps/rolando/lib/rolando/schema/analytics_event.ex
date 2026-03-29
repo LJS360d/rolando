@@ -6,6 +6,7 @@ defmodule Rolando.Schema.AnalyticsEvent do
   @foreign_key_type :binary_id
   schema "analytics_events" do
     field :event_type, :string
+    field :level, :string
     field :guild_id, :string
     field :channel_id, :string
     field :meta, :map, default: %{}

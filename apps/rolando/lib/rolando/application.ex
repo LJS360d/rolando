@@ -1,6 +1,4 @@
 defmodule Rolando.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
   @moduledoc false
 
   use Application
@@ -8,22 +6,35 @@ defmodule Rolando.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      # Database
       Rolando.Repo,
       {Ecto.Migrator,
        repos: Application.fetch_env!(:rolando, :ecto_repos), skip: skip_migrations?()},
+
+      # Clustering
       {DNSCluster, query: Application.get_env(:rolando, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Rolando.PubSub},
-      {Registry, keys: :unique, name: Rolando.Chains.Registry},
-      {DynamicSupervisor, strategy: :one_for_one, name: Rolando.Chains.DynamicSupervisor},
+
+      # Neural Network - Shared weights (initialized once at startup, frozen)
+      {Registry, keys: :unique, name: Rolando.Neural.GuildRegistry},
+      {Registry, keys: :unique, name: Rolando.Neural.SharedWeightsRegistry},
+
+      # Neural Network - Per-guild model supervisors
+      {DynamicSupervisor, strategy: :one_for_one, name: Rolando.Neural.GuildSupervisor},
+
+      # Training - Pool worker for CPU-intensive training steps
+      {Registry, keys: :unique, name: Rolando.Training.PoolRegistry},
       {Task.Supervisor, name: Rolando.TaskSupervisor},
-      Rolando.AnalyticsSubscriber
+
+      # Cluster Sync Subscribers
+      Rolando.Analytics.Subscriber,
+      Rolando.Cache.Subscriber
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Rolando.Supervisor)
   end
 
-  defp skip_migrations?() do
-    # By default, sqlite migrations are run when using a release
+  defp skip_migrations? do
     System.get_env("RELEASE_NAME") == nil
   end
 end

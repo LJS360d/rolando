@@ -13,7 +13,7 @@ defmodule RolandoDiscord.Consumers.Component do
   alias Nostrum.Constants.InteractionCallbackType
   alias Nostrum.Struct.Interaction, as: I
 
-  alias Rolando.Chains
+  alias Rolando.Contexts.{Guilds, GuildConfig, GuildWeights}
   alias RolandoDiscord.InteractionHelpers
   alias RolandoDiscord.Permissions
   alias RolandoDiscord.Train
@@ -40,11 +40,12 @@ defmodule RolandoDiscord.Consumers.Component do
           type: InteractionCallbackType.deferred_channel_message_with_source()
         })
 
-      guild = GuildCache.get!(guild_id)
-      _ = Chains.upsert_guild(guild_id, guild.name)
-      _ = ensure_chain_row(guild_id, guild.name)
+      # Ensure guild exists in our system
+      guild = GuildCache.get!(guild_id) |> Map.put(:id, to_string(guild_id))
+      {:ok, _guild} = Guilds.get_or_create(guild)
 
-      case Chains.get_chain_document(guild_id) do
+      # Ensure config exists for this guild
+      case GuildConfig.get(to_string(guild_id)) do
         {:ok, %{trained_at: t}} when not is_nil(t) ->
           _ = Message.create(i.channel_id, "Training already completed for this server.")
           _ = Interaction.delete_response(i)
@@ -77,19 +78,23 @@ defmodule RolandoDiscord.Consumers.Component do
           data: %{content: "Deleting fetched data from this server.\nThis might take a while.."}
         })
 
-      guild = GuildCache.get!(guild_id)
-      _ = Chains.upsert_guild(guild_id, guild.name)
+      # Ensure guild exists
+      guild = GuildCache.get!(guild_id) |> Map.put(:id, to_string(guild_id))
+      {:ok, _guild} = Guilds.get_or_create(guild)
 
-      case Chains.recreate_chain(guild_id, guild.name) do
+      # Delete existing weights (reset for retraining)
+      case GuildWeights.delete(to_string(guild_id)) do
         {:ok, _} ->
           start_training_job(i, guild_id, :retrain)
 
         {:error, reason} ->
-          Logger.error("recreate_chain failed: #{inspect(reason)}")
+          Logger.error("delete_weights failed: #{inspect(reason)}")
 
           _ =
             Interaction.edit_response(i, %{
-              data: %{content: "Failed to delete chain data for this server. Please try again later."}
+              data: %{
+                content: "Failed to delete chain data for this server. Please try again later."
+              }
             })
       end
     else
@@ -113,7 +118,8 @@ defmodule RolandoDiscord.Consumers.Component do
         _ -> "Fetching"
       end
 
-    case Chains.update_trained_at(guild_id, now) do
+    # Update trained_at timestamp in config
+    case GuildConfig.update_trained_at(to_string(guild_id), now) do
       {:ok, _} ->
         _ =
           Message.create(
@@ -129,20 +135,14 @@ defmodule RolandoDiscord.Consumers.Component do
           user_mention: mention
         ]
 
-        {:ok, _pid} = Task.Supervisor.start_child(Rolando.TaskSupervisor, fn -> Train.run(opts) end)
+        {:ok, _pid} =
+          Task.Supervisor.start_child(Rolando.TaskSupervisor, fn -> Train.run(opts) end)
 
         :ok
 
       {:error, reason} ->
         Logger.error("update_trained_at: #{inspect(reason)}")
         _ = Interaction.edit_response(i, %{data: %{content: "Failed to start training."}})
-    end
-  end
-
-  defp ensure_chain_row(guild_id, guild_name) do
-    case Chains.get_chain_document(guild_id) do
-      {:error, :not_found} -> Chains.create_chain(guild_id, guild_name)
-      {:ok, _} -> :ok
     end
   end
 end

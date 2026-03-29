@@ -31,3 +31,7 @@ erl_crash.dump
 # Database files
 *.db
 *.db-*
+
+# NIF
+*.so
+target/

@@ -1,9 +1,9 @@
-defmodule Rolando.AnalyticsSubscriber do
+defmodule Rolando.Analytics.Subscriber do
   @moduledoc false
   use GenServer
 
   alias Rolando.Analytics
-  alias Rolando.Analytics.SQLAdapter
+  alias Rolando.Analytics.Sync
   require Logger
 
   def start_link(opts \\ []) do
@@ -12,13 +12,13 @@ defmodule Rolando.AnalyticsSubscriber do
 
   @impl true
   def init(_opts) do
-    Phoenix.PubSub.subscribe(Rolando.PubSub, Analytics.pubsub_topic())
+    Phoenix.PubSub.subscribe(Rolando.PubSub, Sync.topic())
     {:ok, %{}}
   end
 
   @impl true
   def handle_info({:analytics_event, attrs}, state) do
-    case SQLAdapter.persist_event(attrs) do
+    case Analytics.persist_event(attrs) do
       {:ok, _} ->
         :ok
 

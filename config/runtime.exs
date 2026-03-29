@@ -1,7 +1,10 @@
 import Config
-import Dotenvy
 
-source!([".env", System.get_env()]) |> System.put_env()
+# check if dotEnvy is available before import
+if Code.ensure_loaded?(Dotenvy) do
+  import Dotenvy
+  source!([".env", System.get_env()]) |> System.put_env()
+end
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -16,19 +19,22 @@ config :rolando_web, RolandoWeb.Endpoint,
 config :nostrum,
   token:
     System.get_env("DISCORD_BOT_TOKEN") ||
-      raise("""
-      environment variable DISCORD_BOT_TOKEN is missing.
-      """)
-
+      (if(config_env() == :prod) do
+         raise("""
+         environment variable DISCORD_BOT_TOKEN is missing.
+         """)
+       else
+         IO.puts("DISCORD_BOT_TOKEN is not set, discord interface will not run")
+       end)
 
 config :nostrum, youtubedl: nil
 config :nostrum, streamlink: nil
 
 config :ueberauth, Ueberauth.Strategy.Discord.OAuth,
-  client_id: env!("DISCORD_OAUTH_CLIENT_ID", :string, nil),
-  client_secret: env!("DISCORD_OAUTH_CLIENT_SECRET", :string, nil)
+  client_id: System.get_env("DISCORD_OAUTH_CLIENT_ID"),
+  client_secret: System.get_env("DISCORD_OAUTH_CLIENT_SECRET")
 
-owner_platform_ids = env!("OWNER_USER_IDS", :string, "") |> String.split(",", trim: true)
+owner_platform_ids = (System.get_env("OWNER_USER_IDS") || "") |> String.split(",", trim: true)
 config :rolando_web, :owner_platform_ids, owner_platform_ids
 config :rolando, :owner_platform_ids, owner_platform_ids
 

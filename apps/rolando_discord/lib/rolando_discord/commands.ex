@@ -7,8 +7,7 @@ defmodule RolandoDiscord.Commands do
     [
       %{
         name: "train",
-        description:
-          "Fetches all available messages in the server to be used as training data",
+        description: "Fetches all available messages in the server to be used as training data",
         dm_permission: false
       },
       %{name: "gif", description: "Returns a gif from the ones it knows"},
@@ -111,11 +110,12 @@ defmodule RolandoDiscord.Commands do
             type: Opt.sub_command(),
             name: "speak",
             description: "Speaks words of wisdom in a VC, and then leaves",
-             options: [
+            options: [
               %{
                 type: Opt.channel(),
                 name: "channel",
-                description: "Optional: Specific channel to speak in (defaults to the one you are connected to)",
+                description:
+                  "Optional: Specific channel to speak in (defaults to the one you are connected to)",
                 required: false
               }
             ]
@@ -167,7 +167,7 @@ defmodule RolandoDiscord.Commands do
                 required: false
               }
             ]
-          },
+          }
         ]
       }
     ]
@@ -183,7 +183,7 @@ defmodule RolandoDiscord.Commands do
         remote_names = remote |> Enum.map(& &1.name) |> Enum.sort()
         local_names != remote_names
 
-      # TODO better diffing
+        # TODO better diffing
     end
   end
 

@@ -7,7 +7,20 @@ defmodule Rolando.Schema.Guild do
     field :name, :string
     field :platform, :string, default: "discord"
     field :image_url, :string
-    has_many :channels, Rolando.Schema.Channel
+
+    # Neural network associations - uses shared primary key for belongs_to
+    belongs_to :config, Rolando.Schema.GuildConfig,
+      references: :guild_id,
+      foreign_key: :config_id,
+      type: :string,
+      on_replace: :delete
+
+    belongs_to :weights, Rolando.Schema.GuildWeights,
+      references: :guild_id,
+      foreign_key: :weights_id,
+      type: :string,
+      on_replace: :delete
+
     timestamps()
   end
 

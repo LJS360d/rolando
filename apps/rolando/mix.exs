@@ -17,9 +17,6 @@ defmodule Rolando.MixProject do
     ]
   end
 
-  # Configuration for the OTP application.
-  #
-  # Type `mix help compile.app` for more information.
   def application do
     [
       mod: {Rolando.Application, []},
@@ -27,13 +24,9 @@ defmodule Rolando.MixProject do
     ]
   end
 
-  # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
-  # Specifies your project dependencies.
-  #
-  # Type `mix help deps` for examples and options.
   defp deps do
     [
       {:dns_cluster, "~> 0.2.0"},
@@ -42,19 +35,26 @@ defmodule Rolando.MixProject do
       {:ecto_sqlite3, ">= 0.0.0"},
       {:jason, "~> 1.2"},
       {:swoosh, "~> 1.16"},
-      {:req, "~> 0.5"}
+      {:req, "~> 0.5"},
+      {:rustler, "~> 0.32"}
     ]
   end
 
-  # Aliases are shortcuts or tasks specific to the current project.
-  #
-  # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
       setup: ["deps.get", "ecto.setup"],
-      "ecto.setup": ["ecto.create", "ecto.migrate", "run #{__DIR__}/priv/repo/seeds.exs"],
+      "ecto.setup": [
+        "ecto.create",
+        "ecto.migrate",
+        "run --no-start #{__DIR__}/priv/repo/seeds.exs"
+      ],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      "nif.build":
+        "run -e 'File.mkdir_p!(\"priv/nif\"); File.cp!(\"native/target/debug/librolando_nif.so\", \"priv/nif/rolando_nif.so\")'",
+      "nif.build.release":
+        "run -e 'File.mkdir_p!(\"priv/nif\"); File.cp!(\"native/target/release/librolando_nif.so\", \"priv/nif/rolando_nif.so\")'",
+      "nif.clean": "run -e 'File.rm_rf!(\"priv/nif\")'"
     ]
   end
 end

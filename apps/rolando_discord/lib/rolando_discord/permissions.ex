@@ -1,9 +1,11 @@
 defmodule RolandoDiscord.Permissions do
   @moduledoc false
 
+  alias Nostrum.Api.Guild
   alias Nostrum.Cache.{GuildCache, Me}
   alias Nostrum.Constants.ChannelType
   alias Nostrum.Struct.Guild.Member
+  alias Nostrum.Struct.Channel
 
   def admin_or_owner?(%{guild_id: nil}), do: false
 
@@ -27,29 +29,32 @@ defmodule RolandoDiscord.Permissions do
 
   def admin_or_owner?(_), do: false
 
-  def bot_can_fetch_text_channel?(guild_id, channel) do
-    guild_id = guild_id
+  def can_fetch_text_channel?(guild_id, %Channel{} = channel) do
+    guild = GuildCache.get!(guild_id)
     me = Me.get()
 
-    if me == nil or channel == nil do
-      false
-    else
-      bot_id = me.id
-      guild = GuildCache.get!(guild_id)
-      bot_member = Map.get(guild.members, bot_id)
-
-      if bot_member == nil do
-        false
-      else
-        perms = Member.guild_channel_permissions(bot_member, guild, channel.id)
-
-        textish =
-          channel.type == ChannelType.guild_text() or channel.type == ChannelType.guild_announcement()
-
-        textish and :view_channel in perms and :read_message_history in perms and
-          :send_messages in perms
+    bot_member =
+      case Guild.member(guild_id, me.id) do
+        {:ok, member} -> member
+        _ -> nil
       end
+
+    if bot_member do
+      check_channel_permissions(bot_member, guild, channel)
+    else
+      false
     end
+  end
+
+  defp check_channel_permissions(member, guild, %Channel{} = channel) do
+    perms = Member.guild_channel_permissions(member, guild, channel.id)
+
+    textish = channel.type in [ChannelType.guild_text(), ChannelType.guild_announcement()]
+
+    textish and
+      :view_channel in perms and
+      :read_message_history in perms and
+      :send_messages in perms
   end
 
   def list_trainable_text_channels(guild_id) do
@@ -57,7 +62,7 @@ defmodule RolandoDiscord.Permissions do
 
     (guild.channels || %{})
     |> Map.values()
-    |> Enum.filter(&bot_can_fetch_text_channel?(guild_id, &1))
+    |> Enum.filter(&can_fetch_text_channel?(guild_id, &1))
   end
 
   def list_channels_for_display(guild_id) do
@@ -68,6 +73,5 @@ defmodule RolandoDiscord.Permissions do
     |> Enum.reject(fn ch ->
       ch.type == ChannelType.guild_voice() or ch.type == ChannelType.guild_category()
     end)
-    |> Enum.sort_by(& &1.position)
   end
 end

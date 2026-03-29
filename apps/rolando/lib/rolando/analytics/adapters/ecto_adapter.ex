@@ -1,4 +1,4 @@
-defmodule Rolando.Analytics.SQLAdapter do
+defmodule Rolando.Analytics.EctoAdapter do
   @behaviour Rolando.Analytics.Adapter
   alias Rolando.Repo
   alias Rolando.Schema.{AnalyticsEvent, Guild}

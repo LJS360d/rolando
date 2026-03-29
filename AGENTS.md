@@ -3,7 +3,7 @@ This is a web application written using the Phoenix web framework.
 ## Project guidelines
 
 - **Memory bank**: consult `.memory-bank/` for project context before substantial work (read `README.md` first for file order). Keep it current: whenever you implement or decide something meaningful, update the relevant files—at minimum `activeContext.md` and `progress.md`, plus any other `.memory-bank/*.md` file whose facts changed (architecture, tech decisions, migration inventory).
-- Use `mix precommit` alias when you are done with all changes and fix any pending issues
+- Never run `mix precommit` yourself
 - Use the already included and available `:req` (`Req`) library for HTTP requests, **avoid** `:httpoison`, `:tesla`, and `:httpc`. Req is included by default and is the preferred HTTP client for Phoenix apps
 
 ### Phoenix v1.8 guidelines
@@ -89,19 +89,12 @@ custom classes must fully style the input
 ## Mix guidelines
 
 - Read the docs and options before using tasks (by using `mix help task_name`)
-- To debug test failures, run tests in a specific file with `mix test test/my_test.exs` or run all previously failed tests with `mix test --failed`
 - `mix deps.clean --all` is **almost never needed**. **Avoid** using it unless you have good reason
 
 ## Test guidelines
 
-- **Always use `start_supervised!/1`** to start processes in tests as it guarantees cleanup between tests
-- **Avoid** `Process.sleep/1` and `Process.alive?/1` in tests
-  - Instead of sleeping to wait for a process to finish, **always** use `Process.monitor/1` and assert on the DOWN message:
+- Do not run tests
 
-      ref = Process.monitor(pid)
-      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
-
-   - Instead of sleeping to synchronize before the next call, **always** use `_ = :sys.get_state/1` to ensure the process has handled prior messages
 <!-- phoenix:elixir-end -->
 
 <!-- phoenix:phoenix-start -->
