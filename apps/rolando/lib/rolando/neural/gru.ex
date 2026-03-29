@@ -3,13 +3,7 @@ defmodule Rolando.Neural.GRU do
   NIF wrapper for GRU (Gated Recurrent Unit) neural network operations.
   """
 
-  @on_load :load_nifs
-
-  @spec load_nifs :: :ok | {:error, atom()}
-  defp load_nifs do
-    path = :filename.join(:code.priv_dir(:rolando), "nif")
-    :erlang.load_nif(path, 0)
-  end
+  alias Rolando.Neural.NIF
 
   @doc """
   Create new GRU weights with Xavier initialization.
@@ -20,7 +14,7 @@ defmodule Rolando.Neural.GRU do
   """
   @spec create_weights(input_size :: non_neg_integer(), hidden_size :: non_neg_integer()) ::
           binary() | {:error, atom()}
-  def create_weights(_input_size, _hidden_size), do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate create_weights(input_size, hidden_size), to: NIF
 
   @doc """
   Forward pass through GRU for a single timestep.
@@ -35,7 +29,7 @@ defmodule Rolando.Neural.GRU do
   """
   @spec forward(input :: [float()], h_prev :: [float()], weights :: binary()) ::
           [float()] | {:error, atom()}
-  def forward(_input, _h_prev, _weights), do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate forward(input, h_prev, weights), to: NIF
 
   @doc """
   Forward pass through GRU for a sequence.
@@ -50,19 +44,19 @@ defmodule Rolando.Neural.GRU do
   """
   @spec forward_sequence(inputs :: [[float()]], initial_h :: [float()], weights :: binary()) ::
           [[float()]] | {:error, atom()}
-  def forward_sequence(_inputs, _initial_h, _weights), do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate forward_sequence(inputs, initial_h, weights), to: NIF
 
   @doc """
   Get hidden size from weights binary.
   """
   @spec hidden_size(weights :: binary()) :: non_neg_integer()
-  def hidden_size(_weights), do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate hidden_size(weights), to: NIF
 
   @doc """
   Get input size from weights binary.
   """
   @spec input_size(weights :: binary()) :: non_neg_integer()
-  def input_size(_weights), do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate input_size(weights), to: NIF
 
   @doc """
   Create a new hidden state vector initialized to zeros.

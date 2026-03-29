@@ -48,6 +48,10 @@ defmodule RolandoDiscord.Train do
     msg_limit = Application.get_env(:rolando, :train_message_limit_per_channel, 750_000)
     max_err = Application.get_env(:rolando, :train_max_fetch_errors_per_channel, 5)
 
+    Logger.info(
+      "Training started for guild #{gid}, channel #{channel_id}, max_concurrency=#{max_conc}, msg_limit=#{msg_limit}"
+    )
+
     Analytics.track(%{
       name: "train_started",
       guild_id: gid,
@@ -56,6 +60,8 @@ defmodule RolandoDiscord.Train do
     })
 
     channels = Permissions.list_trainable_text_channels(guild_id)
+    channel_count = length(channels)
+    Logger.info("Found #{channel_count} trainable channels for guild #{gid}")
 
     started = System.monotonic_time(:millisecond)
 
@@ -81,6 +87,10 @@ defmodule RolandoDiscord.Train do
     elapsed_ms = System.monotonic_time(:millisecond) - started
     elapsed_s = max(elapsed_ms / 1000, 0.001)
     msgs_per_s = Float.round(total / elapsed_s, 2)
+
+    Logger.info(
+      "Training completed for guild #{gid}: #{total} messages in #{format_duration_ms(elapsed_ms)} (#{msgs_per_s} msg/s)"
+    )
 
     # TODO: Initialize neural network weights after message collection
     # This will be implemented as part of the neural training pipeline
@@ -112,25 +122,35 @@ defmodule RolandoDiscord.Train do
   end
 
   defp fetch_one_channel(guild_id, channel_id, msg_limit, max_err) do
+    gid = to_string(guild_id)
+    cid = to_string(channel_id)
+    Logger.info("Starting fetch for channel #{cid} in guild #{gid}, limit=#{msg_limit}")
     loop_fetch(guild_id, channel_id, nil, 0, 0, max_err, msg_limit)
   end
 
   defp loop_fetch(guild_id, channel_id, before_id, err_count, total, max_err, limit) do
     cond do
       err_count > max_err ->
+        Logger.warning(
+          "Channel #{channel_id} exceeded max errors (#{max_err}), stopping at #{total} messages"
+        )
+
         total
 
       total >= limit ->
+        Logger.debug("Channel #{channel_id} reached message limit (#{limit}), stopping")
         total
 
       true ->
         locator = if before_id, do: {:before, before_id}, else: {}
 
-        case Channel.messages(channel_id, 100, locator) do
+        case Channel.messages(channel_id, 200, locator) do
           {:ok, []} ->
+            Logger.debug("Channel #{channel_id} no more messages (total: #{total})")
             total
 
           {:ok, messages} ->
+            # batch_count = length(messages)
             oldest = List.last(messages)
             next_before = oldest.id
             {text_content, media_urls} = extract_content_and_media(messages)
@@ -141,12 +161,22 @@ defmodule RolandoDiscord.Train do
             added = length(text_content)
             new_total = total + added
 
+            # Logger.debug(
+            #   "Channel #{channel_id} fetched batch of #{batch_count} messages, #{added} text, #{length(media_urls)} media, running total: #{new_total}"
+            # )
+
             loop_fetch(guild_id, channel_id, next_before, 0, new_total, max_err, limit)
 
           {:error, _} = err ->
-            Logger.warning("Channel #{channel_id} fetch error: #{inspect(err)}")
+            Logger.warning(
+              "Channel #{channel_id} fetch error (attempt #{err_count + 1}/#{max_err}): #{inspect(err)}"
+            )
 
             if err_count + 1 > max_err do
+              Logger.error(
+                "Channel #{channel_id} failed after #{max_err} errors, stopping at #{total} messages"
+              )
+
               total
             else
               loop_fetch(guild_id, channel_id, before_id, err_count + 1, total, max_err, limit)
@@ -166,13 +196,21 @@ defmodule RolandoDiscord.Train do
     end)
   end
 
-  defp store_media_for_training(guild_id, _channel_id, media_urls) do
+  defp store_media_for_training(guild_id, channel_id, media_urls) do
     gid = to_string(guild_id)
+    cid = to_string(channel_id)
+
+    url_count = length(media_urls)
+
+    if url_count > 0 do
+      Logger.debug("Storing #{url_count} media URLs for channel #{cid} in guild #{gid}")
+    end
 
     Enum.each(media_urls, fn url ->
       # Store media metadata for neural network processing
       MediaStore.create(%{
         guild_id: gid,
+        channel_id: cid,
         url: url,
         media_type: detect_media_type(url),
         context_hash: ""

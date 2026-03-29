@@ -21,8 +21,7 @@ defmodule Rolando.Schema.SharedWeights do
       :embedding_data,
       :projection_data,
       :tier,
-      :inserted_at,
-      :updated_at
+      :inserted_at
     ])
     |> validate_required([:id, :embedding_data, :projection_data])
     |> validate_inclusion(:tier, [:minimal, :standard, :full])

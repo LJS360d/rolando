@@ -27,9 +27,7 @@ defmodule RolandoDiscord.Consumers.Component do
     end
   end
 
-  def handle_event(_event) do
-    :noop
-  end
+  def handle_event(_event), do: :noop
 
   defp confirm_train_first(%I{guild_id: nil}), do: :noop
 

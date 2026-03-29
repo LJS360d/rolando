@@ -230,7 +230,7 @@ fn random_u32() -> u32 {
 }
 
 rustler::init!(
-    "rolando_nif",
+    "Elixir.Rolando.Neural.NIF",
     [
         tokenize,
         detokenize,

@@ -13,6 +13,9 @@
 defmodule Rolando.Seeds do
   @moduledoc false
 
+  alias Rolando.Repo
+  require Logger
+
   # Fixed seed for reproducible Xavier uniform initialization
   # This ensures all nodes in a cluster start with the same weights
   @seed {0x12_34_56_78, 0xAB_CD_EF_00, 0x12_34_56_78}
@@ -74,7 +77,22 @@ defmodule Rolando.Seeds do
     # Concatenate all float32 values into a single binary
     :binary.list_to_bin(values)
   end
+
+  # Start the Ecto repo if not already running
+  defp start_repo_if_not_running do
+    case Repo.start_link() do
+      {:ok, _} -> {:ok, :started}
+      {:error, {:already_started, _}} -> {:ok, :already_running}
+      error -> error
+    end
+  end
+
+  def start_repo do
+    Application.ensure_all_started(:rolando)
+    start_repo_if_not_running()
+  end
 end
 
 # Run the seeds
+Rolando.Seeds.start_repo()
 Rolando.Seeds.run()

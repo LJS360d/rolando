@@ -8,6 +8,7 @@ defmodule Rolando.Schema.MediaStore do
   @primary_key {:id, :id, autogenerate: true}
   schema "media_store" do
     field :guild_id, :string
+    field :channel_id, :string
     field :url, :string
     field :media_type, Ecto.Enum, values: [:image, :gif, :video, :generic]
     field :context_hash, :string
@@ -18,6 +19,7 @@ defmodule Rolando.Schema.MediaStore do
     media_store
     |> cast(attrs, [
       :guild_id,
+      :channel_id,
       :url,
       :media_type,
       :context_hash

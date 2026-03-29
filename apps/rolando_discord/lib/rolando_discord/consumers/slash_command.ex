@@ -37,14 +37,14 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
     track_analytics(i, "slash_command", meta: %{name: i.data.name})
 
     case handle_command(i.data.name, i) do
-      {:ok, _} ->
-        track_analytics(i, "slash_command_complete", meta: %{name: i.data.name})
-
       {:error, err} ->
         track_analytics(i, "slash_command_fail", meta: %{error: inspect(err)}, level: :error)
 
       :noop ->
-        :ok
+        :noop
+
+      _ ->
+        track_analytics(i, "slash_command_complete", meta: %{name: i.data.name})
     end
   end
 
@@ -96,9 +96,7 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
 
   defp handle_command("train", %I{guild_id: guild_id} = i) do
     if Permissions.admin_or_owner?(i) do
-      # Ensure guild exists in our system
       guild_schema = GuildCache.get!(guild_id) |> InteractionHelpers.to_guild_schema()
-
       {:ok, _guild} = Guilds.get_or_create(guild_schema)
 
       # Ensure config exists for this guild (creates with defaults if not exists)
@@ -120,70 +118,64 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
           rem_s = rem(max(remaining, 0), 60)
           rem_str = :io_lib.format("~2..0w:~2..0w", [rem_m, rem_s]) |> IO.iodata_to_binary()
 
-          _ =
-            Interaction.create_response(i, %{
-              type: InteractionCallbackType.channel_message_with_source(),
-              data: %{
-                content:
-                  "Message fetching was last performed on **#{InteractionHelpers.fmt_dt(config.trained_at)}**.\nThe train command has a **#{cd} minutes cooldown** to prevent abuse. Please wait **#{rem_str}** before trying again.",
-                flags: 64
-              }
-            })
+          Interaction.create_response(i, %{
+            type: InteractionCallbackType.channel_message_with_source(),
+            data: %{
+              content:
+                "Message fetching was last performed on **#{InteractionHelpers.fmt_dt(config.trained_at)}**.\nThe train command has a **#{cd} minutes cooldown** to prevent abuse. Please wait **#{rem_str}** before trying again.",
+              flags: 64
+            }
+          })
 
         config.trained_at != nil &&
             (!InteractionHelpers.train_cooldown_active?(config.trained_at) || owner?) ->
           trained_fmt = InteractionHelpers.fmt_dt(config.trained_at)
 
-          _ =
-            Interaction.create_response(i, %{
-              type: InteractionCallbackType.channel_message_with_source(),
-              data: %{
-                content:
-                  "The train command has already been performed at **`#{trained_fmt}`**.\nBy performing it again, you will **delete ALL** the fetched data from this server,\nand it will be fetched again in all accessible text channels,\nyou can use the `/channels` command to see which are accessible.\nIf you wish to exclude specific channels, revoke my typing permissions in those channels.\n\nThis command can only be performed every **#{cd} minutes**. Are you sure?",
-                flags: 64,
-                components: [
-                  %{
-                    type: 1,
-                    components: [
-                      %{
-                        type: 2,
-                        label: "Confirm Re-train",
-                        style: 4,
-                        custom_id: "confirm-train-again"
-                      }
-                    ]
-                  }
-                ]
-              }
-            })
+          Interaction.create_response(i, %{
+            type: InteractionCallbackType.channel_message_with_source(),
+            data: %{
+              content:
+                "The train command has already been performed at **`#{trained_fmt}`**.\nBy performing it again, you will **delete ALL** the fetched data from this server,\nand it will be fetched again in all accessible text channels,\nyou can use the `/channels` command to see which are accessible.\nIf you wish to exclude specific channels, revoke my typing permissions in those channels.\n\nThis command can only be performed every **#{cd} minutes**. Are you sure?",
+              flags: 64,
+              components: [
+                %{
+                  type: 1,
+                  components: [
+                    %{
+                      type: 2,
+                      label: "Confirm Re-train",
+                      style: 4,
+                      custom_id: "confirm-train-again"
+                    }
+                  ]
+                }
+              ]
+            }
+          })
 
         true ->
-          _ =
-            Interaction.create_response(i, %{
-              type: InteractionCallbackType.channel_message_with_source(),
-              data: %{
-                content:
-                  "Are you sure you want to use **ALL SERVER MESSAGES** as training data for me?\nThis will fetch data in all accessible text channels,\nyou can use the `/channels` command to see which are accessible.\nIf you wish to exclude specific channels, revoke my typing permissions in those channels.\n\nThis command can only be performed every **#{cd} minutes**. Are you sure?",
-                flags: 64,
-                components: [
-                  %{
-                    type: 1,
-                    components: [
-                      %{type: 2, label: "Confirm", style: 1, custom_id: "confirm-train"}
-                    ]
-                  }
-                ]
-              }
-            })
+          Interaction.create_response(i, %{
+            type: InteractionCallbackType.channel_message_with_source(),
+            data: %{
+              content:
+                "Are you sure you want to use **ALL SERVER MESSAGES** as training data for me?\nThis will fetch data in all accessible text channels,\nyou can use the `/channels` command to see which are accessible.\nIf you wish to exclude specific channels, revoke my typing permissions in those channels.\n\nThis command can only be performed every **#{cd} minutes**. Are you sure?",
+              flags: 64,
+              components: [
+                %{
+                  type: 1,
+                  components: [
+                    %{type: 2, label: "Confirm", style: 1, custom_id: "confirm-train"}
+                  ]
+                }
+              ]
+            }
+          })
       end
     else
-      _ =
-        Interaction.create_response(i, %{
-          type: InteractionCallbackType.channel_message_with_source(),
-          data: %{content: "You are not authorized to use this command.", flags: 64}
-        })
+      Interaction.create_response(i, %{
+        type: InteractionCallbackType.channel_message_with_source(),
+        data: %{content: "You are not authorized to use this command.", flags: 64}
+      })
     end
-
-    :ok
   end
 end

@@ -3,13 +3,7 @@ defmodule Rolando.Neural.Tokenizer do
   NIF wrapper for BPE tokenizer (sentencepiece).
   """
 
-  @on_load :load_nifs
-
-  @spec load_nifs :: :ok | {:error, atom()}
-  defp load_nifs do
-    path = :filename.join(:code.priv_dir(:rolando), "nif")
-    :erlang.load_nif(path, 0)
-  end
+  alias Rolando.Neural.NIF
 
   @doc """
   Tokenize text into token IDs.
@@ -20,8 +14,8 @@ defmodule Rolando.Neural.Tokenizer do
       [1234, 5678]
   """
   @spec tokenize(String.t()) :: [non_neg_integer()]
-  def tokenize(_text),
-    do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate tokenize(text),
+    to: NIF
 
   @doc """
   Detokenize token IDs back to text.
@@ -32,8 +26,8 @@ defmodule Rolando.Neural.Tokenizer do
       "hello world"
   """
   @spec detokenize([non_neg_integer()]) :: String.t()
-  def detokenize(_token_ids),
-    do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate detokenize(token_ids),
+    to: NIF
 
   @doc """
   Load tokenizer model from path.
@@ -44,8 +38,8 @@ defmodule Rolando.Neural.Tokenizer do
       :ok
   """
   @spec load_model(String.t()) :: :ok | {:error, atom()}
-  def load_model(_model_path),
-    do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate load_model(model_path),
+    to: NIF
 
   @doc """
   Get vocabulary size.
@@ -56,8 +50,8 @@ defmodule Rolando.Neural.Tokenizer do
       32000
   """
   @spec vocab_size :: non_neg_integer()
-  def vocab_size,
-    do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate vocab_size,
+    to: NIF
 
   @doc """
   Get token ID for a given token string.
@@ -68,6 +62,5 @@ defmodule Rolando.Neural.Tokenizer do
       1234
   """
   @spec get_token_id(String.t()) :: non_neg_integer()
-  def get_token_id(_token),
-    do: :erlang.nif_error(:nif_not_loaded)
+  defdelegate get_token_id(token), to: NIF
 end
