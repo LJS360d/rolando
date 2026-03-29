@@ -50,10 +50,7 @@ defmodule Rolando.MixProject do
       ],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
-      "nif.build":
-        "run -e 'File.mkdir_p!(\"priv/nif\"); File.cp!(\"native/target/debug/librolando_nif.so\", \"priv/nif/rolando_nif.so\")'",
-      "nif.build.release":
-        "run -e 'File.mkdir_p!(\"priv/nif\"); File.cp!(\"native/target/release/librolando_nif.so\", \"priv/nif/rolando_nif.so\")'",
+      "nif.build": ["nif.build"],
       "nif.clean": "run -e 'File.rm_rf!(\"priv/nif\")'"
     ]
   end

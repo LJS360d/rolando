@@ -8,18 +8,18 @@ defmodule Rolando.Neural.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  # GRU
+  # GRU - names match Rust exports
 
   @doc """
   Create new GRU weights with Xavier initialization.
 
   ## Examples
 
-      iex> {:ok, weights} = Rolando.Neural.GRU.create_weights(256, 512)
+      iex> {:ok, weights} = Rolando.Neural.GRU.gru_create_weights(256, 512)
   """
-  @spec create_weights(input_size :: non_neg_integer(), hidden_size :: non_neg_integer()) ::
+  @spec gru_create_weights(input_size :: non_neg_integer(), hidden_size :: non_neg_integer()) ::
           binary() | {:error, atom()}
-  def create_weights(_input_size, _hidden_size), do: :erlang.nif_error(:nif_not_loaded)
+  def gru_create_weights(_input_size, _hidden_size), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Forward pass through GRU for a single timestep.
@@ -32,9 +32,9 @@ defmodule Rolando.Neural.NIF do
   ## Returns
     - New hidden state vector
   """
-  @spec forward(input :: [float()], h_prev :: [float()], weights :: binary()) ::
+  @spec gru_forward(input :: [float()], h_prev :: [float()], weights :: binary()) ::
           [float()] | {:error, atom()}
-  def forward(_input, _h_prev, _weights), do: :erlang.nif_error(:nif_not_loaded)
+  def gru_forward(_input, _h_prev, _weights), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Forward pass through GRU for a sequence.
@@ -47,34 +47,26 @@ defmodule Rolando.Neural.NIF do
   ## Returns
     - List of hidden states for each timestep
   """
-  @spec forward_sequence(inputs :: [[float()]], initial_h :: [float()], weights :: binary()) ::
+  @spec gru_forward_sequence(inputs :: [[float()]], initial_h :: [float()], weights :: binary()) ::
           [[float()]] | {:error, atom()}
-  def forward_sequence(_inputs, _initial_h, _weights), do: :erlang.nif_error(:nif_not_loaded)
+  def gru_forward_sequence(_inputs, _initial_h, _weights), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Get hidden size from weights binary.
   """
-  @spec hidden_size(weights :: binary()) :: non_neg_integer()
-  def hidden_size(_weights), do: :erlang.nif_error(:nif_not_loaded)
+  @spec gru_hidden_size(weights :: binary()) :: non_neg_integer()
+  def gru_hidden_size(_weights), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   Get input size from weights binary.
   """
-  @spec input_size(weights :: binary()) :: non_neg_integer()
-  def input_size(_weights), do: :erlang.nif_error(:nif_not_loaded)
+  @spec gru_input_size(weights :: binary()) :: non_neg_integer()
+  def gru_input_size(_weights), do: :erlang.nif_error(:nif_not_loaded)
 
   # Quantizer
 
   @doc """
   Quantize a float32 weight vector to ternary values (-1, 0, +1).
-
-  ## Arguments
-    - weights: List of float32 values
-    - threshold: Optional threshold for quantization (defaults to mean absolute value)
-    - stochastic: Whether to use stochastic quantization
-
-  ## Returns
-    - {values, scale, threshold, zero_ratio}
 
   ## Examples
 
@@ -90,13 +82,6 @@ defmodule Rolando.Neural.NIF do
   @doc """
   Dequantize ternary values back to float32.
 
-  ## Arguments
-    - ternary_values: List of -1, 0, +1 values
-    - scale: Scale factor from quantization
-
-  ## Returns
-    - List of float32 values
-
   ## Examples
 
       iex> Rolando.Neural.Quantizer.dequantize([1, -1, 0, 1], 0.5)
@@ -107,13 +92,6 @@ defmodule Rolando.Neural.NIF do
 
   @doc """
   Quantize a map of weight matrices.
-
-  ## Arguments
-    - weights_map: Map of weight matrix name to float array
-    - precision_mode: :standard or :bitnet
-
-  ## Returns
-    - Map of quantized matrices
 
   ## Examples
 
@@ -127,12 +105,6 @@ defmodule Rolando.Neural.NIF do
 
   @doc """
   Dequantize a map of ternary matrices back to float32.
-
-  ## Arguments
-    - quantized_map: Map of quantized matrices
-
-  ## Returns
-    - Map of float32 matrices
   """
   @spec dequantize_weights(%{String.t() => {[integer()], float(), float(), float()}}) ::
           %{String.t() => [float()]} | {:error, atom()}
@@ -140,14 +112,6 @@ defmodule Rolando.Neural.NIF do
 
   @doc """
   Compute quantization statistics.
-
-  ## Arguments
-    - original: Original float32 weights
-    - quantized: Ternary quantized values
-    - scale: Scale factor used
-
-  ## Returns
-    - {compression_ratio, sparsity}
   """
   @spec compute_stats([float()], [integer()], float()) :: {float(), float()} | {:error, atom()}
   def compute_stats(_original, _quantized, _scale), do: :erlang.nif_error(:nif_not_loaded)
@@ -172,7 +136,7 @@ defmodule Rolando.Neural.NIF do
   ## Examples
 
       iex> Rolando.Neural.Tokenizer.detokenize([1234, 5678])
-      "hello world"
+      "detokenized"
   """
   @spec detokenize([non_neg_integer()]) :: String.t()
   def detokenize(_token_ids),

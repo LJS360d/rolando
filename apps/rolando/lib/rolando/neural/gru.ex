@@ -10,11 +10,11 @@ defmodule Rolando.Neural.GRU do
 
   ## Examples
 
-      iex> {:ok, weights} = Rolando.Neural.GRU.create_weights(256, 512)
+      iex> {:ok, weights} = Rolando.Neural.GRU.gru_create_weights(256, 512)
   """
-  @spec create_weights(input_size :: non_neg_integer(), hidden_size :: non_neg_integer()) ::
+  @spec gru_create_weights(input_size :: non_neg_integer(), hidden_size :: non_neg_integer()) ::
           binary() | {:error, atom()}
-  defdelegate create_weights(input_size, hidden_size), to: NIF
+  defdelegate gru_create_weights(input_size, hidden_size), to: NIF
 
   @doc """
   Forward pass through GRU for a single timestep.
@@ -27,9 +27,9 @@ defmodule Rolando.Neural.GRU do
   ## Returns
     - New hidden state vector
   """
-  @spec forward(input :: [float()], h_prev :: [float()], weights :: binary()) ::
+  @spec gru_forward(input :: [float()], h_prev :: [float()], weights :: binary()) ::
           [float()] | {:error, atom()}
-  defdelegate forward(input, h_prev, weights), to: NIF
+  defdelegate gru_forward(input, h_prev, weights), to: NIF
 
   @doc """
   Forward pass through GRU for a sequence.
@@ -42,21 +42,21 @@ defmodule Rolando.Neural.GRU do
   ## Returns
     - List of hidden states for each timestep
   """
-  @spec forward_sequence(inputs :: [[float()]], initial_h :: [float()], weights :: binary()) ::
+  @spec gru_forward_sequence(inputs :: [[float()]], initial_h :: [float()], weights :: binary()) ::
           [[float()]] | {:error, atom()}
-  defdelegate forward_sequence(inputs, initial_h, weights), to: NIF
+  defdelegate gru_forward_sequence(inputs, initial_h, weights), to: NIF
 
   @doc """
   Get hidden size from weights binary.
   """
-  @spec hidden_size(weights :: binary()) :: non_neg_integer()
-  defdelegate hidden_size(weights), to: NIF
+  @spec gru_hidden_size(weights :: binary()) :: non_neg_integer()
+  defdelegate gru_hidden_size(weights), to: NIF
 
   @doc """
   Get input size from weights binary.
   """
-  @spec input_size(weights :: binary()) :: non_neg_integer()
-  defdelegate input_size(weights), to: NIF
+  @spec gru_input_size(weights :: binary()) :: non_neg_integer()
+  defdelegate gru_input_size(weights), to: NIF
 
   @doc """
   Create a new hidden state vector initialized to zeros.

@@ -61,12 +61,7 @@ defmodule Rolando.Umbrella.MixProject do
     [
       # run `mix setup` in all child apps
       setup: ["cmd mix setup"],
-      "nif.build": [
-        "run --no-start apps/rolando/nif_build.exs"
-      ],
-      "nif.build.release": [
-        "run -e 'File.mkdir_p!(\"priv/nif\"); File.cp!(\"native/target/release/librolando_nif.so\", \"priv/nif/rolando_nif.so\")'"
-      ],
+      "nif.build": ["nif.build"],
       "nif.clean": ["run -e 'File.rm_rf!(\"priv/nif\")'"],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
     ]

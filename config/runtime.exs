@@ -2,8 +2,8 @@ import Config
 
 # check if dotEnvy is available before import
 if Code.ensure_loaded?(Dotenvy) do
-  import Dotenvy
-  source!([".env", System.get_env()]) |> System.put_env()
+  alias Dotenvy
+  Dotenvy.source!([".env", System.get_env()]) |> System.put_env()
 end
 
 # config/runtime.exs is executed for all environments, including

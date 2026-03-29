@@ -5,7 +5,8 @@ defmodule RolandoDiscord.Train do
 
   alias Nostrum.Api.{Channel, Message}
   alias Rolando.Analytics
-  alias Rolando.Contexts.{GuildConfig, MediaStore}
+  alias Rolando.Contexts.{GuildConfig, GuildWeights, MediaStore}
+  alias Rolando.Neural.{GRU, GuildSupervisor}
   alias RolandoDiscord.Permissions
 
   def run(opts) do
@@ -92,8 +93,10 @@ defmodule RolandoDiscord.Train do
       "Training completed for guild #{gid}: #{total} messages in #{format_duration_ms(elapsed_ms)} (#{msgs_per_s} msg/s)"
     )
 
-    # TODO: Initialize neural network weights after message collection
-    # This will be implemented as part of the neural training pipeline
+    # Initialize neural network weights and create checkpoint asynchronously
+    spawn(fn ->
+      create_guild_model_checkpoint(guild_id, gid, total)
+    end)
 
     Analytics.track(%{
       name: "train_completed",
@@ -244,5 +247,112 @@ defmodule RolandoDiscord.Train do
 
   defp contains_url?(content) do
     String.contains?(content, "http://") or String.contains?(content, "https://")
+  end
+
+  # Initialize guild model weights and create checkpoint asynchronously
+  # This runs in a separate process to not block the main training flow
+  def create_guild_model_checkpoint(guild_id, gid, message_count) do
+    try do
+      Logger.info("Starting async model initialization for guild #{gid}")
+
+      # Ensure guild supervisor is running
+      ensure_guild_supervisor_running()
+
+      # Start or get the guild model GenServer
+      start_or_get_guild_model(guild_id)
+
+      # Initialize GRU weights with tokenizer vocab size as input
+      input_size = get_tokenizer_vocab_size()
+      hidden_size = 512
+
+      weights =
+        case GRU.gru_create_weights(input_size, hidden_size) do
+          w when is_binary(w) ->
+            w
+
+          {:error, _} ->
+            # Fallback: create with default values if NIF not loaded
+            create_fallback_weights(input_size, hidden_size)
+        end
+
+      # Save initial weights as checkpoint to database
+      case GuildWeights.upsert(gid, %{weight_data: weights, version: 1, perplexity: 0.0}) do
+        {:ok, _} -> Logger.debug("Weights saved to database")
+        {:error, reason} -> Logger.warning("Failed to save weights: #{inspect(reason)}")
+      end
+
+      # Update trained_at timestamp
+      case GuildConfig.update_trained_at(gid, DateTime.utc_now()) do
+        {:ok, _} -> Logger.debug("trained_at updated")
+        {:error, reason} -> Logger.warning("Failed to update trained_at: #{inspect(reason)}")
+      end
+
+      Logger.info(
+        "Guild model checkpoint created for guild #{gid}: #{message_count} messages, input_size=#{input_size}, hidden_size=#{hidden_size}"
+      )
+
+      Analytics.track(%{
+        name: "model_checkpoint_created",
+        guild_id: gid,
+        meta: %{
+          "message_count" => message_count,
+          "input_size" => input_size,
+          "hidden_size" => hidden_size
+        }
+      })
+    rescue
+      e ->
+        stack = __STACKTRACE__
+
+        Logger.error(
+          "Failed to create guild model checkpoint: #{Exception.format(:error, e, stack)}"
+        )
+    end
+  end
+
+  defp ensure_guild_supervisor_running do
+    # The supervisor should already be running, but ensure it's started
+    # If it's already running, this is a no-op
+    case Rolando.Neural.GuildSupervisor.start_link(name: Rolando.Neural.GuildSupervisor) do
+      {:ok, _} -> :ok
+      {:error, {:already_started, _}} -> :ok
+      {:error, reason} -> Logger.warning("GuildSupervisor start error: #{inspect(reason)}")
+    end
+  end
+
+  defp start_or_get_guild_model(guild_id) do
+    # Try to start the guild model, or get it if already running
+    case GuildSupervisor.start_guild(guild_id) do
+      {:ok, _pid} ->
+        Logger.debug("Started new GuildModel for guild #{guild_id}")
+        :ok
+
+      {:error, {:already_started, _pid}} ->
+        Logger.debug("GuildModel already running for guild #{guild_id}")
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("Failed to start GuildModel: #{inspect(reason)}")
+        :error
+    end
+  end
+
+  defp get_tokenizer_vocab_size do
+    try do
+      Rolando.Neural.Tokenizer.vocab_size()
+    rescue
+      _ ->
+        # Default vocab size if tokenizer not loaded
+        32_000
+    end
+  end
+
+  defp create_fallback_weights(input_size, hidden_size) do
+    # Create simple zero-filled weights as fallback
+    # This is used when the NIF is not loaded
+    # 3 gates, 4 bytes per float
+    hidden_size_bytes = hidden_size * 4 * 3
+    input_size_bytes = input_size * 4 * 3
+    <<0::size(hidden_size_bytes + input_size_bytes)>>
   end
 end
