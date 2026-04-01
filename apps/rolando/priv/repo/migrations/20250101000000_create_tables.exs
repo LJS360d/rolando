@@ -43,6 +43,8 @@ defmodule Rolando.Repo.Migrations.CreateTables do
       add :precision_mode, :string, default: "standard"
       add :tier, :string, default: "standard"
       add :trained_at, :utc_datetime
+      add :reply_rate, :integer, default: 20
+      add :reaction_rate, :integer, default: 100
       add :inserted_at, :utc_datetime, default: fragment("CURRENT_TIMESTAMP")
       add :updated_at, :utc_datetime, default: fragment("CURRENT_TIMESTAMP")
     end
@@ -111,5 +113,22 @@ defmodule Rolando.Repo.Migrations.CreateTables do
     create index(:analytics_events, [:guild_id])
     create index(:analytics_events, [:event_type])
     create index(:analytics_events, [:user_id])
+
+    # Messages table for GRU training data
+    create table(:messages, primary_key: false) do
+      add :id, :binary_id, primary_key: true, autogenerate: true
+      add :guild_id, :string, null: false
+      add :channel_id, :string, null: false
+      add :author_id, :string
+      add :content, :text, null: false
+      add :message_hash, :string
+      add :inserted_at, :utc_datetime, default: fragment("CURRENT_TIMESTAMP")
+      add :updated_at, :utc_datetime, default: fragment("CURRENT_TIMESTAMP")
+    end
+
+    create index(:messages, [:guild_id])
+    create index(:messages, [:channel_id])
+    create index(:messages, [:author_id])
+    create index(:messages, [:message_hash], name: :messages_guild_hash_index)
   end
 end

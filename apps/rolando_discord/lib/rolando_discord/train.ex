@@ -6,6 +6,7 @@ defmodule RolandoDiscord.Train do
   alias Nostrum.Api.{Channel, Message}
   alias Rolando.Analytics
   alias Rolando.Contexts.{GuildConfig, GuildWeights, MediaStore}
+  alias Rolando.Messages
   alias Rolando.Neural.{GRU, GuildSupervisor}
   alias RolandoDiscord.Permissions
 
@@ -45,9 +46,9 @@ defmodule RolandoDiscord.Train do
     user_mention = Keyword.fetch!(opts, :user_mention)
 
     gid = to_string(guild_id)
-    max_conc = Application.get_env(:rolando, :train_channel_max_concurrency, 6)
+    max_conc = Application.get_env(:rolando, :train_channel_max_concurrency, 2)
     msg_limit = Application.get_env(:rolando, :train_message_limit_per_channel, 750_000)
-    max_err = Application.get_env(:rolando, :train_max_fetch_errors_per_channel, 5)
+    max_err = Application.get_env(:rolando, :train_max_fetch_errors_per_channel, 10)
 
     Logger.info(
       "Training started for guild #{gid}, channel #{channel_id}, max_concurrency=#{max_conc}, msg_limit=#{msg_limit}"
@@ -161,6 +162,9 @@ defmodule RolandoDiscord.Train do
             # Store extracted media in the media store for neural network training
             store_media_for_training(guild_id, channel_id, media_urls)
 
+            # Store messages for GRU training
+            store_messages_for_training(guild_id, channel_id, messages)
+
             added = length(text_content)
             new_total = total + added
 
@@ -169,6 +173,34 @@ defmodule RolandoDiscord.Train do
             # )
 
             loop_fetch(guild_id, channel_id, next_before, 0, new_total, max_err, limit)
+
+          {:error, %{status_code: 429, retry_after: retry_after}} ->
+            # Rate limited - wait and retry
+            wait_time = ceil(retry_after * 1000)
+
+            Logger.warning(
+              "Channel #{channel_id} rate limited, waiting #{wait_time}ms before retry"
+            )
+
+            Process.sleep(wait_time)
+            loop_fetch(guild_id, channel_id, before_id, err_count, total, max_err, limit)
+
+          {:error, %{status_code: _}} = error ->
+            Logger.warning(
+              "Channel #{channel_id} fetch error (attempt #{err_count + 1}/#{max_err}): #{inspect(error)}"
+            )
+
+            if err_count + 1 > max_err do
+              Logger.error(
+                "Channel #{channel_id} failed after #{max_err} errors, stopping at #{total} messages"
+              )
+
+              total
+            else
+              # Add small delay between retries to avoid hammering
+              Process.sleep(500)
+              loop_fetch(guild_id, channel_id, before_id, err_count + 1, total, max_err, limit)
+            end
 
           {:error, _} = err ->
             Logger.warning(
@@ -182,6 +214,7 @@ defmodule RolandoDiscord.Train do
 
               total
             else
+              Process.sleep(500)
               loop_fetch(guild_id, channel_id, before_id, err_count + 1, total, max_err, limit)
             end
         end
@@ -219,6 +252,40 @@ defmodule RolandoDiscord.Train do
         context_hash: ""
       })
     end)
+  end
+
+  defp store_messages_for_training(guild_id, channel_id, messages) do
+    gid = to_string(guild_id)
+    cid = to_string(channel_id)
+
+    # Filter and prepare messages for storage
+    message_attrs =
+      Enum.filter(messages, fn msg ->
+        line_acceptable?(msg.content)
+      end)
+      |> Enum.map(fn msg ->
+        # Create a simple hash for deduplication
+        hash = :crypto.hash(:sha256, "#{gid}:#{msg.id}") |> Base.encode16(case: :lower)
+
+        %{
+          guild_id: gid,
+          channel_id: cid,
+          author_id: to_string(msg.author.id),
+          content: msg.content,
+          message_hash: hash
+        }
+      end)
+
+    if length(message_attrs) > 0 do
+      # Use bulk insert for efficiency
+      case Messages.create_many(message_attrs) do
+        {n, _} ->
+          Logger.debug("Stored #{n} messages for guild #{gid}")
+
+        {:error, reason} ->
+          Logger.warning("Failed to store messages: #{inspect(reason)}")
+      end
+    end
   end
 
   defp detect_media_type(url) do

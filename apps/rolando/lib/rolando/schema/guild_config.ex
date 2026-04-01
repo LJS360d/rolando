@@ -18,6 +18,8 @@ defmodule Rolando.Schema.GuildConfig do
     field :precision_mode, Ecto.Enum, values: [:standard, :bitnet], default: :standard
     field :tier, Ecto.Enum, values: [:minimal, :standard, :full], default: :standard
     field :trained_at, :utc_datetime
+    field :reply_rate, :integer, default: 20
+    field :reaction_rate, :integer, default: 100
     timestamps(updated_at: false)
   end
 
@@ -35,12 +37,16 @@ defmodule Rolando.Schema.GuildConfig do
       :vector_augment,
       :precision_mode,
       :tier,
-      :trained_at
+      :trained_at,
+      :reply_rate,
+      :reaction_rate
     ])
     |> validate_required([:guild_id])
     |> validate_number(:batch_size, greater_than: 0)
     |> validate_number(:learning_rate, greater_than: 0)
     |> validate_inclusion(:precision_mode, [:standard, :bitnet])
     |> validate_inclusion(:tier, [:minimal, :standard, :full])
+    |> validate_number(:reply_rate, greater_than: 0)
+    |> validate_number(:reaction_rate, greater_than: 0)
   end
 end

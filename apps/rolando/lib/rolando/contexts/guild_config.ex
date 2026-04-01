@@ -75,6 +75,9 @@ defmodule Rolando.Contexts.GuildConfig do
            :vector_augment,
            :precision_mode,
            :tier,
+           :trained_at,
+           :reply_rate,
+           :reaction_rate,
            :updated_at
          ]},
       conflict_target: :guild_id,
