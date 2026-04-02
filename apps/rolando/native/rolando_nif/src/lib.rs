@@ -1,6 +1,10 @@
 /* Rolando NIF - Rustler entry points for Elixir integration */
 
-use rustler::{Encoder, Env, NifResult, Term};
+mod rnn;
+
+use ndarray::Array1;
+use rustler::{Binary, Encoder, Env, NifResult, Term};
+
 
 // ============== Tokenizer NIFs ==============
 
@@ -31,6 +35,111 @@ fn vocab_size<'a>(env: Env<'a>) -> NifResult<Term<'a>> {
 #[rustler::nif]
 fn get_token_id<'a>(env: Env<'a>, token: String) -> NifResult<Term<'a>> {
     Ok(simple_hash(&token).encode(env))
+}
+
+#[rustler::nif]
+fn tokenize_bytes(text: String) -> Vec<u32> {
+    text.as_bytes().iter().map(|&b| b as u32).collect()
+}
+
+#[rustler::nif]
+fn detokenize_bytes(ids: Vec<u32>) -> String {
+    let bytes: Vec<u8> = ids.iter().map(|&b| b as u8).collect();
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+#[rustler::nif]
+fn tokenizer_byte_vocab_size() -> u32 {
+    256
+}
+
+#[rustler::nif]
+fn language_model_create(vb: u64, e: u64, h: u64) -> Vec<u8> {
+    rnn::create(vb as usize, e as usize, h as usize)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn language_model_train<'a>(
+    weights: Binary<'a>,
+    packed: Vec<u32>,
+    hyper: Binary<'a>,
+) -> (Vec<u8>, f32) {
+    if hyper.len() != 24 {
+        panic!("hyper must be 24 bytes (lr f32, epochs u64, max_seq_len u64, max_norm f32)");
+    }
+    let lr = f32::from_le_bytes(hyper.as_slice()[0..4].try_into().unwrap());
+    let epochs = u64::from_le_bytes(hyper.as_slice()[4..12].try_into().unwrap());
+    let max_seq_len = u64::from_le_bytes(hyper.as_slice()[12..20].try_into().unwrap());
+    let max_norm = f32::from_le_bytes(hyper.as_slice()[20..24].try_into().unwrap());
+
+    if packed.is_empty() {
+        panic!("packed empty");
+    }
+    let num_seqs = packed[0] as usize;
+    if packed.len() < 1 + num_seqs {
+        panic!("packed too short for lengths");
+    }
+    let lengths: Vec<usize> = packed[1..1 + num_seqs]
+        .iter()
+        .map(|&x| x as usize)
+        .collect();
+    let flat: Vec<u32> = packed[1 + num_seqs..].to_vec();
+
+    let m = rnn::unpack(weights.as_slice()).unwrap_or_else(|e| panic!("{}", e));
+    let mut sequences: Vec<Vec<u32>> = Vec::new();
+    let mut off = 0usize;
+    for len in lengths {
+        if off + len > flat.len() {
+            panic!("flat/lengths mismatch");
+        }
+        sequences.push(flat[off..off + len].to_vec());
+        off += len;
+    }
+    if off != flat.len() {
+        panic!("lengths do not sum to flat len");
+    }
+    rnn::train_sequences(
+        m,
+        &sequences,
+        lr,
+        epochs as usize,
+        max_seq_len as usize,
+        max_norm,
+    )
+}
+
+#[rustler::nif]
+fn language_model_step<'a>(
+    weights: Binary<'a>,
+    token_id: u32,
+    h: Vec<f32>,
+) -> (Vec<f32>, Vec<f32>) {
+    let m = rnn::unpack(weights.as_slice()).unwrap_or_else(|e| panic!("{}", e));
+    if h.len() != m.h {
+        panic!(
+            "hidden size mismatch: got {} expected {}",
+            h.len(),
+            m.h
+        );
+    }
+    let h_prev = Array1::from(h);
+    let (logits, h_new) = rnn::step_logits(&m, token_id, &h_prev);
+    (logits.to_vec(), h_new.to_vec())
+}
+
+#[rustler::nif]
+fn language_model_dims<'a>(weights: Binary<'a>) -> (u32, u32, u32) {
+    let w = weights.as_slice();
+    if w.len() < 16 {
+        panic!("truncated header");
+    }
+    if &w[0..4] != b"RLM1" {
+        panic!("not a language model blob");
+    }
+    let vb = u32::from_le_bytes(w[4..8].try_into().unwrap());
+    let e = u32::from_le_bytes(w[8..12].try_into().unwrap());
+    let h = u32::from_le_bytes(w[12..16].try_into().unwrap());
+    (vb, e, h)
 }
 
 // ============== GRU NIFs ==============
@@ -237,6 +346,13 @@ rustler::init!(
         load_model,
         vocab_size,
         get_token_id,
+        tokenize_bytes,
+        detokenize_bytes,
+        tokenizer_byte_vocab_size,
+        language_model_create,
+        language_model_train,
+        language_model_step,
+        language_model_dims,
         gru_forward,
         gru_forward_sequence,
         gru_create_weights,

@@ -8,6 +8,7 @@ defmodule Rolando.Repo.Migrations.CreateTables do
       add :weight_data, :binary
       add :version, :integer, default: 1
       add :perplexity, :float
+      add :codebook_blob, :binary
       add :inserted_at, :utc_datetime, default: fragment("CURRENT_TIMESTAMP")
       add :updated_at, :utc_datetime, default: fragment("CURRENT_TIMESTAMP")
     end

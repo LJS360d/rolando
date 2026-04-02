@@ -7,7 +7,8 @@ defmodule RolandoDiscord.Train do
   alias Rolando.Analytics
   alias Rolando.Contexts.{GuildConfig, GuildWeights, MediaStore}
   alias Rolando.Messages
-  alias Rolando.Neural.{GRU, GuildSupervisor}
+  alias Rolando.Neural.{GuildSupervisor, LanguageModel, WordCodebook}
+  alias Rolando.Neural.Tokenizer
   alias RolandoDiscord.Permissions
 
   def run(opts) do
@@ -279,11 +280,12 @@ defmodule RolandoDiscord.Train do
     if length(message_attrs) > 0 do
       # Use bulk insert for efficiency
       case Messages.create_many(message_attrs) do
+        {:error, reason} ->
+          Logger.warning("Failed to store messages: #{inspect(reason)}")
+
         {n, _} ->
           Logger.debug("Stored #{n} messages for guild #{gid}")
 
-        {:error, reason} ->
-          Logger.warning("Failed to store messages: #{inspect(reason)}")
       end
     end
   end
@@ -316,46 +318,81 @@ defmodule RolandoDiscord.Train do
     String.contains?(content, "http://") or String.contains?(content, "https://")
   end
 
-  # Initialize guild model weights and create checkpoint asynchronously
-  # This runs in a separate process to not block the main training flow
   def create_guild_model_checkpoint(guild_id, gid, message_count) do
     try do
-      Logger.info("Starting async model initialization for guild #{gid}")
+      Logger.info("Starting async language model training for guild #{gid}")
 
-      # Ensure guild supervisor is running
       ensure_guild_supervisor_running()
-
-      # Start or get the guild model GenServer
       start_or_get_guild_model(guild_id)
 
-      # Initialize GRU weights with tokenizer vocab size as input
-      input_size = get_tokenizer_vocab_size()
-      hidden_size = 512
+      vb = Application.get_env(:rolando, :lm_vocab_buckets, 256)
+      e = Application.get_env(:rolando, :lm_embed_dim, 64)
+      h = Application.get_env(:rolando, :lm_hidden_dim, 256)
+      passes = Application.get_env(:rolando, :lm_data_passes, 1) |> max(1)
+      batch_size = Application.get_env(:rolando, :lm_message_batch_size, 500)
+
+      lr = Application.get_env(:rolando, :lm_train_lr, 0.05)
+      epochs = Application.get_env(:rolando, :lm_train_epochs_per_chunk, 1)
+      max_seq_len = Application.get_env(:rolando, :lm_max_seq_len, 128)
+      clip = Application.get_env(:rolando, :lm_gradient_clip, 5.0)
 
       weights =
-        case GRU.gru_create_weights(input_size, hidden_size) do
-          w when is_binary(w) ->
-            w
+        LanguageModel.create(
+          vocab_buckets: vb,
+          embed_dim: e,
+          hidden_dim: h
+        )
 
-          {:error, _} ->
-            # Fallback: create with default values if NIF not loaded
-            create_fallback_weights(input_size, hidden_size)
+      case GuildWeights.upsert(gid, %{
+             weight_data: weights,
+             version: 1,
+             perplexity: 1.0,
+             codebook_blob: nil
+           }) do
+        {:ok, _} ->
+          Logger.debug("Initial language model weights persisted for guild #{gid} (pre-corpus pass)")
+
+        {:error, reason} ->
+          Logger.warning("Failed to save initial language model weights: #{inspect(reason)}")
+      end
+
+      train_opts = [
+        lr: lr,
+        epochs: epochs,
+        max_seq_len: max_seq_len,
+        gradient_clip: clip
+      ]
+
+      {weights, avg_loss} =
+        Enum.reduce(1..passes, {weights, 0.0}, fn _pass, {w, _acc} ->
+          train_language_model_pass(w, gid, batch_size, train_opts)
+        end)
+
+      ppl = :math.exp(min(avg_loss, 20.0))
+
+      codebook_blob =
+        case build_word_codebook(gid, vb) do
+          list when is_list(list) -> WordCodebook.encode(list)
+          _ -> nil
         end
 
-      # Save initial weights as checkpoint to database
-      case GuildWeights.upsert(gid, %{weight_data: weights, version: 1, perplexity: 0.0}) do
-        {:ok, _} -> Logger.debug("Weights saved to database")
+      case GuildWeights.upsert(gid, %{
+             weight_data: weights,
+             version: 1,
+             perplexity: ppl,
+             codebook_blob: codebook_blob
+           }) do
+        {:ok, _} -> Logger.debug("Language model weights and word codebook saved")
         {:error, reason} -> Logger.warning("Failed to save weights: #{inspect(reason)}")
       end
 
-      # Update trained_at timestamp
       case GuildConfig.update_trained_at(gid, DateTime.utc_now()) do
         {:ok, _} -> Logger.debug("trained_at updated")
         {:error, reason} -> Logger.warning("Failed to update trained_at: #{inspect(reason)}")
       end
 
       Logger.info(
-        "Guild model checkpoint created for guild #{gid}: #{message_count} messages, input_size=#{input_size}, hidden_size=#{hidden_size}"
+        "Language model trained for guild #{gid}: #{message_count} messages stored, avg_loss=#{Float.round(avg_loss, 4)}, perplexity≈#{Float.round(ppl, 2)}"
       )
 
       Analytics.track(%{
@@ -363,8 +400,11 @@ defmodule RolandoDiscord.Train do
         guild_id: gid,
         meta: %{
           "message_count" => message_count,
-          "input_size" => input_size,
-          "hidden_size" => hidden_size
+          "vocab_buckets" => vb,
+          "embed_dim" => e,
+          "hidden_dim" => h,
+          "avg_loss" => avg_loss,
+          "perplexity" => ppl
         }
       })
     rescue
@@ -375,6 +415,91 @@ defmodule RolandoDiscord.Train do
           "Failed to create guild model checkpoint: #{Exception.format(:error, e, stack)}"
         )
     end
+  end
+
+  defp build_word_codebook(gid, vb) do
+    counts_by_bucket =
+      Stream.unfold(0, fn offset ->
+        case Messages.list_by_guild(gid, limit: 500, offset: offset) do
+          [] ->
+            nil
+
+          batch ->
+            {batch, offset + length(batch)}
+        end
+      end)
+      |> Enum.reduce(%{}, fn batch, acc ->
+        Enum.reduce(batch, acc, fn msg, acc_inner ->
+          words =
+            msg.content
+            |> String.split()
+            |> Enum.map(&String.trim/1)
+            |> Enum.filter(&(&1 != ""))
+
+          Enum.reduce(words, acc_inner, fn word, acc2 ->
+            case Tokenizer.tokenize(word) do
+              [tid | _] ->
+                b = rem(tid, vb)
+                inner = Map.get(acc2, b, %{})
+                inner = Map.update(inner, word, 1, &(&1 + 1))
+                Map.put(acc2, b, inner)
+
+              [] ->
+                acc2
+            end
+          end)
+        end)
+      end)
+
+    for b <- 0..(vb - 1) do
+      case Map.get(counts_by_bucket, b) do
+        nil ->
+          ""
+
+        inner when map_size(inner) == 0 ->
+          ""
+
+        inner ->
+          inner |> Enum.max_by(fn {_, c} -> c end) |> elem(0)
+      end
+    end
+  end
+
+  defp train_language_model_pass(weights, gid, batch_size, train_opts) do
+    {w_final, losses} =
+      Stream.unfold(0, fn offset ->
+        case Messages.list_by_guild(gid, limit: batch_size, offset: offset) do
+          [] ->
+            nil
+
+          batch ->
+            {batch, offset + length(batch)}
+        end
+      end)
+      |> Enum.reduce({weights, []}, fn batch, {w, losses} ->
+        sequences =
+          batch
+          |> Enum.map(& &1.content)
+          |> Enum.map(&Tokenizer.tokenize/1)
+          |> Enum.filter(&(length(&1) >= 2))
+
+        if sequences == [] do
+          {w, losses}
+        else
+          case LanguageModel.train_chunk(w, sequences, train_opts) do
+            {:ok, w2, loss} ->
+              {w2, [loss | losses]}
+          end
+        end
+      end)
+
+    avg =
+      case losses do
+        [] -> 0.0
+        ls -> Enum.sum(ls) / length(ls)
+      end
+
+    {w_final, avg}
   end
 
   defp ensure_guild_supervisor_running do
@@ -404,22 +529,4 @@ defmodule RolandoDiscord.Train do
     end
   end
 
-  defp get_tokenizer_vocab_size do
-    try do
-      Rolando.Neural.Tokenizer.vocab_size()
-    rescue
-      _ ->
-        # Default vocab size if tokenizer not loaded
-        32_000
-    end
-  end
-
-  defp create_fallback_weights(input_size, hidden_size) do
-    # Create simple zero-filled weights as fallback
-    # This is used when the NIF is not loaded
-    # 3 gates, 4 bytes per float
-    hidden_size_bytes = hidden_size * 4 * 3
-    input_size_bytes = input_size * 4 * 3
-    <<0::size(hidden_size_bytes + input_size_bytes)>>
-  end
 end

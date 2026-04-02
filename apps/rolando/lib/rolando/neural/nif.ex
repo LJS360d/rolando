@@ -177,4 +177,26 @@ defmodule Rolando.Neural.NIF do
   @spec get_token_id(String.t()) :: non_neg_integer()
   def get_token_id(_token),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec tokenize_bytes(String.t()) :: [non_neg_integer()]
+  def tokenize_bytes(_text), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec detokenize_bytes([non_neg_integer()]) :: String.t()
+  def detokenize_bytes(_ids), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec tokenizer_byte_vocab_size :: non_neg_integer()
+  def tokenizer_byte_vocab_size, do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec language_model_create(non_neg_integer(), non_neg_integer(), non_neg_integer()) :: binary()
+  def language_model_create(_vb, _e, _h), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec language_model_train(binary(), [non_neg_integer()], binary()) :: {binary(), float()}
+  def language_model_train(_weights, _packed, _hyper_bin), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec language_model_step(binary(), non_neg_integer(), [float()]) :: {[float()], [float()]}
+  def language_model_step(_weights, _token_id, _h), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec language_model_dims(binary()) ::
+          {non_neg_integer(), non_neg_integer(), non_neg_integer()}
+  def language_model_dims(_weights), do: :erlang.nif_error(:nif_not_loaded)
 end

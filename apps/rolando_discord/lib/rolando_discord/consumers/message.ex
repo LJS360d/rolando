@@ -11,18 +11,17 @@ defmodule RolandoDiscord.Consumers.Message do
   """
   use Nostrum.Consumer
 
+  alias Nostrum.Cache.Me, as: CacheMe
   alias Nostrum.Struct.Message, as: Msg
   alias Rolando.Contexts.GuildConfig
   alias Rolando.Contexts.GuildWeights
   alias Rolando.Messages
-  alias Rolando.Neural.{GRU, Tokenizer}
+  alias Rolando.Neural.{GRU, LanguageModel, Tokenizer, WordCodebook}
 
   require Logger
 
   # Default reply rate (1 means 50% chance, higher means less frequent)
   @default_reply_rate 20
-  # Default reaction rate (not currently used)
-  @_default_reaction_rate 100
 
   def handle_event({:MESSAGE_CREATE, %Msg{author: %{bot: true}}, _ws_state}) do
     # Don't process bot messages
@@ -48,7 +47,7 @@ defmodule RolandoDiscord.Consumers.Message do
   # Async handler - runs in separate process
   defp handle_message_async(msg) do
     guild_id = to_string(msg.guild_id)
-    bot_user_id = Application.get_env(:rolando_discord, :bot_user_id)
+    bot_user_id = resolve_bot_user_id()
 
     # Check if bot was mentioned
     mentioned = mentions_bot?(msg, bot_user_id)
@@ -74,11 +73,27 @@ defmodule RolandoDiscord.Consumers.Message do
     # end
   end
 
-  # Check if the bot was mentioned in the message
-  defp mentions_bot?(%Msg{mentions: mentions}, bot_user_id) do
-    Enum.any?(mentions, fn user ->
-      to_string(user.id) == to_string(bot_user_id)
-    end)
+  defp resolve_bot_user_id do
+    case Application.get_env(:rolando_discord, :bot_user_id) do
+      nil ->
+        case CacheMe.get() do
+          %{id: id} -> id
+          _ -> nil
+        end
+
+      id ->
+        id
+    end
+  end
+
+  defp mentions_bot?(_msg, nil), do: false
+
+  defp mentions_bot?(%Msg{mentions: mentions, content: content}, bot_user_id) do
+    bid = to_string(bot_user_id)
+
+    Enum.any?(mentions, fn user -> to_string(user.id) == bid end) or
+      (is_binary(content) and
+         (String.contains?(content, "<@#{bid}>") or String.contains?(content, "<@!#{bid}>")))
   end
 
   # Handle when bot is mentioned - always reply
@@ -134,14 +149,18 @@ defmodule RolandoDiscord.Consumers.Message do
   end
 
   # Core text generation using GRU
-  defp generate_text(guild_id, seed_text) do
+  def generate_text(guild_id, seed_text) do
     # Load weights from database
     case GuildWeights.get(guild_id) do
       {:ok, weights_record} ->
         if weights_record.weight_data == nil or weights_record.weight_data == "" do
           {:error, :no_weights}
         else
-          do_generate_text(weights_record.weight_data, seed_text)
+          do_generate_text(
+            weights_record.weight_data,
+            seed_text,
+            Map.get(weights_record, :codebook_blob)
+          )
         end
 
       {:error, :not_found} ->
@@ -149,45 +168,51 @@ defmodule RolandoDiscord.Consumers.Message do
     end
   end
 
-  defp do_generate_text(weights, seed_text) do
+  defp do_generate_text(weights, seed_text, codebook_blob) do
+    if LanguageModel.language_model?(weights) do
+      cb = WordCodebook.decode(codebook_blob)
+
+      opts =
+        [max_tokens: 20, temperature: 0.85]
+        |> then(fn o ->
+          if cb do
+            o |> Keyword.put(:max_tokens, 32) |> Keyword.put(:codebook, cb)
+          else
+            o
+          end
+        end)
+
+      case LanguageModel.generate(weights, seed_text, opts) do
+        {:ok, text} -> {:ok, clean_generated_text(text)}
+        {:error, _} = e -> e
+      end
+    else
+      legacy_do_generate_text(weights, seed_text)
+    end
+  end
+
+  defp legacy_do_generate_text(weights, seed_text) do
     try do
-      # Tokenize the input
       token_ids = Tokenizer.tokenize(seed_text)
 
-      # If empty input, generate from random seed
       token_ids =
         if length(token_ids) == 0 do
-          # Generate a random starting token
           [:rand.uniform(32000)]
         else
-          # Use last few tokens as input
           Enum.take(token_ids, -10)
         end
 
-      # Convert token IDs to float vectors (one-hot approximation)
-      # For a real implementation, we'd use an embedding layer
       input_vectors =
         Enum.map(token_ids, fn token_id ->
-          # Simple approach: use token_id as a feature
-          # In production, this would be a proper embedding
           normalize_vector(token_id_to_vector(token_id))
         end)
 
-      # Initialize hidden state
       hidden_size = 512
       h_prev = GRU.zeros(hidden_size)
 
-      # Run GRU forward pass
       output_states = GRU.gru_forward_sequence(input_vectors, h_prev, weights)
-
-      # Get the last output state
       final_state = List.last(output_states) || h_prev
-
-      # Convert output back to token IDs (simplified - just sample from distribution)
-      # In production, this would use a proper output projection + sampling
       generated_token_ids = sample_tokens_from_hidden(final_state, 20)
-
-      # Detokenize back to text
       generated_text = Tokenizer.detokenize(generated_token_ids)
 
       {:ok, clean_generated_text(generated_text)}
@@ -252,14 +277,27 @@ defmodule RolandoDiscord.Consumers.Message do
   end
 
   # Send a reply to a message (with reference)
-  defp send_reply(%Msg{channel_id: channel_id, id: message_id, guild_id: guild_id}, text) do
-    Nostrum.Api.Message.create(channel_id, text,
-      reference: %{message_id: message_id, channel_id: channel_id, guild_id: guild_id}
-    )
+  defp send_reply(%Msg{channel_id: channel_id, id: message_id}, text) do
+    case Nostrum.Api.Message.create(channel_id,
+           content: text,
+           message_reference: %{message_id: message_id}
+         ) do
+      {:ok, _} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("send_reply failed: #{inspect(reason)}")
+    end
   end
 
   # Send a standalone message
   defp send_message(channel_id, text) do
-    Nostrum.Api.Message.create(channel_id, text)
+    case Nostrum.Api.Message.create(channel_id, text) do
+      {:ok, _} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("send_message failed: #{inspect(reason)}")
+    end
   end
 end

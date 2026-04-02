@@ -25,7 +25,7 @@ defmodule Rolando.Contexts.GuildWeights do
   @spec create(guild_id :: String.t(), attrs :: map()) ::
           {:ok, %GuildWeights{}} | {:error, Ecto.Changeset.t()}
   def create(guild_id, attrs \\ %{}) do
-    attrs = Map.put(attrs, "guild_id", guild_id)
+    attrs = Map.put(attrs, :guild_id, guild_id)
 
     %GuildWeights{guild_id: guild_id}
     |> GuildWeights.changeset(attrs)
@@ -35,12 +35,12 @@ defmodule Rolando.Contexts.GuildWeights do
   @spec upsert(guild_id :: String.t(), attrs :: map()) ::
           {:ok, %GuildWeights{}} | {:error, Ecto.Changeset.t()}
   def upsert(guild_id, attrs) do
-    attrs = Map.put(attrs, "guild_id", guild_id)
+    attrs = Map.put(attrs, :guild_id, guild_id)
 
     %GuildWeights{guild_id: guild_id}
     |> GuildWeights.changeset(attrs)
     |> Repo.insert(
-      on_conflict: {:replace, [:weight_data, :version, :perplexity, :updated_at]},
+      on_conflict: {:replace, [:weight_data, :codebook_blob, :version, :perplexity, :updated_at]},
       conflict_target: :guild_id,
       returning: true
     )

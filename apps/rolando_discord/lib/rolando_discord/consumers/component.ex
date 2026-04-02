@@ -82,10 +82,7 @@ defmodule RolandoDiscord.Consumers.Component do
 
       # Delete existing weights (reset for retraining)
       case GuildWeights.delete(to_string(guild_id)) do
-        {:ok, _} ->
-          start_training_job(i, guild_id, :retrain)
-
-        {:error, reason} ->
+        {:error, reason} when reason != :not_found ->
           Logger.error("delete_weights failed: #{inspect(reason)}")
 
           _ =
@@ -94,6 +91,9 @@ defmodule RolandoDiscord.Consumers.Component do
                 content: "Failed to delete chain data for this server. Please try again later."
               }
             })
+
+        _ ->
+          start_training_job(i, guild_id, :retrain)
       end
     else
       _ =

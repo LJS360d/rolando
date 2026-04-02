@@ -17,7 +17,16 @@ config :rolando,
   cache_adapter: Rolando.Cache.ETSAdapter,
   train_channel_max_concurrency: 6,
   train_message_limit_per_channel: 750_000,
-  train_max_fetch_errors_per_channel: 5
+  train_max_fetch_errors_per_channel: 5,
+  lm_vocab_buckets: 2048,
+  lm_embed_dim: 64,
+  lm_hidden_dim: 256,
+  lm_train_lr: 0.05,
+  lm_train_epochs_per_chunk: 1,
+  lm_max_seq_len: 128,
+  lm_gradient_clip: 5.0,
+  lm_message_batch_size: 500,
+  lm_data_passes: 1
 
 # Configure the mailer
 #

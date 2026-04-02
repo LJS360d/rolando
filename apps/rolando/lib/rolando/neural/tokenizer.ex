@@ -63,4 +63,16 @@ defmodule Rolando.Neural.Tokenizer do
   """
   @spec get_token_id(String.t()) :: non_neg_integer()
   defdelegate get_token_id(token), to: NIF
+
+  @doc """
+  UTF-8 byte-level token IDs (0–255 per byte). Used for language model training and generation.
+  """
+  @spec tokenize_bytes(String.t()) :: [non_neg_integer()]
+  defdelegate tokenize_bytes(text), to: NIF
+
+  @spec detokenize_bytes([non_neg_integer()]) :: String.t()
+  defdelegate detokenize_bytes(ids), to: NIF
+
+  @spec byte_vocab_size :: non_neg_integer()
+  defdelegate byte_vocab_size(), to: NIF, as: :tokenizer_byte_vocab_size
 end

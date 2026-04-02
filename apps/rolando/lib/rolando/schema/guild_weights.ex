@@ -9,9 +9,10 @@ defmodule Rolando.Schema.GuildWeights do
   @primary_key {:guild_id, :string, autogenerate: false}
   schema "guild_weights" do
     field :weight_data, :binary
+    field :codebook_blob, :binary
     field :version, :integer, default: 1
     field :perplexity, :float
-    timestamps(updated_at: false)
+    timestamps()
   end
 
   def changeset(guild_weights, attrs) do
@@ -19,6 +20,7 @@ defmodule Rolando.Schema.GuildWeights do
     |> cast(attrs, [
       :guild_id,
       :weight_data,
+      :codebook_blob,
       :version,
       :perplexity,
       :inserted_at,
