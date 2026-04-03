@@ -2,7 +2,7 @@ This is a web application written using the Phoenix web framework.
 
 ## Project guidelines
 
-- **Memory bank**: consult `.memory-bank/` for project context before substantial work (read `README.md` first for file order). Keep it current: whenever you implement or decide something meaningful, update the relevant files—at minimum `activeContext.md` and `progress.md`, plus any other `.memory-bank/*.md` file whose facts changed (architecture, tech decisions, migration inventory).
+- **Memory bank**: consult `memory-bank/` for project context before substantial work (read `README.md` first for file order). Keep it current: whenever you implement or decide something meaningful, update the relevant files—at minimum `activeContext.md` and `progress.md`, plus any other `memory-bank/*.md` file whose facts changed (architecture, tech decisions, migration inventory).
 - Never run `mix precommit` yourself
 - Use the already included and available `:req` (`Req`) library for HTTP requests, **avoid** `:httpoison`, `:tesla`, and `:httpc`. Req is included by default and is the preferred HTTP client for Phoenix apps
 

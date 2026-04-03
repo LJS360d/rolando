@@ -2,9 +2,7 @@ defmodule RolandoDiscord.Consumers.Message do
   @moduledoc """
   Handles `MESSAGE_CREATE` (and related message events when added).
 
-  Generates text using the GRU neural network model when:
-  - The bot is mentioned by a user
-  - Random chance based on guild's reply_rate setting
+  Generates text using the configured generator (default: Markov chain backed by Redis or ETS).
 
   Heavy work should be delegated to `Rolando.TaskSupervisor` or a dedicated pool so
   this process stays responsive across all guilds/shards.
@@ -20,21 +18,17 @@ defmodule RolandoDiscord.Consumers.Message do
 
   require Logger
 
-  # Default reply rate (1 means 50% chance, higher means less frequent)
   @default_reply_rate 20
 
   def handle_event({:MESSAGE_CREATE, %Msg{author: %{bot: true}}, _ws_state}) do
-    # Don't process bot messages
     :noop
   end
 
   def handle_event({:MESSAGE_CREATE, %Msg{guild_id: nil}, _ws_state}) do
-    # Don't process DM messages
     :noop
   end
 
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
-    # Spawn async to not block the consumer
     spawn(fn ->
       handle_message_async(msg)
     end)
@@ -44,33 +38,20 @@ defmodule RolandoDiscord.Consumers.Message do
     :noop
   end
 
-  # Async handler - runs in separate process
   defp handle_message_async(msg) do
     guild_id = to_string(msg.guild_id)
     bot_user_id = resolve_bot_user_id()
-
-    # Check if bot was mentioned
     mentioned = mentions_bot?(msg, bot_user_id)
-
-    # Get guild config for reply rate
     config = GuildConfig.get_or_default(guild_id)
     reply_rate = config.reply_rate || @default_reply_rate
 
-    # Handle mention reply
     if mentioned do
       handle_mention_reply(msg, guild_id)
     end
 
-    # Handle random message generation (non-reply)
     if rated_choice(reply_rate) do
       handle_random_message(msg, guild_id)
     end
-
-    # Handle reactions (future: add emoji reactions)
-    # reaction_rate = config.reaction_rate || @default_reaction_rate
-    # if rated_choice(reaction_rate) do
-    #   handle_reaction(msg, guild_id)
-    # end
   end
 
   defp resolve_bot_user_id do
@@ -96,7 +77,6 @@ defmodule RolandoDiscord.Consumers.Message do
          (String.contains?(content, "<@#{bid}>") or String.contains?(content, "<@!#{bid}>")))
   end
 
-  # Handle when bot is mentioned - always reply
   defp handle_mention_reply(msg, guild_id) do
     case generate_text(guild_id, msg.content) do
       {:ok, generated_text} when generated_text != "" ->
@@ -110,14 +90,11 @@ defmodule RolandoDiscord.Consumers.Message do
     end
   end
 
-  # Handle random message (not a direct reply)
   defp handle_random_message(msg, guild_id) do
-    # Use the last few messages as context if available
     context = get_recent_message_context(guild_id)
 
     case generate_text(guild_id, context) do
       {:ok, generated_text} when generated_text != "" ->
-        # 10% chance to reply to the message, 90% chance to send standalone
         if rated_choice(10) do
           send_reply(msg, generated_text)
         else
@@ -132,9 +109,7 @@ defmodule RolandoDiscord.Consumers.Message do
     end
   end
 
-  # Get some recent messages as context for generation
   defp get_recent_message_context(guild_id) do
-    # Get a few random messages to use as seed context
     case Messages.get_random_messages(guild_id, 3) do
       [] ->
         ""
@@ -143,14 +118,24 @@ defmodule RolandoDiscord.Consumers.Message do
         messages
         |> Enum.map(& &1.content)
         |> Enum.join(" ")
-        # Limit context length
         |> String.slice(0, 200)
     end
   end
 
-  # Core text generation using GRU
   def generate_text(guild_id, seed_text) do
-    # Load weights from database
+    case Application.get_env(:rolando, :text_generator, :markov) do
+      :markov ->
+        case Rolando.Markov.generate(guild_id, seed_text) do
+          {:ok, text} -> {:ok, clean_generated_text(text)}
+          {:error, _} = e -> e
+        end
+
+      :gru ->
+        gru_generate_text(guild_id, seed_text)
+    end
+  end
+
+  defp gru_generate_text(guild_id, seed_text) do
     case GuildWeights.get(guild_id) do
       {:ok, weights_record} ->
         if weights_record.weight_data == nil or weights_record.weight_data == "" do
@@ -197,7 +182,7 @@ defmodule RolandoDiscord.Consumers.Message do
 
       token_ids =
         if length(token_ids) == 0 do
-          [:rand.uniform(32000)]
+          [:rand.uniform(32_000)]
         else
           Enum.take(token_ids, -10)
         end
@@ -223,22 +208,13 @@ defmodule RolandoDiscord.Consumers.Message do
     end
   end
 
-  # Convert token ID to a simple vector representation
   defp token_id_to_vector(token_id) do
-    # Simple hash-based vector for demo
-    # In production: use learned embeddings
-    _vocab_size = 32000
-
-    vector =
-      for i <- 0..15 do
-        bit = (token_id + i) |> :erlang.bsl(1) |> :erlang.band(1)
-        if bit == 1, do: 0.5, else: -0.5
-      end
-
-    vector
+    for i <- 0..15 do
+      bit = (token_id + i) |> :erlang.bsl(1) |> :erlang.band(1)
+      if bit == 1, do: 0.5, else: -0.5
+    end
   end
 
-  # Normalize a vector to have unit length
   defp normalize_vector(vector) do
     sum = :math.sqrt(Enum.reduce(vector, 0, fn x, acc -> x * x + acc end))
 
@@ -249,34 +225,26 @@ defmodule RolandoDiscord.Consumers.Message do
     end
   end
 
-  # Sample tokens from hidden state (simplified)
   defp sample_tokens_from_hidden(_hidden_state, count) do
-    # Simplified: just generate random token IDs
-    # In production: use output projection + softmax + sampling
     for _ <- 1..count do
-      :rand.uniform(32000)
+      :rand.uniform(32_000)
     end
   end
 
-  # Clean up generated text
   defp clean_generated_text(text) do
     text
     |> String.trim()
-    # Remove Discord mentions that might have been generated
     |> String.replace(~r/<@\d+>/, "")
     |> String.replace(~r/<#\d+>/, "")
     |> String.replace(~r/<:[\w]+:\d+>/, "")
-    # Normalize whitespace
     |> String.replace(~r/\s+/, " ")
     |> String.trim()
   end
 
-  # Weighted random choice (same logic as Go code)
   defp rated_choice(rate) do
     rate == 1 || (rate > 1 && :rand.uniform(rate) == 1)
   end
 
-  # Send a reply to a message (with reference)
   defp send_reply(%Msg{channel_id: channel_id, id: message_id}, text) do
     case Nostrum.Api.Message.create(channel_id,
            content: text,
@@ -290,7 +258,6 @@ defmodule RolandoDiscord.Consumers.Message do
     end
   end
 
-  # Send a standalone message
   defp send_message(channel_id, text) do
     case Nostrum.Api.Message.create(channel_id, text) do
       {:ok, _} ->

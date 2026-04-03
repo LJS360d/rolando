@@ -14,6 +14,7 @@ defmodule RolandoDiscord.Consumers.Component do
   alias Nostrum.Struct.Interaction, as: I
 
   alias Rolando.Contexts.{Guilds, GuildConfig, GuildWeights}
+  alias Rolando.Markov
   alias RolandoDiscord.InteractionHelpers
   alias RolandoDiscord.Permissions
   alias RolandoDiscord.Train
@@ -81,6 +82,8 @@ defmodule RolandoDiscord.Consumers.Component do
       {:ok, _guild} = Guilds.get_or_create(guild)
 
       # Delete existing weights (reset for retraining)
+      _ = Markov.reset(to_string(guild_id))
+
       case GuildWeights.delete(to_string(guild_id)) do
         {:error, reason} when reason != :not_found ->
           Logger.error("delete_weights failed: #{inspect(reason)}")

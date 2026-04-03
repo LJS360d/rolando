@@ -36,7 +36,8 @@ defmodule Rolando.MixProject do
       {:jason, "~> 1.2"},
       {:swoosh, "~> 1.16"},
       {:req, "~> 0.5"},
-      {:rustler, "~> 0.32"}
+      {:rustler, "~> 0.32"},
+      {:redix, "~> 1.5"}
     ]
   end
 

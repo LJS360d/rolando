@@ -4,6 +4,7 @@ defmodule RolandoDiscord.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      RolandoDiscord.OperatorBroadcast,
       # Subscriber for resyncing commands
       RolandoDiscord.CommandsResyncSubscriber,
       RolandoDiscord.Consumers.SlashCommand,

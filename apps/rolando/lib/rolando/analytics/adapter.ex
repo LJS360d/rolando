@@ -8,4 +8,6 @@ defmodule Rolando.Analytics.Adapter do
   @callback guilds_count() :: non_neg_integer()
   @callback persist_event(Event.t() | map()) ::
               {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()}
+  @callback list_recent_events(pos_integer(), map()) :: [Ecto.Schema.t()]
+  @callback event_counts_by_day(pos_integer()) :: [{String.t(), non_neg_integer()}]
 end

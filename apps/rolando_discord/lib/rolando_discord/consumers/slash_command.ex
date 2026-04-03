@@ -101,12 +101,12 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
 
       # Ensure config exists for this guild (creates with defaults if not exists)
       {:ok, config} = GuildConfig.get_or_create(to_string(guild_id))
-      owner? = InteractionHelpers.owner_user?(i)
+      operator? = InteractionHelpers.operator_user?(i)
       cd = InteractionHelpers.cooldown_mins()
 
       cond do
         config.trained_at != nil &&
-          InteractionHelpers.train_cooldown_active?(config.trained_at) && !owner? ->
+          InteractionHelpers.train_cooldown_active?(config.trained_at) && !operator? ->
           remaining =
             DateTime.diff(
               DateTime.add(config.trained_at, cd, :minute),
@@ -128,7 +128,7 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
           })
 
         config.trained_at != nil &&
-            (!InteractionHelpers.train_cooldown_active?(config.trained_at) || owner?) ->
+            (!InteractionHelpers.train_cooldown_active?(config.trained_at) || operator?) ->
           trained_fmt = InteractionHelpers.fmt_dt(config.trained_at)
 
           Interaction.create_response(i, %{

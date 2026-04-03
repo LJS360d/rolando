@@ -1,0 +1,18 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <article class="prose prose-sm max-w-none text-base-content">
+    <h1 class="text-2xl font-semibold tracking-tight">Privacy policy</h1>
+    <p class="text-base-content/80">
+      This deployment of Rolando processes Discord server messages that operators choose to use for training,
+      stores analytics events about bot and operator actions, and uses Discord OAuth for operator sign-in.
+      Message content used for training is retained according to your deployment configuration. Analytics rows
+      include event types, optional guild, channel, and user identifiers, and structured metadata (for example
+      command names or error summaries)—not full message bodies unless explicitly included by a feature.
+      OAuth tokens are handled server-side only; they are not exposed in browser bundles.
+    </p>
+    <p class="text-base-content/80">
+      Third-party services may include Discord (chat platform), and optional speech or media providers when
+      voice features are enabled. Contact the deployment operator for data retention specifics, access requests,
+      or deletion policies.
+    </p>
+  </article>
+</Layouts.app>

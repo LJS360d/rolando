@@ -26,7 +26,10 @@ config :rolando,
   lm_max_seq_len: 128,
   lm_gradient_clip: 5.0,
   lm_message_batch_size: 500,
-  lm_data_passes: 1
+  lm_data_passes: 1,
+  text_generator: :markov,
+  markov_store: :ets,
+  markov_message_batch_size: 1000
 
 # Configure the mailer
 #

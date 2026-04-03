@@ -8,6 +8,7 @@ defmodule RolandoWeb.Router do
     plug :put_root_layout, html: {RolandoWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug RolandoWeb.Plugs.FetchCurrentScope
   end
 
   pipeline :api do
@@ -18,20 +19,28 @@ defmodule RolandoWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/privacy", PageController, :privacy
+    get "/terms", PageController, :terms
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", RolandoWeb do
-  #   pipe_through :api
-  # end
+  scope "/auth", RolandoWeb do
+    pipe_through :browser
 
-  # Enable LiveDashboard and Swoosh mailbox preview in development
+    get "/logout", AuthController, :logout
+    get "/:provider", AuthController, :request
+    get "/:provider/callback", AuthController, :callback
+  end
+
+  live_session :operator,
+    on_mount: [{RolandoWeb.OperatorAuth, :ensure_operator}] do
+    scope "/", RolandoWeb do
+      pipe_through :browser
+
+      live "/operator", OperatorLive, :index
+    end
+  end
+
   if Application.compile_env(:rolando_web, :dev_routes) do
-    # If you want to use the LiveDashboard in production, you should put
-    # it behind authentication and allow only admins to access it.
-    # If your application does not have an admins-only section yet,
-    # you can use Plug.BasicAuth to set up some basic authentication
-    # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do

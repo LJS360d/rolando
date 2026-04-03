@@ -24,6 +24,8 @@ defmodule RolandoDiscord.InteractionHelpers do
   def owner_user?(%I{user: %{id: id}}) when not is_nil(id), do: match_owner?(id)
   def owner_user?(_), do: false
 
+  def operator_user?(%I{} = i), do: owner_user?(i)
+
   defp match_owner?(user_id) do
     owners = Application.get_env(:rolando, :owner_platform_ids, [])
 

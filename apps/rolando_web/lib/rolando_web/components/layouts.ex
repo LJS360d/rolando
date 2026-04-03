@@ -35,38 +35,68 @@ defmodule RolandoWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
+    <header class="navbar border-b border-base-300 bg-base-100/80 px-4 backdrop-blur sm:px-6 lg:px-8">
       <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
+        <a href={~p"/"} class="flex w-fit items-center gap-2 transition hover:opacity-90">
+          <img src={~p"/images/logo.svg"} width="36" alt="" />
+          <span class="text-sm font-semibold tracking-tight">Rolando</span>
         </a>
       </div>
       <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
+        <ul class="flex items-center gap-2 px-1 sm:gap-4">
           <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
+            <.link navigate={~p"/"} class="btn btn-ghost btn-sm">
+              Home
+            </.link>
           </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
+          <%= cond do %>
+            <% match?(%{type: :operator}, @current_scope) -> %>
+              <li>
+                <.link navigate={~p"/operator"} class="btn btn-ghost btn-sm">
+                  Operator
+                </.link>
+              </li>
+              <li>
+                <a href={~p"/auth/logout"} class="btn btn-ghost btn-sm">
+                  Sign out
+                </a>
+              </li>
+            <% match?(%{type: :user}, @current_scope) -> %>
+              <li>
+                <a href={~p"/auth/logout"} class="btn btn-ghost btn-sm">
+                  Sign out
+                </a>
+              </li>
+            <% true -> %>
+              <li>
+                <a href={~p"/auth/discord"} class="btn btn-primary btn-sm">
+                  Sign in with Discord
+                </a>
+              </li>
+          <% end %>
           <li>
             <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
           </li>
         </ul>
       </div>
     </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
+    <main class="px-4 py-12 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-5xl space-y-4">
         {render_slot(@inner_block)}
       </div>
     </main>
+
+    <footer class="border-t border-base-300 bg-base-200/30 px-4 py-6 sm:px-6 lg:px-8">
+      <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-base-content/60">
+        <.link navigate={~p"/privacy"} class="transition hover:text-base-content">
+          Privacy policy
+        </.link>
+        <.link navigate={~p"/terms"} class="transition hover:text-base-content">
+          Terms of service
+        </.link>
+      </div>
+    </footer>
 
     <.flash_group flash={@flash} />
     """

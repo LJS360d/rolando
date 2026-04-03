@@ -6,9 +6,8 @@ defmodule RolandoDiscord.Train do
   alias Nostrum.Api.{Channel, Message}
   alias Rolando.Analytics
   alias Rolando.Contexts.{GuildConfig, GuildWeights, MediaStore}
+  alias Rolando.Markov
   alias Rolando.Messages
-  alias Rolando.Neural.{GuildSupervisor, LanguageModel, WordCodebook}
-  alias Rolando.Neural.Tokenizer
   alias RolandoDiscord.Permissions
 
   def run(opts) do
@@ -95,9 +94,8 @@ defmodule RolandoDiscord.Train do
       "Training completed for guild #{gid}: #{total} messages in #{format_duration_ms(elapsed_ms)} (#{msgs_per_s} msg/s)"
     )
 
-    # Initialize neural network weights and create checkpoint asynchronously
     spawn(fn ->
-      create_guild_model_checkpoint(guild_id, gid, total)
+      build_markov_chain(guild_id, gid, total)
     end)
 
     Analytics.track(%{
@@ -163,7 +161,6 @@ defmodule RolandoDiscord.Train do
             # Store extracted media in the media store for neural network training
             store_media_for_training(guild_id, channel_id, media_urls)
 
-            # Store messages for GRU training
             store_messages_for_training(guild_id, channel_id, messages)
 
             added = length(text_content)
@@ -318,214 +315,75 @@ defmodule RolandoDiscord.Train do
     String.contains?(content, "http://") or String.contains?(content, "https://")
   end
 
-  def create_guild_model_checkpoint(guild_id, gid, message_count) do
+  def build_markov_chain(_guild_id, gid, message_count) do
     try do
-      Logger.info("Starting async language model training for guild #{gid}")
-
-      ensure_guild_supervisor_running()
-      start_or_get_guild_model(guild_id)
-
-      vb = Application.get_env(:rolando, :lm_vocab_buckets, 256)
-      e = Application.get_env(:rolando, :lm_embed_dim, 64)
-      h = Application.get_env(:rolando, :lm_hidden_dim, 256)
-      passes = Application.get_env(:rolando, :lm_data_passes, 1) |> max(1)
-      batch_size = Application.get_env(:rolando, :lm_message_batch_size, 500)
-
-      lr = Application.get_env(:rolando, :lm_train_lr, 0.05)
-      epochs = Application.get_env(:rolando, :lm_train_epochs_per_chunk, 1)
-      max_seq_len = Application.get_env(:rolando, :lm_max_seq_len, 128)
-      clip = Application.get_env(:rolando, :lm_gradient_clip, 5.0)
-
-      weights =
-        LanguageModel.create(
-          vocab_buckets: vb,
-          embed_dim: e,
-          hidden_dim: h
-        )
-
-      case GuildWeights.upsert(gid, %{
-             weight_data: weights,
-             version: 1,
-             perplexity: 1.0,
-             codebook_blob: nil
-           }) do
-        {:ok, _} ->
-          Logger.debug("Initial language model weights persisted for guild #{gid} (pre-corpus pass)")
-
-        {:error, reason} ->
-          Logger.warning("Failed to save initial language model weights: #{inspect(reason)}")
-      end
-
-      train_opts = [
-        lr: lr,
-        epochs: epochs,
-        max_seq_len: max_seq_len,
-        gradient_clip: clip
-      ]
-
-      {weights, avg_loss} =
-        Enum.reduce(1..passes, {weights, 0.0}, fn _pass, {w, _acc} ->
-          train_language_model_pass(w, gid, batch_size, train_opts)
-        end)
-
-      ppl = :math.exp(min(avg_loss, 20.0))
-
-      codebook_blob =
-        case build_word_codebook(gid, vb) do
-          list when is_list(list) -> WordCodebook.encode(list)
-          _ -> nil
-        end
-
-      case GuildWeights.upsert(gid, %{
-             weight_data: weights,
-             version: 1,
-             perplexity: ppl,
-             codebook_blob: codebook_blob
-           }) do
-        {:ok, _} -> Logger.debug("Language model weights and word codebook saved")
-        {:error, reason} -> Logger.warning("Failed to save weights: #{inspect(reason)}")
-      end
-
-      case GuildConfig.update_trained_at(gid, DateTime.utc_now()) do
-        {:ok, _} -> Logger.debug("trained_at updated")
-        {:error, reason} -> Logger.warning("Failed to update trained_at: #{inspect(reason)}")
-      end
+      batch_size = Application.get_env(:rolando, :markov_message_batch_size, 1000)
+      store = Application.get_env(:rolando, :markov_store, :ets)
 
       Logger.info(
-        "Language model trained for guild #{gid}: #{message_count} messages stored, avg_loss=#{Float.round(avg_loss, 4)}, perplexity≈#{Float.round(ppl, 2)}"
+        "Building Markov chain for guild #{gid} (#{message_count} messages stored, batch=#{batch_size}, store=#{store})"
       )
 
-      Analytics.track(%{
-        name: "model_checkpoint_created",
-        guild_id: gid,
-        meta: %{
-          "message_count" => message_count,
-          "vocab_buckets" => vb,
-          "embed_dim" => e,
-          "hidden_dim" => h,
-          "avg_loss" => avg_loss,
-          "perplexity" => ppl
-        }
-      })
+      with :ok <- Markov.reset(gid) do
+        Stream.unfold(0, fn offset ->
+          case Messages.list_by_guild(gid, limit: batch_size, offset: offset) do
+            [] ->
+              nil
+
+            batch ->
+              {batch, offset + length(batch)}
+          end
+        end)
+        |> Enum.each(fn batch ->
+          texts = Enum.map(batch, & &1.content)
+
+          case Markov.ingest_texts(gid, texts) do
+            {:ok, _} -> :ok
+            {:error, r} -> Logger.warning("Markov ingest batch failed: #{inspect(r)}")
+          end
+        end)
+
+        _ = Markov.mark_ready(gid)
+
+        magic = "MARKOV1"
+
+        case GuildWeights.upsert(gid, %{
+               weight_data: magic,
+               version: 2,
+               perplexity: 1.0,
+               codebook_blob: nil
+             }) do
+          {:ok, _} -> :ok
+          {:error, reason} -> Logger.warning("GuildWeights upsert: #{inspect(reason)}")
+        end
+
+        case GuildConfig.update_trained_at(gid, DateTime.utc_now()) do
+          {:ok, _} -> :ok
+          {:error, reason} -> Logger.warning("trained_at update: #{inspect(reason)}")
+        end
+
+        Logger.info("Markov chain ready for guild #{gid}")
+
+        Analytics.track(%{
+          name: "model_checkpoint_created",
+          guild_id: gid,
+          meta: %{
+            "message_count" => message_count,
+            "generator" => "markov",
+            "store" => store
+          }
+        })
+      else
+        {:error, r} ->
+          Logger.error("Markov reset failed: #{inspect(r)}")
+      end
     rescue
       e ->
         stack = __STACKTRACE__
 
         Logger.error(
-          "Failed to create guild model checkpoint: #{Exception.format(:error, e, stack)}"
+          "Markov training failed: #{Exception.format(:error, e, stack)}"
         )
-    end
-  end
-
-  defp build_word_codebook(gid, vb) do
-    counts_by_bucket =
-      Stream.unfold(0, fn offset ->
-        case Messages.list_by_guild(gid, limit: 500, offset: offset) do
-          [] ->
-            nil
-
-          batch ->
-            {batch, offset + length(batch)}
-        end
-      end)
-      |> Enum.reduce(%{}, fn batch, acc ->
-        Enum.reduce(batch, acc, fn msg, acc_inner ->
-          words =
-            msg.content
-            |> String.split()
-            |> Enum.map(&String.trim/1)
-            |> Enum.filter(&(&1 != ""))
-
-          Enum.reduce(words, acc_inner, fn word, acc2 ->
-            case Tokenizer.tokenize(word) do
-              [tid | _] ->
-                b = rem(tid, vb)
-                inner = Map.get(acc2, b, %{})
-                inner = Map.update(inner, word, 1, &(&1 + 1))
-                Map.put(acc2, b, inner)
-
-              [] ->
-                acc2
-            end
-          end)
-        end)
-      end)
-
-    for b <- 0..(vb - 1) do
-      case Map.get(counts_by_bucket, b) do
-        nil ->
-          ""
-
-        inner when map_size(inner) == 0 ->
-          ""
-
-        inner ->
-          inner |> Enum.max_by(fn {_, c} -> c end) |> elem(0)
-      end
-    end
-  end
-
-  defp train_language_model_pass(weights, gid, batch_size, train_opts) do
-    {w_final, losses} =
-      Stream.unfold(0, fn offset ->
-        case Messages.list_by_guild(gid, limit: batch_size, offset: offset) do
-          [] ->
-            nil
-
-          batch ->
-            {batch, offset + length(batch)}
-        end
-      end)
-      |> Enum.reduce({weights, []}, fn batch, {w, losses} ->
-        sequences =
-          batch
-          |> Enum.map(& &1.content)
-          |> Enum.map(&Tokenizer.tokenize/1)
-          |> Enum.filter(&(length(&1) >= 2))
-
-        if sequences == [] do
-          {w, losses}
-        else
-          case LanguageModel.train_chunk(w, sequences, train_opts) do
-            {:ok, w2, loss} ->
-              {w2, [loss | losses]}
-          end
-        end
-      end)
-
-    avg =
-      case losses do
-        [] -> 0.0
-        ls -> Enum.sum(ls) / length(ls)
-      end
-
-    {w_final, avg}
-  end
-
-  defp ensure_guild_supervisor_running do
-    # The supervisor should already be running, but ensure it's started
-    # If it's already running, this is a no-op
-    case Rolando.Neural.GuildSupervisor.start_link(name: Rolando.Neural.GuildSupervisor) do
-      {:ok, _} -> :ok
-      {:error, {:already_started, _}} -> :ok
-      {:error, reason} -> Logger.warning("GuildSupervisor start error: #{inspect(reason)}")
-    end
-  end
-
-  defp start_or_get_guild_model(guild_id) do
-    # Try to start the guild model, or get it if already running
-    case GuildSupervisor.start_guild(guild_id) do
-      {:ok, _pid} ->
-        Logger.debug("Started new GuildModel for guild #{guild_id}")
-        :ok
-
-      {:error, {:already_started, _pid}} ->
-        Logger.debug("GuildModel already running for guild #{guild_id}")
-        :ok
-
-      {:error, reason} ->
-        Logger.warning("Failed to start GuildModel: #{inspect(reason)}")
-        :error
     end
   end
 
