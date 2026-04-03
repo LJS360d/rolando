@@ -7,7 +7,7 @@ if Code.ensure_loaded?(Dotenvy) do
 end
 
 if url = System.get_env("REDIS_URL") do
-  config :rolando, :markov_store, :redis
+  config :rolando, :lm_store, :redis
   config :rolando, :redis_url, url
 end
 

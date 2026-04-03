@@ -86,7 +86,6 @@ defmodule Rolando.Persistence.SqliteAdapter do
       guild_id: media.guild_id,
       url: media.url,
       media_type: media.media_type,
-      context_hash: media.context_hash
     })
     |> Repo.insert()
     |> case do

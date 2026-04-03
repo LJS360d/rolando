@@ -3,10 +3,10 @@ defmodule RolandoDiscord.Train do
 
   require Logger
 
+  alias Rolando.LM
   alias Nostrum.Api.{Channel, Message}
   alias Rolando.Analytics
-  alias Rolando.Contexts.{GuildConfig, GuildWeights, MediaStore}
-  alias Rolando.Markov
+  alias Rolando.Contexts.{GuildConfig, MediaStore}
   alias Rolando.Messages
   alias RolandoDiscord.Permissions
 
@@ -31,11 +31,13 @@ defmodule RolandoDiscord.Train do
         meta: %{"exception" => Exception.message(e)}
       })
 
-      _ =
-        Message.create(
-          channel_id,
-          "#{user_mention} Training failed: `#{Exception.message(e)}`"
-        )
+      case Message.create(
+             channel_id,
+             "#{user_mention} Training failed: `#{Exception.message(e)}`"
+           ) do
+        {:ok, _} -> :ok
+        {:error, r} -> Logger.warning("Failed to send failure message: #{inspect(r)}")
+      end
 
       :error
   end
@@ -94,10 +96,6 @@ defmodule RolandoDiscord.Train do
       "Training completed for guild #{gid}: #{total} messages in #{format_duration_ms(elapsed_ms)} (#{msgs_per_s} msg/s)"
     )
 
-    spawn(fn ->
-      build_markov_chain(guild_id, gid, total)
-    end)
-
     Analytics.track(%{
       name: "train_completed",
       guild_id: gid,
@@ -112,9 +110,10 @@ defmodule RolandoDiscord.Train do
     content =
       "#{user_mention} Finished Fetching messages.\nMessages fetched: `#{total}`\nTime elapsed: `#{format_duration_ms(elapsed_ms)}`\nMessages/Second: `#{msgs_per_s}`"
 
-    _ = Message.create(channel_id, content)
-
-    :ok
+    case Message.create(channel_id, content) do
+      {:ok, _} -> :ok
+      {:error, r} -> Logger.warning("Failed to send completion message: #{inspect(r)}")
+    end
   end
 
   defp format_duration_ms(ms) do
@@ -159,9 +158,9 @@ defmodule RolandoDiscord.Train do
             {text_content, media_urls} = extract_content_and_media(messages)
 
             # Store extracted media in the media store for neural network training
-            store_media_for_training(guild_id, channel_id, media_urls)
+            store_media(guild_id, channel_id, media_urls)
 
-            store_messages_for_training(guild_id, channel_id, messages)
+            store_messages(guild_id, channel_id, messages)
 
             added = length(text_content)
             new_total = total + added
@@ -230,7 +229,7 @@ defmodule RolandoDiscord.Train do
     end)
   end
 
-  defp store_media_for_training(guild_id, channel_id, media_urls) do
+  defp store_media(guild_id, channel_id, media_urls) do
     gid = to_string(guild_id)
     cid = to_string(channel_id)
 
@@ -241,18 +240,16 @@ defmodule RolandoDiscord.Train do
     end
 
     Enum.each(media_urls, fn url ->
-      # Store media metadata for neural network processing
       MediaStore.create(%{
         guild_id: gid,
         channel_id: cid,
         url: url,
-        media_type: detect_media_type(url),
-        context_hash: ""
+        media_type: detect_media_type(url)
       })
     end)
   end
 
-  defp store_messages_for_training(guild_id, channel_id, messages) do
+  defp store_messages(guild_id, channel_id, messages) do
     gid = to_string(guild_id)
     cid = to_string(channel_id)
 
@@ -262,48 +259,57 @@ defmodule RolandoDiscord.Train do
         line_acceptable?(msg.content)
       end)
       |> Enum.map(fn msg ->
-        # Create a simple hash for deduplication
-        hash = :crypto.hash(:sha256, "#{gid}:#{msg.id}") |> Base.encode16(case: :lower)
-
         %{
           guild_id: gid,
           channel_id: cid,
           author_id: to_string(msg.author.id),
-          content: msg.content,
-          message_hash: hash
+          content: msg.content
         }
       end)
 
     if length(message_attrs) > 0 do
-      # Use bulk insert for efficiency
+      LM.train_batch(gid, messages |> Enum.map(& &1.content))
+
       case Messages.create_many(message_attrs) do
         {:error, reason} ->
           Logger.warning("Failed to store messages: #{inspect(reason)}")
 
         {n, _} ->
           Logger.debug("Stored #{n} messages for guild #{gid}")
-
       end
     end
   end
 
+  @extensions %{
+    gif: ~w(.gif),
+    image: ~w(.jpg .jpeg .png .webp .avif),
+    video: ~w(.mp4 .mov .avi),
+    audio: ~w(.mp3 .wav .ogg)
+  }
+
+  @domains %{
+    gif: ~w(tenor.com giphy.com),
+    image:
+      ~w(imgur.com i.imgur.com pinterest.com pin.it pixiv.net pximg.net flickr.com staticflickr.com twitter.com x.com fixvx.com),
+    video: ~w(youtube.com youtu.be)
+  }
+
   defp detect_media_type(url) do
-    cond do
-      String.contains?(url, ".jpg") or String.contains?(url, ".jpeg") or
-        String.contains?(url, ".png") or String.contains?(url, ".gif") ->
-        :image
+    uri = URI.parse(String.downcase(url))
+    path = uri.path || ""
+    host = uri.host || ""
 
-      String.contains?(url, ".mp4") or String.contains?(url, ".mov") or
-          String.contains?(url, ".avi") ->
-        :video
+    type_by_extension =
+      Enum.find_value(@extensions, fn {type, exts} ->
+        Enum.any?(exts, &String.ends_with?(path, &1)) && type
+      end)
 
-      String.contains?(url, ".mp3") or String.contains?(url, ".wav") or
-          String.contains?(url, ".ogg") ->
-        :gif
+    type_by_domain =
+      Enum.find_value(@domains, fn {type, domains} ->
+        Enum.any?(domains, &(host == &1 or String.ends_with?(host, "." <> &1))) && type
+      end)
 
-      true ->
-        :other
-    end
+    type_by_extension || type_by_domain || :other
   end
 
   defp line_acceptable?(content) do
@@ -314,77 +320,4 @@ defmodule RolandoDiscord.Train do
   defp contains_url?(content) do
     String.contains?(content, "http://") or String.contains?(content, "https://")
   end
-
-  def build_markov_chain(_guild_id, gid, message_count) do
-    try do
-      batch_size = Application.get_env(:rolando, :markov_message_batch_size, 1000)
-      store = Application.get_env(:rolando, :markov_store, :ets)
-
-      Logger.info(
-        "Building Markov chain for guild #{gid} (#{message_count} messages stored, batch=#{batch_size}, store=#{store})"
-      )
-
-      with :ok <- Markov.reset(gid) do
-        Stream.unfold(0, fn offset ->
-          case Messages.list_by_guild(gid, limit: batch_size, offset: offset) do
-            [] ->
-              nil
-
-            batch ->
-              {batch, offset + length(batch)}
-          end
-        end)
-        |> Enum.each(fn batch ->
-          texts = Enum.map(batch, & &1.content)
-
-          case Markov.ingest_texts(gid, texts) do
-            {:ok, _} -> :ok
-            {:error, r} -> Logger.warning("Markov ingest batch failed: #{inspect(r)}")
-          end
-        end)
-
-        _ = Markov.mark_ready(gid)
-
-        magic = "MARKOV1"
-
-        case GuildWeights.upsert(gid, %{
-               weight_data: magic,
-               version: 2,
-               perplexity: 1.0,
-               codebook_blob: nil
-             }) do
-          {:ok, _} -> :ok
-          {:error, reason} -> Logger.warning("GuildWeights upsert: #{inspect(reason)}")
-        end
-
-        case GuildConfig.update_trained_at(gid, DateTime.utc_now()) do
-          {:ok, _} -> :ok
-          {:error, reason} -> Logger.warning("trained_at update: #{inspect(reason)}")
-        end
-
-        Logger.info("Markov chain ready for guild #{gid}")
-
-        Analytics.track(%{
-          name: "model_checkpoint_created",
-          guild_id: gid,
-          meta: %{
-            "message_count" => message_count,
-            "generator" => "markov",
-            "store" => store
-          }
-        })
-      else
-        {:error, r} ->
-          Logger.error("Markov reset failed: #{inspect(r)}")
-      end
-    rescue
-      e ->
-        stack = __STACKTRACE__
-
-        Logger.error(
-          "Markov training failed: #{Exception.format(:error, e, stack)}"
-        )
-    end
-  end
-
 end

@@ -158,6 +158,48 @@ defmodule Rolando.Contexts.GuildConfig do
     end
   end
 
+  @spec update_reply_rate(guild_id :: String.t(), reply_rate :: float()) ::
+          {:ok, %GuildConfig{}} | {:error, :not_found}
+  def update_reply_rate(guild_id, reply_rate) do
+    case get(guild_id) do
+      {:ok, config} ->
+        config
+        |> GuildConfig.changeset(%{reply_rate: reply_rate, updated_at: DateTime.utc_now()})
+        |> Repo.update()
+
+      error ->
+        error
+    end
+  end
+
+  @spec update_reaction_rate(guild_id :: String.t(), reaction_rate :: float()) ::
+          {:ok, %GuildConfig{}} | {:error, :not_found}
+  def update_reaction_rate(guild_id, reaction_rate) do
+    case get(guild_id) do
+      {:ok, config} ->
+        config
+        |> GuildConfig.changeset(%{reaction_rate: reaction_rate, updated_at: DateTime.utc_now()})
+        |> Repo.update()
+
+      error ->
+        error
+    end
+  end
+
+  @spec update_filter_pings(guild_id :: String.t(), filter_pings :: boolean()) ::
+          {:ok, %GuildConfig{}} | {:error, :not_found}
+  def update_filter_pings(guild_id, filter_pings) do
+    case get(guild_id) do
+      {:ok, config} ->
+        config
+        |> GuildConfig.changeset(%{filter_pings: filter_pings, updated_at: DateTime.utc_now()})
+        |> Repo.update()
+
+      error ->
+        error
+    end
+  end
+
   @spec delete(guild_id :: String.t()) :: {:ok, %GuildConfig{}} | {:error, :not_found}
   def delete(guild_id) do
     case get(guild_id) do

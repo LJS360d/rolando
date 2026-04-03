@@ -57,13 +57,6 @@ defmodule Rolando.Contexts.MediaStore do
     |> Repo.all()
   end
 
-  @spec search_by_context(guild_id :: String.t(), context_hash :: String.t()) :: [%MediaStore{}]
-  def search_by_context(guild_id, context_hash) do
-    MediaStore
-    |> where([m], m.guild_id == ^guild_id and m.context_hash == ^context_hash)
-    |> Repo.all()
-  end
-
   @spec delete(id :: integer()) :: {:ok, %MediaStore{}} | {:error, :not_found}
   def delete(id) do
     case get(id) do

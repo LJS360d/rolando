@@ -15,12 +15,6 @@ defmodule Rolando.Schema.Guild do
       type: :string,
       on_replace: :delete
 
-    belongs_to :weights, Rolando.Schema.GuildWeights,
-      references: :guild_id,
-      foreign_key: :weights_id,
-      type: :string,
-      on_replace: :delete
-
     timestamps()
   end
 

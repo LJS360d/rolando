@@ -61,9 +61,8 @@ defmodule Rolando.Umbrella.MixProject do
     [
       # run `mix setup` in all child apps
       setup: ["cmd mix setup"],
-      "nif.build": ["nif.build"],
-      "nif.clean": ["run -e 'File.rm_rf!(\"priv/nif\")'"],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
+      "redis.build": ["run -e Rolando.RedisBuild.run()"]
     ]
   end
 end

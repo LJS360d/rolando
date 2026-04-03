@@ -13,8 +13,9 @@ defmodule RolandoDiscord.Consumers.Component do
   alias Nostrum.Constants.InteractionCallbackType
   alias Nostrum.Struct.Interaction, as: I
 
-  alias Rolando.Contexts.{Guilds, GuildConfig, GuildWeights}
-  alias Rolando.Markov
+  alias Rolando.Contexts.{Guilds, GuildConfig}
+  alias Rolando.LM
+  alias Rolando.Messages
   alias RolandoDiscord.InteractionHelpers
   alias RolandoDiscord.Permissions
   alias RolandoDiscord.Train
@@ -81,23 +82,11 @@ defmodule RolandoDiscord.Consumers.Component do
       guild = GuildCache.get!(guild_id) |> InteractionHelpers.to_guild_schema()
       {:ok, _guild} = Guilds.get_or_create(guild)
 
-      # Delete existing weights (reset for retraining)
-      _ = Markov.reset(to_string(guild_id))
+      # Delete existing messages (reset for retraining)
+      _ = LM.delete_guild(to_string(guild_id))
+      _ = Messages.delete_by_guild(to_string(guild_id))
 
-      case GuildWeights.delete(to_string(guild_id)) do
-        {:error, reason} when reason != :not_found ->
-          Logger.error("delete_weights failed: #{inspect(reason)}")
-
-          _ =
-            Interaction.edit_response(i, %{
-              data: %{
-                content: "Failed to delete chain data for this server. Please try again later."
-              }
-            })
-
-        _ ->
-          start_training_job(i, guild_id, :retrain)
-      end
+      start_training_job(i, guild_id, :retrain)
     else
       _ =
         Interaction.create_response(i, %{

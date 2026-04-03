@@ -11,7 +11,6 @@ defmodule Rolando.Schema.MediaStore do
     field :channel_id, :string
     field :url, :string
     field :media_type, Ecto.Enum, values: [:image, :gif, :video, :generic]
-    field :context_hash, :string
     timestamps(updated_at: false)
   end
 
@@ -21,11 +20,9 @@ defmodule Rolando.Schema.MediaStore do
       :guild_id,
       :channel_id,
       :url,
-      :media_type,
-      :context_hash
+      :media_type
     ])
     |> validate_required([:guild_id, :url, :media_type])
     |> validate_length(:url, min: 1)
-    |> validate_length(:context_hash, min: 1)
   end
 end

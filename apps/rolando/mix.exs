@@ -36,7 +36,7 @@ defmodule Rolando.MixProject do
       {:jason, "~> 1.2"},
       {:swoosh, "~> 1.16"},
       {:req, "~> 0.5"},
-      {:rustler, "~> 0.32"},
+      # {:rustler, "~> 0.32"},
       {:redix, "~> 1.5"}
     ]
   end
@@ -50,9 +50,9 @@ defmodule Rolando.MixProject do
         "run --no-start #{__DIR__}/priv/repo/seeds.exs"
       ],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
-      "nif.build": ["nif.build"],
-      "nif.clean": "run -e 'File.rm_rf!(\"priv/nif\")'"
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
+      # "nif.build": ["nif.build"],
+      # "nif.clean": "run -e 'File.rm_rf!(\"priv/nif\")'"
     ]
   end
 end

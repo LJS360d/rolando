@@ -5,7 +5,7 @@ defmodule Rolando.Messages.Adapter do
   """
 
   @callback create(map()) :: {:ok, Ecto.Schema.t()} | {:error, Ecto.Changeset.t()}
-  @callback create_many([map()]) :: {Integer.t(), [Ecto.Schema.t()]} | {:error, term()}
+  @callback create_many([map()]) :: {integer(), [Ecto.Schema.t()]} | {:error, term()}
   @callback list_by_guild(String.t(), keyword()) :: [Ecto.Schema.t()]
   @callback count_by_guild(String.t()) :: non_neg_integer()
   @callback delete_by_guild(String.t()) :: {non_neg_integer(), nil | [term()]}

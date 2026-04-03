@@ -1,0 +1,38 @@
+name: rolando
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./redis/data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./redis/redis_markov.lua:/scripts/redis_markov.lua:ro
+      - ./redis/docker-entrypoint-redis.sh:/docker-entrypoint-redis.sh:ro
+    entrypoint: ["/bin/sh", "/docker-entrypoint-redis.sh"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rolando
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    restart: unless-stopped
+    ports:
+      - "${REDISINSIGHT_PORT:-5540}:5540"
+    volumes:
+      - ./redisinsight/data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - rolando
+
+networks:
+  rolando:
+    driver: bridge

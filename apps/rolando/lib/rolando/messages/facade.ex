@@ -5,7 +5,6 @@ defmodule Rolando.Messages do
   """
   @behaviour Rolando.Messages.Adapter
   @default_adapter Rolando.Messages.EctoAdapter
-  require Logger
 
   defp adapter do
     Application.get_env(:rolando, :messages_adapter, @default_adapter)
