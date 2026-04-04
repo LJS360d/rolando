@@ -57,6 +57,34 @@ defmodule Rolando.Contexts.MediaStore do
     |> Repo.all()
   end
 
+  @spec get_random_by_guild(guild_id :: String.t(), media_type :: atom() | nil) ::
+          {:ok, %MediaStore{}} | {:error, :not_found}
+  def get_random_by_guild(guild_id, media_type) when media_type != nil do
+    query =
+      MediaStore
+      |> where([m], m.guild_id == ^guild_id and m.media_type == ^media_type)
+      |> order_by(fragment("RANDOM()"))
+      |> limit(1)
+
+    case Repo.all(query) do
+      [media] -> {:ok, media}
+      [] -> {:error, :not_found}
+    end
+  end
+
+  def get_random_by_guild(guild_id, nil) do
+    query =
+      MediaStore
+      |> where([m], m.guild_id == ^guild_id)
+      |> order_by(fragment("RANDOM()"))
+      |> limit(1)
+
+    case Repo.all(query) do
+      [media] -> {:ok, media}
+      [] -> {:error, :not_found}
+    end
+  end
+
   @spec delete(id :: integer()) :: {:ok, %MediaStore{}} | {:error, :not_found}
   def delete(id) do
     case get(id) do

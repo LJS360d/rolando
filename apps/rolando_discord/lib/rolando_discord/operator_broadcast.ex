@@ -102,8 +102,11 @@ defmodule RolandoDiscord.OperatorBroadcast do
 
     details =
       Enum.map(results, fn
-        {:ok, tag} -> %{status: :ok, target: inspect(tag)}
-        {:error, {kind, id, reason}} -> %{status: :error, kind: kind, id: id, reason: inspect(reason)}
+        {:ok, tag} ->
+          %{status: :ok, target: inspect(tag)}
+
+        {:error, {kind, id, reason}} ->
+          %{status: :error, kind: kind, id: id, reason: inspect(reason)}
       end)
 
     {ok_n, err_n, details}

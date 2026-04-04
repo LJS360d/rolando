@@ -32,6 +32,7 @@ erl_crash.dump
 *.db
 *.db-*
 data
+!apps/**/data
 
 # NIF
 *.so

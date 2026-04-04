@@ -7,7 +7,7 @@ defmodule Rolando.Schema.GuildConfig do
 
   @primary_key {:guild_id, :string, autogenerate: false}
   schema "guild_config" do
-    field :tier, :string, default: "standard"
+    field :tier, :integer, default: 2
     field :premium, :boolean, default: false
     field :filter_pings, :boolean, default: false
     field :filter_bot_authors, :boolean, default: true
@@ -37,5 +37,6 @@ defmodule Rolando.Schema.GuildConfig do
     |> validate_number(:reply_rate, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
     |> validate_number(:reaction_rate, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
     |> validate_number(:vc_join_rate, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
+    |> validate_number(:tier, greater_than_or_equal_to: 2, less_than_or_equal_to: 255)
   end
 end

@@ -42,4 +42,36 @@ defmodule RolandoDiscord.InteractionHelpers do
       image_url: Guild.icon_url(guild)
     }
   end
+
+  @extensions %{
+    gif: ~w(.gif),
+    image: ~w(.jpg .jpeg .png .webp .avif),
+    video: ~w(.mp4 .mov .avi),
+    audio: ~w(.mp3 .wav .ogg)
+  }
+
+  @domains %{
+    gif: ~w(tenor.com giphy.com),
+    image:
+      ~w(imgur.com i.imgur.com pinterest.com pin.it pixiv.net pximg.net flickr.com staticflickr.com twitter.com x.com fixvx.com),
+    video: ~w(youtube.com youtu.be)
+  }
+
+  def detect_media_type(url) do
+    uri = URI.parse(String.downcase(url))
+    path = uri.path || ""
+    host = uri.host || ""
+
+    type_by_extension =
+      Enum.find_value(@extensions, fn {type, exts} ->
+        Enum.any?(exts, &String.ends_with?(path, &1)) && type
+      end)
+
+    type_by_domain =
+      Enum.find_value(@domains, fn {type, domains} ->
+        Enum.any?(domains, &(host == &1 or String.ends_with?(host, "." <> &1))) && type
+      end)
+
+    type_by_extension || type_by_domain || :other
+  end
 end

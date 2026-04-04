@@ -9,6 +9,7 @@ defmodule RolandoDiscord.Train do
   alias Rolando.Contexts.{GuildConfig, MediaStore}
   alias Rolando.Messages
   alias RolandoDiscord.Permissions
+  alias RolandoDiscord.InteractionHelpers
 
   def run(opts) do
     do_run(opts)
@@ -229,7 +230,7 @@ defmodule RolandoDiscord.Train do
         guild_id: gid,
         channel_id: cid,
         url: url,
-        media_type: detect_media_type(url)
+        media_type: InteractionHelpers.detect_media_type(url)
       })
     end)
   end
@@ -263,38 +264,6 @@ defmodule RolandoDiscord.Train do
           Logger.debug("Stored #{n} messages for guild #{gid}")
       end
     end
-  end
-
-  @extensions %{
-    gif: ~w(.gif),
-    image: ~w(.jpg .jpeg .png .webp .avif),
-    video: ~w(.mp4 .mov .avi),
-    audio: ~w(.mp3 .wav .ogg)
-  }
-
-  @domains %{
-    gif: ~w(tenor.com giphy.com),
-    image:
-      ~w(imgur.com i.imgur.com pinterest.com pin.it pixiv.net pximg.net flickr.com staticflickr.com twitter.com x.com fixvx.com),
-    video: ~w(youtube.com youtu.be)
-  }
-
-  defp detect_media_type(url) do
-    uri = URI.parse(String.downcase(url))
-    path = uri.path || ""
-    host = uri.host || ""
-
-    type_by_extension =
-      Enum.find_value(@extensions, fn {type, exts} ->
-        Enum.any?(exts, &String.ends_with?(path, &1)) && type
-      end)
-
-    type_by_domain =
-      Enum.find_value(@domains, fn {type, domains} ->
-        Enum.any?(domains, &(host == &1 or String.ends_with?(host, "." <> &1))) && type
-      end)
-
-    type_by_extension || type_by_domain || :other
   end
 
   defp line_acceptable?(content) do
