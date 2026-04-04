@@ -62,6 +62,15 @@ defmodule Rolando.LM.Adapters.RedisMarkovChain do
   end
 
   @impl true
+  def get_tier(guild_id) do
+    case Redix.command(@connection, ["HGET", config_key(to_string(guild_id)), "n_gram_size"]) do
+      {:ok, nil} -> {:ok, @default_n_gram_size}
+      {:ok, val} -> {:ok, String.to_integer(val)}
+      {:error, err} -> {:error, err}
+    end
+  end
+
+  @impl true
   def train_batch(guild_id, messages, opts \\ []) when is_list(messages) do
     guild_id_str = to_string(guild_id)
     n_gram_size = Keyword.get(opts, :n_gram_size, @default_n_gram_size)
@@ -193,16 +202,9 @@ defmodule Rolando.LM.Adapters.RedisMarkovChain do
   end
 
   @doc """
-  Gets the current n_gram_size (cohesion) value for a guild from Redis.
-  """
-  def get_n_gram_size(guild_id) do
-    fetch_n_gram_size(to_string(guild_id))
-  end
-
-  @doc """
   Updates the n_gram_size (cohesion) value for a guild in Redis.
   """
-  def update_n_gram_size(guild_id, n_gram_size) when n_gram_size >= 2 and n_gram_size <= 10 do
+  def update_n_gram_size(guild_id, n_gram_size) when n_gram_size >= 2 and n_gram_size <= 255 do
     guild_id_str = to_string(guild_id)
 
     case Redix.command(@connection, [
@@ -244,7 +246,7 @@ defmodule Rolando.LM.Adapters.RedisMarkovChain do
   end
 
   def fetch_n_gram_size(guild_id) do
-    case Redix.command(@connection, ["HGET", config_key(guild_id), "n_gram_size"]) do
+    case Redix.command(@connection, ["HGET", config_key(to_string(guild_id)), "n_gram_size"]) do
       {:ok, nil} -> {:ok, @default_n_gram_size}
       {:ok, val} -> {:ok, String.to_integer(val)}
       {:error, _} -> {:ok, @default_n_gram_size}

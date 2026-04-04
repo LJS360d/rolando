@@ -10,6 +10,8 @@ defmodule Rolando.LM.Adapter do
   @callback train_batch(guild_id(), [String.t()], opts :: keyword()) :: :ok | {:error, any()}
   @callback change_tier(guild_id(), tier :: integer(), [String.t()]) ::
               :ok | {:error, any()}
+  @callback get_tier(guild_id()) ::
+              :ok | {:error, any()}
 
   @callback generate(guild_id()) :: result()
   @callback generate(guild_id(), seed :: String.t() | nil) :: result()

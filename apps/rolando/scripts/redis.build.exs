@@ -66,7 +66,7 @@ defmodule Rolando.RedisBuild do
   end
 
   defp load_messages_for_guild_to_redis(guild_id_str) do
-    case RedisMarkovChain.fetch_n_gram_size(guild_id_str) do
+    case RedisMarkovChain.get_tier(guild_id_str) do
       {:ok, n_gram_size} ->
         Logger.info("Guild #{guild_id_str}: Using n_gram_size = #{n_gram_size}")
         fetch_and_train_messages_recursive(guild_id_str, nil, n_gram_size)

@@ -7,12 +7,14 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
   """
   use Nostrum.Consumer
 
+  alias Rolando.Messages
   alias Nostrum.Api.Interaction
   alias Nostrum.Cache.GuildCache
   alias Nostrum.Constants.InteractionCallbackType
   alias Nostrum.Struct.Interaction, as: I
 
   alias Rolando.Analytics
+  alias Rolando.LM
   alias Rolando.Contexts.{Guilds, GuildConfig}
   alias RolandoDiscord.InteractionHelpers
   alias RolandoDiscord.Permissions
@@ -227,7 +229,7 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
         {:ok} ->
           # Fetch stats from Redis Markov Chain
           stats_result =
-            Rolando.LM.Adapters.RedisMarkovChain.get_stats(to_string(guild_id))
+            LM.get_stats(to_string(guild_id))
 
           # Fetch guild config
           config = GuildConfig.get_or_default(to_string(guild_id))
@@ -456,7 +458,7 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
     if Permissions.admin_or_owner?(i) do
       value_option = get_option_value(i, "value")
 
-      case Rolando.LM.Adapters.RedisMarkovChain.get_n_gram_size(to_string(guild_id)) do
+      case LM.get_tier(to_string(guild_id)) do
         {:ok, current_size} ->
           cond do
             is_nil(value_option) ->
@@ -473,11 +475,10 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
             true ->
               # Set new cohesion
               new_value = value_option
+              gid = to_string(guild_id)
+              messages = Messages.list_by_guild(gid) |> Enum.map(& &1.content)
 
-              case Rolando.LM.Adapters.RedisMarkovChain.update_n_gram_size(
-                     to_string(guild_id),
-                     new_value
-                   ) do
+              case LM.change_tier(gid, new_value, messages) do
                 {:ok, _updated_size} ->
                   Interaction.create_response(i, %{
                     type: InteractionCallbackType.channel_message_with_source(),
@@ -536,11 +537,7 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
       })
     else
       # Generate opinion based on seed using the Markov chain
-      case Rolando.LM.Adapters.RedisMarkovChain.generate(
-             to_string(guild_id),
-             about_option,
-             20
-           ) do
+      case LM.generate(to_string(guild_id), about_option) do
         {:ok, text} ->
           Interaction.create_response(i, %{
             type: InteractionCallbackType.channel_message_with_source(),
@@ -589,7 +586,7 @@ defmodule RolandoDiscord.Consumers.SlashCommand do
         })
       else
         # Delete the specified data from training data
-        case Rolando.LM.Adapters.RedisMarkovChain.delete_message(
+        case LM.delete_message(
                to_string(guild_id),
                data_option
              ) do

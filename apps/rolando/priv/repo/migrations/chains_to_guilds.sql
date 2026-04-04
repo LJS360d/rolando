@@ -121,6 +121,13 @@ DROP TABLE IF EXISTS guild_config;
 ALTER TABLE guilds_new RENAME TO guilds;
 ALTER TABLE guild_config_new RENAME TO guild_config;
 
+UPDATE guild_config
+SET trained_at = trained_at || ' 00:00:00'
+WHERE trained_at IS NOT NULL
+  AND length(trained_at) = 10
+  AND trained_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+
+
 -- Step 6: Create indexes
 CREATE INDEX IF NOT EXISTS idx_guilds_id ON guilds(id);
 CREATE INDEX IF NOT EXISTS idx_guilds_config_id ON guilds(config_id);

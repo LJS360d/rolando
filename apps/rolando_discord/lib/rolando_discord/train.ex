@@ -171,8 +171,9 @@ defmodule RolandoDiscord.Train do
 
             loop_fetch(guild_id, channel_id, next_before, 0, new_total, max_err, limit)
 
-          {:error, %{status_code: 429, retry_after: retry_after}} ->
+          {:error, %{status_code: 429}} ->
             # Rate limited - wait and retry
+            retry_after = 5
             wait_time = ceil(retry_after * 1000)
 
             Logger.warning(
@@ -182,7 +183,7 @@ defmodule RolandoDiscord.Train do
             Process.sleep(wait_time)
             loop_fetch(guild_id, channel_id, before_id, err_count, total, max_err, limit)
 
-          {:error, %{status_code: _}} = error ->
+          {:error, %{status_code: _} = error} ->
             Logger.warning(
               "Channel #{channel_id} fetch error (attempt #{err_count + 1}/#{max_err}): #{inspect(error)}"
             )
@@ -195,22 +196,6 @@ defmodule RolandoDiscord.Train do
               total
             else
               # Add small delay between retries to avoid hammering
-              Process.sleep(500)
-              loop_fetch(guild_id, channel_id, before_id, err_count + 1, total, max_err, limit)
-            end
-
-          {:error, _} = err ->
-            Logger.warning(
-              "Channel #{channel_id} fetch error (attempt #{err_count + 1}/#{max_err}): #{inspect(err)}"
-            )
-
-            if err_count + 1 > max_err do
-              Logger.error(
-                "Channel #{channel_id} failed after #{max_err} errors, stopping at #{total} messages"
-              )
-
-              total
-            else
               Process.sleep(500)
               loop_fetch(guild_id, channel_id, before_id, err_count + 1, total, max_err, limit)
             end

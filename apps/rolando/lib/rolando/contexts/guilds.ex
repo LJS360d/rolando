@@ -3,7 +3,7 @@ defmodule Rolando.Contexts.Guilds do
   alias Rolando.Repo
   alias Rolando.Cache
   alias Rolando.Analytics
-  alias Rolando.Schema.{Guild, GuildConfig, GuildWeights}
+  alias Rolando.Schema.{Guild, GuildConfig}
 
   @cache_table :guild_cache
 
@@ -90,7 +90,7 @@ defmodule Rolando.Contexts.Guilds do
     end
   end
 
-  @spec list_directory_page(pos_integer(), pos_integer()) :: [%{}]
+  @spec list_directory_page(page :: pos_integer(), page_size :: pos_integer()) :: [%{}]
   def list_directory_page(page, page_size)
       when is_integer(page) and page >= 1 and is_integer(page_size) and page_size >= 1 do
     offset = (page - 1) * page_size
@@ -98,8 +98,6 @@ defmodule Rolando.Contexts.Guilds do
     from(g in Guild,
       left_join: c in GuildConfig,
       on: c.guild_id == g.id,
-      left_join: w in GuildWeights,
-      on: w.guild_id == g.id,
       order_by: [desc: g.updated_at],
       offset: ^offset,
       limit: ^page_size,
@@ -109,8 +107,7 @@ defmodule Rolando.Contexts.Guilds do
         platform: g.platform,
         image_url: g.image_url,
         updated_at: g.updated_at,
-        trained_at: c.trained_at,
-        has_weights: not is_nil(w.guild_id)
+        trained_at: c.trained_at
       }
     )
     |> Repo.all()

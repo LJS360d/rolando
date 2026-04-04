@@ -273,13 +273,12 @@ defmodule RolandoWeb.OperatorLive do
               >
               </div>
             </div>
-            <p class="mt-2 text-xs text-base-content/50">
-              Bar scales to a 512&nbsp;MB reference; not a hard limit.
-            </p>
           </div>
 
           <div class="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
-            <h3 class="text-sm font-medium text-base-content/80">Events per day (last {@chart_days})</h3>
+            <h3 class="text-sm font-medium text-base-content/80">
+              Events per day (last {@chart_days})
+            </h3>
             <div class="mt-4 flex h-40 items-end gap-1">
               <%= for {day, n} <- @chart_series do %>
                 <% h_pct = if @chart_max > 0, do: round(n / @chart_max * 100), else: 0 %>
@@ -313,7 +312,9 @@ defmodule RolandoWeb.OperatorLive do
             <.input field={@event_filter_form[:guild_id]} type="text" label="Guild id" />
             <.input field={@event_filter_form[:since]} type="date" label="Since (UTC date)" />
             <div class="flex items-end">
-              <button type="submit" class="btn btn-secondary btn-sm w-full sm:w-auto">Apply filters</button>
+              <button type="submit" class="btn btn-secondary btn-sm w-full sm:w-auto">
+                Apply filters
+              </button>
             </div>
           </.form>
           <div class="mt-3 overflow-x-auto rounded-xl border border-base-300 bg-base-100 shadow-sm">
@@ -336,7 +337,10 @@ defmodule RolandoWeb.OperatorLive do
                   </tr>
                 <% end %>
                 <%= for ev <- @events do %>
-                  <tr id={"operator-event-#{ev.id}"} class="border-b border-base-200/80 odd:bg-base-200/20">
+                  <tr
+                    id={"operator-event-#{ev.id}"}
+                    class="border-b border-base-200/80 odd:bg-base-200/20"
+                  >
                     <td class="whitespace-nowrap px-3 py-2 text-xs font-mono">
                       {Calendar.strftime(ev.inserted_at, "%Y-%m-%d %H:%M:%S")}
                     </td>
@@ -355,7 +359,9 @@ defmodule RolandoWeb.OperatorLive do
 
         <section aria-labelledby="op-guilds-heading">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 id="op-guilds-heading" class="text-lg font-semibold tracking-tight">Guild directory</h2>
+            <h2 id="op-guilds-heading" class="text-lg font-semibold tracking-tight">
+              Guild directory
+            </h2>
             <div class="flex items-center gap-2">
               <span class="text-xs text-base-content/60">
                 Page {@guild_page} of {@guild_total_pages}
@@ -384,11 +390,11 @@ defmodule RolandoWeb.OperatorLive do
             <table class="min-w-full border-collapse text-left text-sm">
               <thead class="border-b border-base-300 bg-base-200/50">
                 <tr>
-                  <th class="px-3 py-2 font-medium">Guild id</th>
+                  <th class="px-3 py-2 font-medium">#</th>
+                  <th class="px-3 py-2 font-medium"></th>
                   <th class="px-3 py-2 font-medium">Name</th>
                   <th class="px-3 py-2 font-medium">Last updated</th>
                   <th class="px-3 py-2 font-medium">Trained</th>
-                  <th class="px-3 py-2 font-medium">Weights</th>
                 </tr>
               </thead>
               <tbody id="operator-guilds">
@@ -402,6 +408,13 @@ defmodule RolandoWeb.OperatorLive do
                 <%= for row <- @guild_rows do %>
                   <tr class="border-b border-base-200/80 odd:bg-base-200/20">
                     <td class="px-3 py-2 font-mono text-xs">{row.id}</td>
+                    <td class="px-3 py-2 text-xs">
+                      <%= if row.image_url do %>
+                        <img src={row.image_url} alt={row.name} class="w-8 h-8 rounded-full" />
+                      <% else %>
+                        <span class="w-8 h-8 rounded-full bg-base-300 inline-block"></span>
+                      <% end %>
+                    </td>
                     <td class="px-3 py-2">{row.name}</td>
                     <td class="whitespace-nowrap px-3 py-2 text-xs">
                       {Calendar.strftime(row.updated_at, "%Y-%m-%d %H:%M")}
@@ -413,13 +426,6 @@ defmodule RolandoWeb.OperatorLive do
                         —
                       <% end %>
                     </td>
-                    <td class="px-3 py-2 text-xs">
-                      <%= if row.has_weights do %>
-                        yes
-                      <% else %>
-                        no
-                      <% end %>
-                    </td>
                   </tr>
                 <% end %>
               </tbody>
@@ -427,13 +433,27 @@ defmodule RolandoWeb.OperatorLive do
           </div>
         </section>
 
-        <section class="rounded-xl border border-base-300 bg-base-100 p-6 shadow-sm" aria-labelledby="op-broadcast-heading">
+        <section
+          class="rounded-xl border border-base-300 bg-base-100 p-6 shadow-sm"
+          aria-labelledby="op-broadcast-heading"
+        >
           <h2 id="op-broadcast-heading" class="text-lg font-semibold tracking-tight">Broadcast</h2>
           <p class="mt-1 text-sm text-base-content/70">
             Sends are queued to the bot runtime over the internal pub/sub bus (not direct from the browser to Discord).
           </p>
-          <.form for={@broadcast_form} id="operator-broadcast-form" phx-submit="broadcast" class="mt-4 space-y-4">
-            <.input field={@broadcast_form[:body]} type="textarea" label="Message" required phx-debounce="blur" />
+          <.form
+            for={@broadcast_form}
+            id="operator-broadcast-form"
+            phx-submit="broadcast"
+            class="mt-4 space-y-4"
+          >
+            <.input
+              field={@broadcast_form[:body]}
+              type="textarea"
+              label="Message"
+              required
+              phx-debounce="blur"
+            />
             <.input
               field={@broadcast_form[:channel_ids_raw]}
               type="text"

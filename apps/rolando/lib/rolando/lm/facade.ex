@@ -4,7 +4,7 @@ defmodule Rolando.LM do
   and prod can use an external Redis.
   """
   @behaviour Rolando.LM.Adapter
-  @default_adapter Rolando.LM.EctoAdapter
+  @default_adapter Rolando.LM.Adapters.ETS
 
   defp adapter do
     Application.get_env(:rolando, :lm_adapter, @default_adapter)
@@ -33,6 +33,11 @@ defmodule Rolando.LM do
   @impl true
   def generate(guild_id, seed, length) do
     adapter().generate(guild_id, seed, length)
+  end
+
+  @impl true
+  def get_tier(guild_id) do
+    adapter().get_tier(guild_id)
   end
 
   @impl true
