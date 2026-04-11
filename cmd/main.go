@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"rolando/internal/config"
@@ -16,7 +17,13 @@ import (
 	"rolando/cmd/ihttp"
 	"rolando/internal/repositories"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/cache"
+	discordevents "github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/disgo/voice"
+	"github.com/disgoorg/godave/golibdave"
 )
 
 // LDFLAGS
@@ -28,21 +35,41 @@ func main() {
 	config.Version = Version
 	logger.Infof("Version: %s", config.Version)
 	logger.Debugf("Env: %s", config.Env)
-	logger.Debugln("Creating discord session...")
-	ds, err := discordgo.New("Bot " + config.Token)
-	if err != nil {
-		logger.Fatalf("error creating Discord session,", err)
-	}
+	logger.Debugln("Creating discord client...")
 
-	ds.Identify.Intents = config.Intents
+	ctx := context.Background()
+
+	client, err := disgo.New(config.Token,
+		bot.WithGatewayConfigOpts(
+			gateway.WithIntents(config.Intents),
+		),
+		bot.WithVoiceManagerConfigOpts(
+			voice.WithDaveSessionCreateFunc(golibdave.NewSession),
+		),
+		bot.WithCacheConfigOpts(
+			cache.WithCaches(
+				cache.FlagGuilds,
+				cache.FlagChannels,
+				cache.FlagRoles,
+				cache.FlagMembers,
+				cache.FlagVoiceStates,
+			),
+		),
+		bot.WithEventListenerFunc(func(e *discordevents.GuildsReady) {
+			events.UpdatePresence(e.Client())
+		}),
+	)
+	if err != nil {
+		logger.Fatalf("error creating Discord client: %v", err)
+	}
 
 	// Open a websocket connection to Discord and begin listening.
-	err = ds.Open()
+	err = client.OpenGateway(ctx)
 	if err != nil {
-		logger.Fatalln("error opening connection,", err)
+		logger.Fatalln("error opening gateway connection:", err)
 	}
-	logger.Debugln("Discord session created")
-	events.UpdatePresence(ds)
+	logger.Debugln("Discord client created and connected")
+
 	logger.Debugln("Initializing services...")
 	// DI
 	messagesRepo, err := repositories.NewMessagesRepository(config.DatabasePath)
@@ -53,22 +80,30 @@ func main() {
 	if err != nil {
 		logger.Fatalf("error creating chains repository: %v", err)
 	}
-	chainsService := services.NewChainsService(ds, *chainsRepo, *messagesRepo)
-	dataFetchService := services.NewDataFetchService(ds, chainsService, messagesRepo)
+	chainsService := services.NewChainsService(client, *chainsRepo, *messagesRepo)
+	dataFetchService := services.NewDataFetchService(client, chainsService, messagesRepo)
 	// Handlers
-	messagesHandler := messages.NewMessageHandler(ds, chainsService)
-	commandsHandler := commands.NewSlashCommandsHandler(ds, chainsService)
-	buttonsHandler := buttons.NewButtonsHandler(ds, dataFetchService, chainsService)
-	eventsHandler := events.NewEventsHandler(ds, chainsService)
+	messagesHandler := messages.NewMessageHandler(client, chainsService)
+	commandsHandler := commands.NewSlashCommandsHandler(client, chainsService)
+	buttonsHandler := buttons.NewButtonsHandler(client, dataFetchService, chainsService)
+	eventsHandler := events.NewEventsHandler(client, chainsService)
 	logger.Debugln("All services initialized")
 	chainsService.LoadChains()
-	ds.AddHandler(commandsHandler.OnSlashCommandInteraction)
-	ds.AddHandler(messagesHandler.OnMessageCreate)
-	ds.AddHandler(buttonsHandler.OnButtonInteraction)
-	ds.AddHandler(eventsHandler.OnEventCreate)
-	logger.Infof("Logged in as %s", ds.State.User.String())
+
+	client.EventManager.AddEventListeners(
+		bot.NewListenerFunc(commandsHandler.OnSlashCommandInteraction),
+		bot.NewListenerFunc(messagesHandler.OnMessageCreate),
+		bot.NewListenerFunc(buttonsHandler.OnButtonInteraction),
+		bot.NewListenerFunc(eventsHandler.OnEventCreate),
+	)
+
+	botUser, err := client.Rest.GetUser(client.ID())
+	if err != nil {
+		logger.Fatalf("error getting bot user: %v", err)
+	}
+	logger.Infof("Logged in as %s#%s", botUser.Username, botUser.Discriminator)
 	if config.RunHttpServer {
-		srv := ihttp.NewHttpServer(ds, chainsService, messagesRepo)
+		srv := ihttp.NewHttpServer(client, chainsService, messagesRepo)
 		srv.Start()
 	}
 	logger.Infof("Startup time: %s", time.Since(config.StartupTime).String())
@@ -79,5 +114,5 @@ func main() {
 	<-sc
 
 	// Cleanly close down the Discord session.
-	ds.Close()
+	client.Close(ctx)
 }

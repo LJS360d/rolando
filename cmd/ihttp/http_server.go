@@ -4,23 +4,23 @@ import (
 	"rolando/cmd/idiscord/services"
 	"rolando/cmd/ihttp/analytics"
 	"rolando/cmd/ihttp/auth"
-	"rolando/cmd/ihttp/bot"
+	httpBot "rolando/cmd/ihttp/bot"
 	"rolando/cmd/ihttp/data"
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"rolando/internal/repositories"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
 	"github.com/gin-gonic/gin"
 )
 
 type HttpServer struct {
 	ChainsService  *services.ChainsService
-	DiscordSession *discordgo.Session
+	DiscordSession *bot.Client
 	MessagesRepo   *repositories.MessagesRepository
 }
 
-func NewHttpServer(discordSession *discordgo.Session, chainsService *services.ChainsService, messagesRepo *repositories.MessagesRepository) *HttpServer {
+func NewHttpServer(discordSession *bot.Client, chainsService *services.ChainsService, messagesRepo *repositories.MessagesRepository) *HttpServer {
 	return &HttpServer{
 		ChainsService:  chainsService,
 		DiscordSession: discordSession,
@@ -38,7 +38,7 @@ func (s *HttpServer) Start() {
 	)
 
 	analyticsController := analytics.NewController(s.ChainsService, s.DiscordSession)
-	botController := bot.NewController(s.ChainsService, s.DiscordSession)
+	botController := httpBot.NewController(s.ChainsService, s.DiscordSession)
 	authController := auth.NewController(s.DiscordSession)
 	dataController := data.NewController(s.DiscordSession, s.MessagesRepo)
 	// Routes

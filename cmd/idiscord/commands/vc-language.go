@@ -3,27 +3,28 @@ package commands
 import (
 	"rolando/internal/data"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // implementation of /vc language command
-func (h *SlashCommandsHandler) vcLanguageCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (h *SlashCommandsHandler) vcLanguageCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
 	var lang string
-	for _, option := range i.ApplicationCommandData().Options {
-		if option.Name == "language" && option.Type == discordgo.ApplicationCommandOptionInteger {
-			lang = data.Langs[option.IntValue()]
+	for _, option := range i.SlashCommandInteractionData().Options {
+		if option.Name == "language" && option.Type == discord.ApplicationCommandOptionTypeInt {
+			lang = data.Langs[option.Int()]
 			break
 		}
 	}
 
-	chainId := i.GuildID
-	chainDoc, err := h.ChainsService.GetChainDocument(chainId)
+	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
 	if err != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Failed to retrieve chain data.",
-				Flags:   discordgo.MessageFlagsEphemeral,
+				Flags:   discord.MessageFlagEphemeral,
 			},
 		})
 		return
@@ -34,27 +35,27 @@ func (h *SlashCommandsHandler) vcLanguageCommand(s *discordgo.Session, i *discor
 			return
 		}
 		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"tts_language": lang}); err != nil {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
+			s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+				Type: discord.InteractionResponseTypeCreateMessage,
+				Data: discord.MessageCreate{
 					Content: "Failed to update tts language.",
-					Flags:   discordgo.MessageFlagsEphemeral,
+					Flags:   discord.MessageFlagEphemeral,
 				},
 			})
 			return
 		}
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Set language to use in vc to `" + lang + "`",
 			},
 		})
 		return
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeCreateMessage,
+		Data: discord.MessageCreate{
 			Content: "Current language is `" + chainDoc.TTSLanguage + "`",
 		},
 	})

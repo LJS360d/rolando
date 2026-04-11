@@ -3,59 +3,61 @@ package commands
 import (
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // implementation of /wipe command
-func (h *SlashCommandsHandler) wipeCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	options := i.ApplicationCommandData().Options
+func (h *SlashCommandsHandler) wipeCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	options := i.SlashCommandInteractionData().Options
 	var data string
 	for _, option := range options {
-		if option.Name == "data" && option.Type == discordgo.ApplicationCommandOptionString {
-			data = option.StringValue()
+		if option.Name == "data" && option.Type == discord.ApplicationCommandOptionTypeString {
+			data = option.String()
 			break
 		}
 	}
 
 	if data == "" {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "You must provide the data to be erased.",
-				Flags:   discordgo.MessageFlagsEphemeral,
+				Flags:   discord.MessageFlagEphemeral,
 			},
 		})
 		return
 	}
 
-	chain, err := h.ChainsService.GetChain(i.GuildID)
+	chain, err := h.ChainsService.GetChain(i.GuildID().String())
 	if err != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Failed to retrieve chain data.",
-				Flags:   discordgo.MessageFlagsEphemeral,
+				Flags:   discord.MessageFlagEphemeral,
 			},
 		})
 		return
 	}
 
-	err = h.ChainsService.DeleteTextData(i.GuildID, data)
+	err = h.ChainsService.DeleteTextData(i.GuildID().String(), data)
 	if err != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Failed to delete the specified data.",
-				Flags:   discordgo.MessageFlagsEphemeral,
+				Flags:   discord.MessageFlagEphemeral,
 			},
 		})
 		return
 	}
 
 	chain.Delete(data)
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeCreateMessage,
+		Data: discord.MessageCreate{
 			Content: fmt.Sprintf("Deleted `%s`", data),
 		},
 	})

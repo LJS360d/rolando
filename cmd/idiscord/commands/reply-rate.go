@@ -3,29 +3,30 @@ package commands
 import (
 	"strconv"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // implementation of /replyrate command
-func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	options := i.ApplicationCommandData().Options
+func (h *SlashCommandsHandler) replyRateCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	options := i.SlashCommandInteractionData().Options
 	var rate *int
 	for _, option := range options {
-		if option.Name == "rate" && option.Type == discordgo.ApplicationCommandOptionInteger {
-			value := int(option.IntValue())
+		if option.Name == "rate" && option.Type == discord.ApplicationCommandOptionTypeInt {
+			value := int(option.Int())
 			rate = &value
 			break
 		}
 	}
 
-	guildID := i.GuildID
-	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
+	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
 	if err != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Failed to retrieve chain data.",
-				Flags:   discordgo.MessageFlagsEphemeral,
+				Flags:   discord.MessageFlagEphemeral,
 			},
 		})
 		return
@@ -36,11 +37,11 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 			return
 		}
 		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"reply_rate": *rate}); err != nil {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
+			s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+				Type: discord.InteractionResponseTypeCreateMessage,
+				Data: discord.MessageCreate{
 					Content: "Failed to update reply rate.",
-					Flags:   discordgo.MessageFlagsEphemeral,
+					Flags:   discord.MessageFlagEphemeral,
 				},
 			})
 			return
@@ -50,9 +51,9 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 		} else {
 			ratePercent = float64(1 / float64(*rate) * 100)
 		}
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Set reply rate to `" + strconv.Itoa(*rate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
 			},
 		})
@@ -64,9 +65,9 @@ func (h *SlashCommandsHandler) replyRateCommand(s *discordgo.Session, i *discord
 	} else {
 		ratePercent = float64(1 / float64(chainDoc.ReplyRate) * 100)
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeCreateMessage,
+		Data: discord.MessageCreate{
 			Content: "Current reply rate is `" + strconv.Itoa(chainDoc.ReplyRate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
 		},
 	})

@@ -1,13 +1,17 @@
 package commands
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
+)
 
 // implementation of /gif command
-func (h *SlashCommandsHandler) gifCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+func (h *SlashCommandsHandler) gifCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeDeferredCreateMessage,
 	})
-	chain, err := h.ChainsService.GetChain(i.GuildID)
+	chain, err := h.ChainsService.GetChain(i.GuildID().String())
 	if err != nil {
 		return
 	}
@@ -15,43 +19,43 @@ func (h *SlashCommandsHandler) gifCommand(s *discordgo.Session, i *discordgo.Int
 	if err != nil || gif == "" {
 		gif = "No valid gif found."
 	}
-	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+	s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.MessageUpdate{
 		Content: &gif,
 	})
 }
 
 // implementation of /image command
-func (h *SlashCommandsHandler) imageCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+func (h *SlashCommandsHandler) imageCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeDeferredCreateMessage,
 	})
-	chain, err := h.ChainsService.GetChain(i.GuildID)
+	chain, err := h.ChainsService.GetChain(i.GuildID().String())
 	if err != nil {
 		return
 	}
-	image, err := chain.MediaStore.GetMedia("image")
-	if err != nil || image == "" {
-		image = "No valid image found."
+	media, err := chain.MediaStore.GetMedia("image")
+	if err != nil || media == "" {
+		media = "No valid image found."
 	}
-	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: &image,
+	s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.MessageUpdate{
+		Content: &media,
 	})
 }
 
 // implementation of /video command
-func (h *SlashCommandsHandler) videoCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+func (h *SlashCommandsHandler) videoCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeDeferredCreateMessage,
 	})
-	chain, err := h.ChainsService.GetChain(i.GuildID)
+	chain, err := h.ChainsService.GetChain(i.GuildID().String())
 	if err != nil {
 		return
 	}
-	video, err := chain.MediaStore.GetMedia("video")
-	if err != nil || video == "" {
-		video = "No valid video found."
+	media, err := chain.MediaStore.GetMedia("video")
+	if err != nil || media == "" {
+		media = "No valid video found."
 	}
-	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: &video,
+	s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.MessageUpdate{
+		Content: &media,
 	})
 }

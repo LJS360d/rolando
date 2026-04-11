@@ -3,15 +3,17 @@ package commands
 import (
 	"rolando/internal/logger"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // implementation of /src command
-func (h *SlashCommandsHandler) srcCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (h *SlashCommandsHandler) srcCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
 	repoURL := "https://github.com/LJS360d/rolando"
-	err := h.Client.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
+	err := h.Client.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeCreateMessage,
+		Data: discord.MessageCreate{
 			Content: repoURL,
 		},
 	})

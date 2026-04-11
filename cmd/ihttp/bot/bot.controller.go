@@ -8,20 +8,23 @@ import (
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/gin-gonic/gin"
 )
 
 type BotController struct {
 	chainsService *services.ChainsService
-	ds            *discordgo.Session
+	ds            *bot.Client
 }
 
-func NewController(chainsService *services.ChainsService, ds *discordgo.Session) *BotController {
+func NewController(chainsService *services.ChainsService, ds *bot.Client) *BotController {
 	return &BotController{
 		chainsService: chainsService,
 		ds:            ds,
@@ -60,17 +63,29 @@ func (s *BotController) Broadcast(c *gin.Context) {
 
 		go func(g *BroadcastGuildRequest) {
 			defer wg.Done()
-			channelId := g.ChannelId
-			if channelId == "" {
-				guild, err := s.ds.Guild(g.Id)
-				if err != nil {
-					errCh <- err
-					return
-				}
-				channelId = guild.SystemChannelID
+			channelId, err := snowflake.Parse(g.ChannelId)
+			if err != nil {
+				errCh <- err
+				return
 			}
+			gid, err := snowflake.Parse(g.Id)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			guild, ok := s.ds.Caches.Guild(gid)
+			if !ok {
+				errCh <- fmt.Errorf("guild with id '%s' not found in cache", g.Id)
+				return
+			}
+			if guild.SystemChannelID == nil {
+				errCh <- fmt.Errorf("guild with id '%s' has no system channel", g.Id)
+				return
+			}
+			channelId = *guild.SystemChannelID
+
 			logger.Infof("Broadcasting message in guild: %s, channel: %s", g.Id, channelId)
-			_, err := s.ds.ChannelMessageSend(channelId, req.Content)
+			_, err = s.ds.Rest.CreateMessage(channelId, discord.NewMessageCreate().WithContent(req.Content))
 			if err != nil {
 				logger.Errorf("could not send message in guild: %s, channel: %s: %v", g.Id, channelId, err)
 				errCh <- err
@@ -94,24 +109,7 @@ func (s *BotController) Broadcast(c *gin.Context) {
 
 const discordUserGuildsLimit = 200
 
-func fetchAllUserGuilds(ds *discordgo.Session) ([]*discordgo.UserGuild, error) {
-	var all []*discordgo.UserGuild
-	for _, sg := range ds.State.Guilds {
-		all = append(all, &discordgo.UserGuild{
-			ID:                       sg.ID,
-			Name:                     sg.Name,
-			Icon:                     sg.Icon,
-			Owner:                    sg.Owner,
-			Permissions:              sg.Permissions,
-			Features:                 sg.Features,
-			ApproximateMemberCount:   sg.MemberCount,
-			ApproximatePresenceCount: len(sg.Presences),
-		})
-	}
-	return all, nil
-}
-
-func sortKeyGuildWithChain(g *discordgo.UserGuild, chain gin.H, sortBy string) float64 {
+func sortKeyGuildWithChain(g discord.Guild, chain gin.H, sortBy string) float64 {
 	if sortBy == "approximate_member_count" {
 		return float64(g.ApproximateMemberCount)
 	}
@@ -158,11 +156,6 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	}
 	sortBy := c.Query("sortBy")
 
-	allGuilds, err := fetchAllUserGuilds(s.ds)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
 	chainMap, err := analytics.BuildAllChainsAnalyticsMap(s.chainsService)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -170,13 +163,14 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	}
 
 	type guildWithChain struct {
-		Guild   *discordgo.UserGuild
+		Guild   discord.Guild
 		Chain   gin.H
 		SortKey float64
 	}
+	allGuilds := slices.Collect(s.ds.Caches.Guilds())
 	merged := make([]guildWithChain, 0, len(allGuilds))
 	for _, g := range allGuilds {
-		chain := chainMap[g.ID]
+		chain := chainMap[g.ID.String()]
 		merged = append(merged, guildWithChain{
 			Guild:   g,
 			Chain:   chain,
@@ -195,8 +189,8 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 			"id":                         m.Guild.ID,
 			"name":                       m.Guild.Name,
 			"icon":                       m.Guild.Icon,
-			"owner":                      m.Guild.Owner,
-			"permissions":                m.Guild.Permissions,
+			"owner":                      m.Guild.OwnerID.String(),
+			"permissions":                "",
 			"features":                   m.Guild.Features,
 			"approximate_member_count":   m.Guild.ApproximateMemberCount,
 			"approximate_presence_count": m.Guild.ApproximatePresenceCount,
@@ -227,12 +221,7 @@ func (s *BotController) GetBotGuildsAll(c *gin.Context) {
 		c.JSON(errCode, gin.H{"error": err.Error()})
 		return
 	}
-	all, err := fetchAllUserGuilds(s.ds)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(200, all)
+	c.JSON(200, slices.Collect(s.ds.Caches.Guilds()))
 }
 
 // GET /bot/guilds/:guildId, requires member authorization
@@ -243,25 +232,18 @@ func (s *BotController) GetGuild(c *gin.Context) {
 		c.JSON(errCode, gin.H{"error": err.Error()})
 		return
 	}
-
-	guild, err := s.ds.State.Guild(guildId)
+	gid, err := snowflake.Parse(guildId)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	userGuild := discordgo.UserGuild{
-		ID:                       guild.ID,
-		Name:                     guild.Name,
-		Icon:                     guild.Icon,
-		Features:                 guild.Features,
-		Owner:                    guild.Owner,
-		Permissions:              guild.Permissions,
-		ApproximateMemberCount:   guild.ApproximateMemberCount,
-		ApproximatePresenceCount: guild.ApproximatePresenceCount,
+	guild, ok := s.ds.Caches.Guild(gid)
+	if !ok {
+		c.JSON(400, gin.H{"error": fmt.Errorf("guild with id '%s' not found in cache", guildId)})
+		return
 	}
-
-	c.JSON(200, userGuild)
+	c.JSON(200, guild)
 }
 
 // PUT /bot/guilds/:guildId, requires owner authorization
@@ -296,27 +278,30 @@ func (s *BotController) GetGuildInvite(c *gin.Context) {
 		return
 	}
 
-	channels, err := s.ds.GuildChannels(c.Param("guildId"))
+	gid, err := snowflake.Parse(c.Param("guildId"))
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	var publicChannelID string
+
+	channels := slices.Collect(s.ds.Caches.ChannelsForGuild(gid))
+	var publicChannelID *snowflake.ID
 	for _, channel := range channels {
-		if channel != nil && channel.Type == discordgo.ChannelTypeGuildText {
-			publicChannelID = channel.ID
+		if channel != nil && channel.Type() == discord.ChannelTypeGuildText {
+			channelId := channel.ID()
+			publicChannelID = &channelId
 			break
 		}
 	}
 
-	if publicChannelID == "" {
+	if publicChannelID == nil {
 		c.JSON(400, gin.H{"error": "No public channels available in the guild"})
 		return
 	}
 
-	inv, err := s.ds.ChannelInviteCreate(publicChannelID, discordgo.Invite{
-		MaxAge:    86400,
-		MaxUses:   1,
+	inv, err := s.ds.Rest.CreateInvite(*publicChannelID, discord.InviteCreate{
+		MaxAge:    new(86400),
+		MaxUses:   new(1),
 		Temporary: false,
 	})
 	if err != nil {
@@ -329,8 +314,8 @@ func (s *BotController) GetGuildInvite(c *gin.Context) {
 
 // GET /bot/user, public
 func (s *BotController) GetBotUser(c *gin.Context) {
-	botUser := s.ds.State.User
-	commands, err := s.ds.ApplicationCommands(s.ds.State.User.ID, "")
+	botUser, _ := s.ds.Caches.SelfUser()
+	commands, err := s.ds.Rest.GetGlobalCommands(s.ds.ApplicationID, false)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -341,13 +326,13 @@ func (s *BotController) GetBotUser(c *gin.Context) {
 		"id":             botUser.ID,
 		"username":       botUser.Username,
 		"global_name":    botUser.Username + "#" + botUser.Discriminator,
-		"avatar_url":     botUser.AvatarURL(""),
+		"avatar_url":     botUser.AvatarURL(),
 		"discriminator":  botUser.Discriminator,
 		"verified":       botUser.Verified,
-		"accent_color":   int32(botUser.AccentColor),
+		"accent_color":   botUser.AccentColor,
 		"invite_url":     config.InviteUrl,
 		"slash_commands": commands,
-		"guilds":         len(s.ds.State.Guilds),
+		"guilds":         s.ds.Caches.GuildCache().Len(),
 	})
 }
 
@@ -377,14 +362,18 @@ func (s *BotController) LeaveGuild(c *gin.Context) {
 		c.JSON(errCode, gin.H{"error": err.Error()})
 		return
 	}
-	guildId := c.Param("guildId")
-	err = s.ds.GuildLeave(guildId)
+	guildId, err := snowflake.Parse(c.Param("guildId"))
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	err = s.ds.Rest.LeaveGuild(guildId)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(204, nil)
-	err = s.chainsService.DeleteChain(guildId)
+	err = s.chainsService.DeleteChain(guildId.String())
 	if err != nil {
 		logger.Errorf("Failed to delete chain after leaving guild: %v", err)
 		return

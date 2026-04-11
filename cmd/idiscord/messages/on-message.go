@@ -10,24 +10,30 @@ import (
 	"rolando/internal/utils"
 	"slices"
 
-	discord "github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // OnMessageCreate handles new message events.
-func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageCreate) {
-	if m.Author == nil || m.Author.Bot {
+func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
+	if e.GuildID == nil {
+		return // Skip DMs
+	}
+
+	m := e.Message
+	if m.Author.Bot {
 		return // do not process bot messages
 	}
-	guild, err := s.Guild(m.GuildID)
+	guild, ok := h.Client.Caches.Guild(*m.GuildID)
 
 	// Skip processing if no guild (should never happen)
-	if err != nil {
+	if !ok {
 		return
 	}
 
-	channel, err := s.State.Channel(m.ChannelID)
+	channel, ok := h.Client.Caches.Channel(m.ChannelID)
 	// Consolidate access check
-	if err != nil || !helpers.HasGuildTextChannelAccess(s, s.State.User.ID, channel) {
+	if !ok || !helpers.HasGuildTextChannelAccess(h.Client, h.Client.ID(), channel) {
 		return
 	}
 
@@ -35,12 +41,12 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 	// Update chain state for content and attachments concurrently with other operations.
 	go func() {
 		// Only fetch/create chainDoc and chain once here, as they are used for all subsequent calls.
-		chainDoc, err := h.ChainsService.GetChainDocument(guild.ID)
+		chainDoc, err := h.ChainsService.GetChainDocument(guild.ID.String())
 		if err != nil {
 			logger.Errorf("Failed to fetch chain doc in '%s': %v", guild.Name, err)
 			return
 		}
-		chain, err := h.ChainsService.GetChain(guild.ID)
+		chain, err := h.ChainsService.GetChain(guild.ID.String())
 		if err != nil {
 			logger.Errorf("Failed to fetch chain in '%s': %v", guild.Name, err)
 			return
@@ -51,7 +57,7 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 			messages = append(messages, m.Content)
 		}
 		for _, attachment := range m.Attachments {
-			if attachment == nil {
+			if attachment.URL == "" {
 				// should never happen
 				continue
 			}
@@ -59,27 +65,27 @@ func (h *MessageHandler) OnMessageCreate(s *discord.Session, m *discord.MessageC
 		}
 
 		if len(messages) > 0 {
-			if _, err := h.ChainsService.UpdateChainState(guild.ID, messages); err != nil {
+			if _, err := h.ChainsService.UpdateChainState(guild.ID.String(), messages); err != nil {
 				logger.Errorf("Failed to update chain state in '%s': %v", guild.Name, err)
 			}
 		}
 
 		// Must use the fetched chain/chainDoc from *this* goroutine
-
-		if helpers.MentionsUser(m.Message, s.State.User.ID, guild) {
-			h.handleReply(s, m.Message, chain)
+		botMember, _ := h.Client.Caches.Member(guild.ID, h.Client.ID())
+		if helpers.MentionsUser(m, botMember) {
+			h.handleReply(m, chain)
 		}
 		if ratedChoice(chain.ReplyRate) {
-			h.handleRandomMessage(s, m.Message, guild.Name, chain)
+			h.handleRandomMessage(m, guild.Name, chain)
 		}
 		if ratedChoice(chainDoc.ReactionRate) {
-			h.handleReaction(s, m.Message, guild.Name)
+			h.handleReaction(m, guild.Name)
 		}
 	}()
 }
 
 // handleReply sends a message in reply to a mention.
-func (h *MessageHandler) handleReply(s *discord.Session, m *discord.Message, chain *model.MarkovChain) {
+func (h *MessageHandler) handleReply(m discord.Message, chain *model.MarkovChain) {
 	message, err := h.getMessage(chain)
 	if err != nil {
 		logger.Errorf("Failed to generate text for mention reply in '%s': %v", m.GuildID, err)
@@ -89,21 +95,21 @@ func (h *MessageHandler) handleReply(s *discord.Session, m *discord.Message, cha
 		return
 	}
 
-	sendData := &discord.MessageSend{
+	sendData := discord.MessageCreate{
 		Content: message,
-		Reference: &discord.MessageReference{
-			MessageID: m.ID,
-			ChannelID: m.ChannelID,
+		MessageReference: &discord.MessageReference{
+			MessageID: new(m.ID),
+			ChannelID: new(m.ChannelID),
 			GuildID:   m.GuildID,
 		},
 	}
-	if _, err = h.Client.ChannelMessageSendComplex(m.ChannelID, sendData); err != nil {
+	if _, err = h.Client.Rest.CreateMessage(m.ChannelID, sendData); err != nil {
 		logger.Errorf("Failed to send mention reply in '%s': %v", m.GuildID, err)
 	}
 }
 
 // handleRandomMessage sends a non-reply/quiet-reply message.
-func (h *MessageHandler) handleRandomMessage(s *discord.Session, m *discord.Message, guildName string, chain *model.MarkovChain) {
+func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string, chain *model.MarkovChain) {
 	message, err := h.getMessage(chain)
 	if err != nil {
 		logger.Errorf("Failed to generate text for random message in '%s': %v", guildName, err)
@@ -111,14 +117,14 @@ func (h *MessageHandler) handleRandomMessage(s *discord.Session, m *discord.Mess
 	}
 	if ratedChoice(10) /* 10% */ {
 		// the message replies to the original message without pinging the user
-		sendData := &discord.MessageSend{
+		sendData := discord.MessageCreate{
 			Content: message,
-			Reference: &discord.MessageReference{
-				MessageID: m.ID,
-				ChannelID: m.ChannelID,
+			MessageReference: &discord.MessageReference{
+				MessageID: new(m.ID),
+				ChannelID: new(m.ChannelID),
 				GuildID:   m.GuildID,
 			},
-			AllowedMentions: &discord.MessageAllowedMentions{
+			AllowedMentions: &discord.AllowedMentions{
 				Parse: []discord.AllowedMentionType{
 					discord.AllowedMentionTypeUsers,
 					discord.AllowedMentionTypeRoles,
@@ -127,34 +133,31 @@ func (h *MessageHandler) handleRandomMessage(s *discord.Session, m *discord.Mess
 				RepliedUser: false,
 			},
 		}
-		if _, err = h.Client.ChannelMessageSendComplex(m.ChannelID, sendData); err != nil {
+		if _, err = h.Client.Rest.CreateMessage(m.ChannelID, sendData); err != nil {
 			logger.Errorf("Failed to send mention reply in '%s': %v", m.GuildID, err)
 		}
 		return
 	}
-
-	if _, err = h.Client.ChannelMessageSend(m.ChannelID, message); err != nil {
+	if _, err = h.Client.Rest.CreateMessage(m.ChannelID, discord.MessageCreate{
+		Content: message,
+	}); err != nil {
 		logger.Errorf("Failed to send random message in '%s': %v", guildName, err)
 	}
 }
 
 // handleReaction adds a random reaction to a message.
-func (h *MessageHandler) handleReaction(s *discord.Session, m *discord.Message, guildName string) {
-	guildEmojis, err := s.GuildEmojis(m.GuildID)
-	if err != nil {
-		logger.Errorf("Failed to fetch guild emojis in '%s': %v", guildName, err)
-		return
-	}
+func (h *MessageHandler) handleReaction(m discord.Message, guildName string) {
+	guildEmojis := h.Client.Caches.Emojis((*m.GuildID))
 
 	// base emoji pool
 	emojiPool := slices.Clone(data.EmojiUnicodes)
 	// add guild custom emojis to the base pool
-	for _, emoji := range guildEmojis {
-		emojiPool = append(emojiPool, emoji.APIName())
+	for emoji := range guildEmojis {
+		emojiPool = append(emojiPool, emoji.Name)
 	}
 
 	randEmoji := emojiPool[rand.Intn(len(emojiPool))]
-	if err = s.MessageReactionAdd(m.ChannelID, m.ID, randEmoji); err != nil {
+	if err := h.Client.Rest.AddReaction(m.ChannelID, m.ID, randEmoji); err != nil {
 		logger.Errorf("Failed to add reaction: %v", err)
 	}
 }

@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
 	"rolando/internal/model"
@@ -16,88 +18,108 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/disgo/voice"
+	"github.com/disgoorg/snowflake/v2"
 )
 
 // implementation of /vc join command
-func (h *SlashCommandsHandler) vcJoinCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (h *SlashCommandsHandler) vcJoinCommand(client *bot.Client, i *events.ApplicationCommandInteractionCreate) {
 	// step 0: defer a response to the interaction
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
-	})
+	err := i.DeferCreateMessage(true)
+	if err != nil {
+		logger.Errorf("Failed to defer interaction response: %v", err)
+		return
+	}
+
+	guildID := *i.GuildID()
+	userID := i.User().ID
 
 	// step 1: get the user's voice state
-	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-	if err != nil {
+	voiceState, ok := h.Client.Caches.VoiceState(guildID, userID)
+	if !ok || voiceState.ChannelID == nil {
 		content := "You must be in a voice channel to use this command."
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &content,
-		})
+		_, err := client.Rest.UpdateInteractionResponse(client.ApplicationID, i.Token(), discord.NewMessageUpdate().WithContent(content))
+		if err != nil {
+			logger.Errorf("Failed to update interaction response: %v", err)
+		}
 		return
 	}
 
-	vcCtx, _ /* vcClose */ := context.WithCancel(context.Background())
+	go func() {
+		vcCtx, _ := context.WithCancel(context.Background())
 
-	// step 2: join the voice channel
-	vc, err := s.ChannelVoiceJoin(vcCtx, i.GuildID, voiceState.ChannelID, false, false)
-	if err != nil || vc.Status != discordgo.VoiceConnectionStatusReady {
-		channel, _ := s.State.Channel(voiceState.ChannelID)
-		content := fmt.Sprintf("Failed to join the voice channel: %s", channel.Name)
-		logger.Errorln(content, err)
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &content,
-		})
-		return
-	}
-	voiceChannel, _ := s.State.Channel(voiceState.ChannelID)
-	// step 3: having joined the vc, respond to the interaction
-	content := fmt.Sprintf("Joined the voice channel '%s', i'll speak sometimes", voiceChannel.Name)
-	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: &content,
-	})
+		// step 2: join the voice channel
+		conn := h.Client.VoiceManager.CreateConn(guildID)
+		err = conn.Open(vcCtx, *voiceState.ChannelID, false, false)
+		if err != nil || conn.Gateway().Status() != voice.StatusReady {
+			channel, _ := h.Client.Caches.Channel(*voiceState.ChannelID)
+			var channelName string
+			if channel != nil {
+				channelName = channel.Name()
+			} else {
+				channelName = "unknown"
+			}
+			content := fmt.Sprintf("Failed to join the voice channel: %s", channelName)
+			logger.Errorln(content, err)
+			_, err := client.Rest.UpdateInteractionResponse(client.ApplicationID, i.Token(), discord.NewMessageUpdate().WithContent(content))
+			if err != nil {
+				logger.Errorf("Failed to update interaction response: %v", err)
+			}
+			return
+		}
 
-	// step 4: generate a static TTS audio and stream it to the vc
-	chainDoc, err := h.ChainsService.GetChainDocument(voiceState.GuildID)
-	if err != nil {
-		logger.Errorf("Failed to retrieve chain document: %v", err)
-		return
-	}
-	chain, err := h.ChainsService.GetChain(chainDoc.ID)
-	if err != nil {
-		logger.Errorf("Failed to retrieve chain: %v", err)
-		return
-	}
-	d, err := tts.GenerateTTSDecoder("i am here", chainDoc.TTSLanguage)
-	if err != nil {
-		logger.Errorf("Failed to generate TTS decoder: %v", err)
-		return
-	}
-	if err := helpers.StreamAudioDecoder(vc, d); err != nil {
-		logger.Errorf("Failed to stream audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
-	}
+		voiceChannel, _ := h.Client.Caches.Channel(*voiceState.ChannelID)
+		var channelName string
+		if voiceChannel != nil {
+			channelName = voiceChannel.Name()
+		} else {
+			channelName = "unknown"
+		}
 
-	// step 5: start listening in the vc
-	listenVc(s, i, vc, vcCtx, voiceChannel, chainDoc, chain)
+		// step 3: having joined the vc, respond to the interaction
+		content := fmt.Sprintf("Joined the voice channel '%s', i'll speak sometimes", channelName)
+		_, err = client.Rest.UpdateInteractionResponse(client.ApplicationID, i.Token(), discord.NewMessageUpdate().WithContent(content))
+		if err != nil {
+			logger.Errorf("Failed to update interaction response: %v", err)
+		}
+
+		// step 4: generate a static TTS audio and stream it to the vc
+		chainDoc, err := h.ChainsService.GetChainDocument(guildID.String())
+		if err != nil {
+			logger.Errorf("Failed to retrieve chain document: %v", err)
+			return
+		}
+		chain, err := h.ChainsService.GetChain(chainDoc.ID)
+		if err != nil {
+			logger.Errorf("Failed to retrieve chain: %v", err)
+			return
+		}
+		provider, err := tts.GenerateTTSProvider("i am here", chainDoc.TTSLanguage)
+		if err != nil {
+			logger.Errorf("Failed to generate TTS provider: %v", err)
+			return
+		}
+		if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
+			if !errors.Is(err, io.EOF) {
+				logger.Errorf("Failed to stream audio in '%s' in '%s': %v", channelName, chainDoc.Name, err)
+			}
+		}
+
+		// step 5: start listening in the vc
+		listenVc(h, i, conn, vcCtx, voiceChannel, chainDoc, chain)
+	}()
+
 }
 
-func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.Member, error) {
-	guild, err := s.Guild(guildID)
-	if err != nil {
-		return nil, err
-	}
-
-	memberMap := make(map[string]*discordgo.Member)
-	for _, member := range guild.Members {
-		memberMap[member.User.ID] = member
-	}
-
-	var users []*discordgo.Member
-	for _, vs := range guild.VoiceStates {
-		if vs.ChannelID == channelID {
-			if member, ok := memberMap[vs.UserID]; ok {
+func getVCUsers(h *SlashCommandsHandler, guildID snowflake.ID, channelID snowflake.ID) ([]discord.Member, error) {
+	var users []discord.Member
+	for vs := range h.Client.Caches.VoiceStates(guildID) {
+		if vs.ChannelID != nil && *vs.ChannelID == channelID {
+			member, ok := h.Client.Caches.Member(guildID, vs.UserID)
+			if ok {
 				users = append(users, member)
 			}
 		}
@@ -105,7 +127,7 @@ func getVCUsers(s *discordgo.Session, guildID, channelID string) ([]*discordgo.M
 	return users, nil
 }
 
-func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordgo.VoiceConnection, vcCtx context.Context, voiceChannel *discordgo.Channel, chainDoc *repositories.Chain, chain *model.MarkovChain) {
+func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteractionCreate, conn voice.Conn, vcCtx context.Context, voiceChannel discord.Channel, chainDoc *repositories.Chain, chain *model.MarkovChain) {
 	var ttsMutex sync.Mutex
 	done := make(chan struct{})
 	var once sync.Once
@@ -118,36 +140,46 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 		})
 	}
 
-	freeCleanupHandler := s.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
-		if vs.GuildID != i.GuildID {
-			return
-		}
+	guildID := *event.GuildID()
+	botUserID := h.Client.ID()
+	var channelName string
+	if voiceChannel != nil {
+		channelName = voiceChannel.Name()
+	} else {
+		channelName = "unknown"
+	}
 
-		if vs.UserID == s.State.User.ID {
-			logger.Infof("Left voice channel '%s' in '%s', initiating cleanup...", voiceChannel.Name, chainDoc.Name)
-			triggerCleanup()
-			return
-		}
+	// Listen for voice state updates to detect when we should leave
+	listener := bot.NewListenerFunc(
+		func(e events.GuildVoiceStateUpdate) {
+			if e.VoiceState.GuildID != guildID {
+				return
+			}
 
-		currentUsers, _ := getVCUsers(s, i.GuildID, voiceChannel.ID)
-		if len(currentUsers) < 1 { // All other users have left
-			triggerCleanup()
-		}
-	})
+			if e.VoiceState.UserID == botUserID {
+				logger.Infof("Left voice channel '%s' in '%s', initiating cleanup...", channelName, chainDoc.Name)
+				triggerCleanup()
+				return
+			}
+
+			currentUsers, _ := getVCUsers(h, guildID, voiceChannel.ID())
+			if len(currentUsers) < 1 { // All other users have left
+				triggerCleanup()
+			}
+		},
+	)
+	h.Client.EventManager.AddEventListeners(listener)
 
 	// use the 'done' channel to instruct other goroutines to stop *before* cleanup.
-	defer func() {
-		freeCleanupHandler()
+	defer func(updateListener bot.EventListener) {
+		h.Client.RemoveEventListeners(updateListener)
 		// It's safe to close here because the main function (where this defer runs)
 		// is about to exit. All goroutines that listen to 'done' will unblock.
 		close(done)
-		err := vc.Disconnect(vcCtx)
-		if err != nil {
-			logger.Warnf("Failed to disconnect from voice channel (already disconnected?): %v", err)
-		}
+		conn.Close(vcCtx)
 		stt.FreeRecognizer(chain.ID)
-		logger.Infof("Cleanup complete for VC '%s' in '%s'", voiceChannel.Name, chainDoc.Name)
-	}()
+		logger.Infof("Cleanup complete for VC '%s' in '%s'", channelName, chainDoc.Name)
+	}(listener)
 
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
@@ -156,7 +188,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 		for {
 			select {
 			case <-ticker.C:
-				if vc.Status != discordgo.VoiceConnectionStatusReady {
+				if conn.Gateway().Status() != voice.StatusReady {
 					logger.Warnf("Voice connection no longer ready, initiating cleanup...")
 					triggerCleanup()
 					return
@@ -168,9 +200,15 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 	}()
 
 	go func() {
-		receiver := helpers.NewVoiceReceiver()
 		pcmChan := make(chan *helpers.PCMPacket, 10)
-		go receiver.ReceivePCM(vc, pcmChan)
+		receiver := helpers.NewVoskOpusReceiver(chainDoc.ID, chainDoc.TTSLanguage, pcmChan)
+
+		// Register the opus frame receiver with the voice connection
+		conn.SetOpusFrameReceiver(receiver)
+
+		defer func() {
+			receiver.Close()
+		}()
 
 		for {
 			select {
@@ -181,7 +219,7 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 					return
 				}
 
-				if vc.Status != discordgo.VoiceConnectionStatusReady {
+				if conn.Gateway().Status() != voice.StatusReady {
 					logger.Warnf("Voice connection lost during PCM processing, initiating cleanup...")
 					triggerCleanup()
 					return
@@ -211,19 +249,21 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 					ttsMutex.Lock()
 					defer ttsMutex.Unlock()
 
-					if vc.Status != discordgo.VoiceConnectionStatusReady {
+					if conn.Gateway().Status() != voice.StatusReady {
 						logger.Warnf("Voice connection not ready before streaming, skipping...")
 						return
 					}
 
-					d, err := tts.GenerateTTSDecoder(chain.TalkFiltered(10), chainDoc.TTSLanguage)
+					provider, err := tts.GenerateTTSProvider(chain.TalkFiltered(10), chainDoc.TTSLanguage)
 					if err != nil {
-						logger.Errorf("Failed to generate random TTS decoder in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
+						logger.Errorf("Failed to generate random TTS provider in '%s' in '%s': %v", channelName, chainDoc.Name, err)
 						return
 					}
-					if err := helpers.StreamAudioDecoder(vc, d); err != nil {
-						logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", voiceChannel.Name, chainDoc.Name, err)
-						triggerCleanup()
+					if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
+						if !errors.Is(err, io.EOF) {
+							logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", channelName, chainDoc.Name, err)
+							triggerCleanup()
+						}
 					}
 				}()
 
@@ -240,6 +280,6 @@ func listenVc(s *discordgo.Session, i *discordgo.InteractionCreate, vc *discordg
 		// go into the defer block for cleanup
 		return
 	case <-time.After(8 * time.Hour): // timeout after 8 hours
-		logger.Infof("VC Timeout in '%s' in '%s', initiating cleanup...", voiceChannel.Name, chainDoc.Name)
+		logger.Infof("VC Timeout in '%s' in '%s', initiating cleanup...", channelName, chainDoc.Name)
 	}
 }

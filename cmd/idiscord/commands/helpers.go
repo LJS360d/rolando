@@ -6,11 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/snowflake/v2"
 )
 
 func (h *SlashCommandsHandler) withAdminPermission(cb SlashCommandHandler, msg ...string) SlashCommandHandler {
-	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	return func(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
 		if !h.checkAdmin(i, msg...) {
 			return
 		}
@@ -18,15 +21,15 @@ func (h *SlashCommandsHandler) withAdminPermission(cb SlashCommandHandler, msg .
 	}
 }
 
-func (h *SlashCommandsHandler) checkAdmin(i *discordgo.InteractionCreate, msg ...string) bool {
+func (h *SlashCommandsHandler) checkAdmin(i *events.ApplicationCommandInteractionCreate, msg ...string) bool {
 	for _, ownerID := range config.OwnerIDs {
-		if i.Member.User.ID == ownerID {
+		if i.User().ID.String() == ownerID {
 			return true
 		}
 	}
 
-	perms := i.Member.Permissions
-	if perms&discordgo.PermissionAdministrator != 0 {
+	perms := i.Member().Permissions
+	if perms&discord.PermissionAdministrator != 0 {
 		return true
 	}
 	var content string
@@ -35,31 +38,22 @@ func (h *SlashCommandsHandler) checkAdmin(i *discordgo.InteractionCreate, msg ..
 	} else {
 		content = "You are not authorized to use this command."
 	}
-	h.Client.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
+	h.Client.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeCreateMessage,
+		Data: discord.MessageCreate{
 			Content: content,
-			Flags:   discordgo.MessageFlagsEphemeral,
+			Flags:   discord.MessageFlagEphemeral,
 		},
 	})
 
 	return false
 }
 
-func (h *SlashCommandsHandler) withGuildSubscription(skuId string, cb SlashCommandHandler) SlashCommandHandler {
-	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (h *SlashCommandsHandler) withGuildSubscription(skuId snowflake.ID, cb SlashCommandHandler) SlashCommandHandler {
+	return func(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
 		canUse := h.guildSubscriptionCheck(s, i, skuId)
 		if !canUse {
 			logger.Warnf("Guild %s is not subscribed to SKU %s", i.GuildID, skuId)
-			premiumButton := &discordgo.Button{
-				Style: discordgo.PremiumButton,
-				SKUID: skuId,
-			}
-			actionRow := &discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					premiumButton,
-				},
-			}
 			var content string
 			content = "Hey the usage of this command is not free! You can start supporting the project and get premium access by buying a subscription right now"
 			if config.PremiumsPageLink != "" {
@@ -67,12 +61,12 @@ func (h *SlashCommandsHandler) withGuildSubscription(skuId string, cb SlashComma
 			} else {
 				content += "."
 			}
-			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content:    content,
-					Components: []discordgo.MessageComponent{*actionRow},
-				},
+			err := s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+				Type: discord.InteractionResponseTypeCreateMessage,
+				Data: discord.NewMessageCreate().WithContent(content).AddActionRow(discord.ButtonComponent{
+					Style: discord.ButtonStylePremium,
+					SkuID: skuId,
+				}),
 			})
 			if err != nil {
 				logger.Errorf("Failed to send paywall check premium button response: %v", err)
@@ -83,18 +77,18 @@ func (h *SlashCommandsHandler) withGuildSubscription(skuId string, cb SlashComma
 	}
 }
 
-func (h *SlashCommandsHandler) guildSubscriptionCheck(s *discordgo.Session, i *discordgo.InteractionCreate, skuId string) bool {
+func (h *SlashCommandsHandler) guildSubscriptionCheck(s *bot.Client, i *events.ApplicationCommandInteractionCreate, skuId snowflake.ID) bool {
 	if !config.PaywallsEnabled {
 		return true
 	}
 	// pass if the user is a bot owner
 	for _, ownerID := range config.OwnerIDs {
-		if i.Member.User.ID == ownerID {
-			logger.Infof("User %s is an owner, skipping guild subscription check", i.Member.User.GlobalName)
+		if i.User().ID.String() == ownerID {
+			logger.Infof("User %s is a bot owner, skipping guild subscription check", *i.User().GlobalName)
 			return true
 		}
 	}
-	guildID := i.GuildID
+	guildID := i.GuildID().String()
 	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
 	if err != nil {
 		logger.Errorf("Failed to retrieve chain data for guild %s for subscription check: %v", guildID, err)
@@ -106,8 +100,8 @@ func (h *SlashCommandsHandler) guildSubscriptionCheck(s *discordgo.Session, i *d
 	}
 	logger.Infof("Performing guild subscription check for sku '%s' in guild '%s'", skuId, chainDoc.Name)
 	// Check if the guild has the SKU
-	for _, ent := range i.Entitlements {
-		if ent.SKUID == skuId && ent.EndsAt != nil && ent.EndsAt.After(time.Now()) {
+	for _, ent := range i.Entitlements() {
+		if ent.SkuID == skuId && ent.EndsAt != nil && ent.EndsAt.After(time.Now()) {
 			return true
 		}
 	}

@@ -5,20 +5,21 @@ import (
 	"rolando/internal/logger"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/events"
 )
 
 type ButtonsHandler struct {
-	Client           *discordgo.Session
+	Client           *bot.Client
 	ChainsService    *services.ChainsService
 	DataFetchService *services.DataFetchService
 	Handlers         map[string]ButtonHandler
 }
 
-type ButtonHandler func(s *discordgo.Session, i *discordgo.InteractionCreate)
+type ButtonHandler func(client *bot.Client, i *events.ComponentInteractionCreate)
 
 // Constructor for ButtonsHandler
-func NewButtonsHandler(client *discordgo.Session, dataFetchService *services.DataFetchService, chainsService *services.ChainsService) *ButtonsHandler {
+func NewButtonsHandler(client *bot.Client, dataFetchService *services.DataFetchService, chainsService *services.ChainsService) *ButtonsHandler {
 	handler := &ButtonsHandler{
 		Client:           client,
 		ChainsService:    chainsService,
@@ -39,39 +40,28 @@ func (h *ButtonsHandler) registerButtons() {
 }
 
 // Entry point for handling button interactions
-func (h *ButtonsHandler) OnButtonInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.Type != discordgo.InteractionMessageComponent {
-		return
-	}
+func (h *ButtonsHandler) OnButtonInteraction(i *events.ComponentInteractionCreate) {
 
 	var where string
-	if i.GuildID == "" {
+	if i.GuildID() == nil {
 		where = "DMs"
 	} else {
-		if guild, err := h.Client.Guild(i.GuildID); err != nil {
-			logger.Errorf("Failed to fetch guild '%s' for button interaction: %v", i.GuildID, err)
+		if guild, ok := h.Client.Caches.Guild(*i.GuildID()); !ok {
+			logger.Errorf("Guild with id '%s' not found in cache", i.GuildID())
 			return
 		} else {
 			where = guild.Name
 		}
 	}
 
-	var who string
-	if i.User != nil {
-		who = i.User.Username
-	} else if i.Member != nil && i.Member.User != nil {
-		who = i.Member.User.Username
-	} else {
-		logger.Errorf("Failed to determine user for button interaction in '%s'", where)
-		return
-	}
-	buttonId := i.MessageComponentData().CustomID
+	who := i.User().Username
+	buttonId := i.Data.CustomID()
 
 	startTime := time.Now()
 	logger.Infof("from '%s' in '%s': btn:%s", who, where, buttonId)
 	// Check if there's a handler for the button ID
 	if handler, exists := h.Handlers[buttonId]; exists {
-		handler(s, i) // Call the function bound to the button ID
+		handler(h.Client, i) // Call the function bound to the button ID
 	}
 	logger.Infof("btn:%s handler from '%s' in '%s' completed in %s", buttonId, who, where, time.Since(startTime).String())
 }

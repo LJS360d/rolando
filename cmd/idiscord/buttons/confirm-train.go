@@ -6,17 +6,19 @@ import (
 	"rolando/internal/utils"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // Handle 'confirm-train' button interaction
-func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (h *ButtonsHandler) onConfirmTrain(s *bot.Client, i *events.ComponentInteractionCreate) {
 	// Defer the update
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	s.Rest.CreateInteractionResponse(i.ComponentInteraction.ID(), i.ComponentInteraction.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeDeferredCreateMessage,
 	})
 
-	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID)
+	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
 	if err != nil {
 		logger.Errorf("Failed to fetch chainDoc for guild %s: %v", i.GuildID, err)
 		return
@@ -24,51 +26,48 @@ func (h *ButtonsHandler) onConfirmTrain(s *discordgo.Session, i *discordgo.Inter
 
 	// redundant check
 	if chainDoc.TrainedAt != nil && chainDoc.TrainedAt.Before(time.Now()) {
-		s.ChannelMessageSend(i.ChannelID, "Training already completed for this server.")
-		return
-	}
-
-	var userId string
-	if i.User != nil {
-		userId = i.User.ID
-	} else if i.Member != nil && i.Member.User != nil {
-		userId = i.Member.User.ID
-	} else {
-		logger.Errorf("Failed to determine user ID for interaction in '%s'", chainDoc.Name)
+		s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent("Training already completed for this server."))
 		return
 	}
 
 	// Start the training process
 	// Send confirmation message
-	content := fmt.Sprintf("<@%s> Started Fetching messages.\nI  will send a message when I'm done.\nEstimated Time: `1 Minute per every 5000 Messages in the Server`\nThis might take a while..", userId)
-	s.ChannelMessageSend(i.ChannelID, content)
-	s.InteractionResponseDelete(i.Interaction)
+	content := fmt.Sprintf("%s Started Fetching messages.\nI  will send a message when I'm done.\nEstimated Time: `1 Minute per every 5000 Messages in the Server`\nThis might take a while..", i.User().Mention())
+	s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent(content))
+	s.Rest.DeleteInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token())
 
 	// Update chain status
 	now := time.Now()
 	chainDoc.TrainedAt = &now
-	if _, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained_at": now}); err != nil {
+	if _, err = h.ChainsService.UpdateChainMeta(i.GuildID().String(), map[string]any{"trained_at": now}); err != nil {
 		logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
 		return
 	}
-	go func() {
-		startTime := time.Now()
-		messages, err := h.DataFetchService.FetchAllGuildMessages(i.GuildID)
-		if err != nil {
-			logger.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID, err)
-			// Revert chain status
-			chainDoc.TrainedAt = nil
-			if _, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained_at": nil}); err != nil {
-				logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
-			}
-			return
-		}
 
-		// Send completion message
-		s.ChannelMessageSend(i.ChannelID, fmt.Sprintf("<@%s> Finished Fetching messages.\nMessages fetched: `%s`\nTime elapsed: `%s`\nMessages/Second: `%s`",
-			userId,
-			utils.FormatNumber(float64(len(messages))),
-			time.Since(startTime).String(),
-			utils.FormatNumber(float64(len(messages))/(time.Since(startTime).Seconds()))))
-	}()
+	startTime := time.Now()
+	messages, err := h.DataFetchService.FetchAllGuildMessages(i.GuildID().String())
+	if err != nil {
+		logger.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID, err)
+		// Revert chain status
+		chainDoc.TrainedAt = nil
+		if _, err = h.ChainsService.UpdateChainMeta(i.GuildID().String(), map[string]any{"trained_at": nil}); err != nil {
+			logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
+		}
+		return
+	}
+
+	// Send completion message
+	finalMsg := fmt.Sprintf("%s Finished Fetching messages.\nMessages fetched: `%s`\nTime elapsed: `%s`\nMessages/Second: `%s`",
+		i.User().Mention(),
+		utils.FormatNumber(float64(len(messages))),
+		time.Since(startTime).String(),
+		utils.FormatNumber(
+			float64(len(messages))/(time.Since(startTime).Seconds()),
+		),
+	)
+
+	if _, err := s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent(finalMsg)); err != nil {
+		logger.Errorf("Failed to send training finished msg: %v", err)
+	}
+
 }

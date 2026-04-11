@@ -4,7 +4,6 @@
 ![Discord](https://img.shields.io/discord/1122938014637756486)
 
 Discord Bot implementation of a MarkovChain to learn how to type like a user of the guild.<br>
-Created with: [discordgo](https://github.com/bwmarrin/discordgo)
 
 ## Overview
 

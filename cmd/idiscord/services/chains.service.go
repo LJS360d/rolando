@@ -11,24 +11,25 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/snowflake/v2"
 )
 
 type ChainsService struct {
 	mu           sync.RWMutex
-	session      *discordgo.Session
+	session      *bot.Client
 	chainsMap    map[string]*model.MarkovChain
 	chainsRepo   repositories.ChainsRepository
 	messagesRepo repositories.MessagesRepository
 }
 
 // NewChainsService initializes a new ChainsService.
-func NewChainsService(ds *discordgo.Session, chainsRepo repositories.ChainsRepository, messagesRepo repositories.MessagesRepository) *ChainsService {
+func NewChainsService(client *bot.Client, chainsRepo repositories.ChainsRepository, messagesRepo repositories.MessagesRepository) *ChainsService {
 	return &ChainsService{
 		chainsMap:    make(map[string]*model.MarkovChain),
 		chainsRepo:   chainsRepo,
 		messagesRepo: messagesRepo,
-		session:      ds,
+		session:      client,
 	}
 }
 
@@ -41,9 +42,13 @@ func (cs *ChainsService) GetChain(id string) (*model.MarkovChain, error) {
 	if exists {
 		return chain, nil
 	}
-	guild, err := cs.session.State.Guild(id)
+	gid, err := snowflake.Parse(id)
 	if err != nil {
 		return nil, err
+	}
+	guild, ok := cs.session.Caches.Guild(gid)
+	if !ok {
+		return nil, fmt.Errorf("guild with id '%s' not found in cache", id)
 	}
 	// Create a new chain if it doesn't exist
 	return cs.CreateChain(id, guild.Name)
@@ -158,7 +163,7 @@ func (cs *ChainsService) UpdateChainMeta(id string, fields map[string]any) (*rep
 	if pingsRaw, ok := fields["pings"]; ok {
 		pings, ok := pingsRaw.(bool)
 		if !ok {
-			return nil, errors.New("pings must be a boolean " + err.Error())
+			return nil, errors.New("pings must be a boolean")
 		}
 		chain.Pings = pings
 	}

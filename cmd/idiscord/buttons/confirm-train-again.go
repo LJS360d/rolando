@@ -6,54 +6,34 @@ import (
 	"rolando/internal/utils"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
-// TODO:
-// the lines with
-//
-// Flags:   discordgo.MessageFlagsEphemeral,
-//
-// have been commented out because the discordgo fork from tvanriel is not fully up to date with
-// bwmarrin/discordgo@master, these lines should be uncommented when PR https://github.com/bwmarrin/discordgo/pull/1593
-// is merged and released into the upstream, and also remove the replace in the go.mod
-
 // Handle 'confirm-train-again' button interaction
-func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (h *ButtonsHandler) onConfirmTrainAgain(s *bot.Client, i *events.ComponentInteractionCreate) {
 	// Defer the update
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	s.Rest.CreateInteractionResponse(i.ComponentInteraction.ID(), i.ComponentInteraction.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeDeferredCreateMessage,
 	})
 
-	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID)
+	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
 	if err != nil {
 		logger.Errorf("Failed to fetch chainDoc for guild %s: %v", i.GuildID, err)
-		errMsg := "Failed to fetch current chain document for this server. Please try again later."
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &errMsg,
-			// Flags:   discordgo.MessageFlagsEphemeral,
-		})
-		return
-	}
-	var userId string
-	if i.User != nil {
-		userId = i.User.ID
-	} else if i.Member != nil && i.Member.User != nil {
-		userId = i.Member.User.ID
-	} else {
-		logger.Errorf("Failed to determine user ID for interaction in '%s'", chainDoc.Name)
-		errMsg := "Unable to determine user ID for this interaction. Please try again later."
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &errMsg,
-			// Flags:   discordgo.MessageFlagsEphemeral,
-		})
 		return
 	}
 
+	// redundant check
+	// if chainDoc.TrainedAt != nil && chainDoc.TrainedAt.Before(time.Now()) {
+	// 	s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent("You cannot perform this action yet."))
+	// 	return
+	// }
+
 	cnt := "Deleting fetched data from this server.\nThis might take a while.."
-	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+	s.Rest.UpdateInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token(), discord.MessageUpdate{
 		Content: &cnt,
-		// Flags:   discordgo.MessageFlagsEphemeral,
+		Flags:   new(discord.MessageFlagEphemeral),
 	})
 
 	// recreate the chain
@@ -64,9 +44,9 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.
 		logger.Errorf("Failed to delete chain for guild %s: %v", i.GuildID, err)
 		// Send error message
 		errMsg := "Failed to delete chain data for this server. Please try again later."
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token(), discord.MessageUpdate{
 			Content: &errMsg,
-			// Flags:   discordgo.MessageFlagsEphemeral,
+			Flags:   new(discord.MessageFlagEphemeral),
 		})
 		return
 	}
@@ -75,44 +55,51 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *discordgo.Session, i *discordgo.
 		logger.Errorf("Failed to create chain for guild %s: %v", i.GuildID, err)
 		// Send error message
 		errMsg := "Failed to recreate a new chain for this server. Please try again later."
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token(), discord.MessageUpdate{
 			Content: &errMsg,
-			// Flags:   discordgo.MessageFlagsEphemeral,
+			Flags:   new(discord.MessageFlagEphemeral),
 		})
 		return
 	}
 
 	// Start the training process
 	// Send confirmation message
-	content := fmt.Sprintf("<@%s> Started Refetching messages.\nI  will send a message when I'm done.\nEstimated Time: `1 Minute per every 5000 Messages in the Server`\nThis might take a while..", userId)
-	s.ChannelMessageSend(i.ChannelID, content)
-	s.InteractionResponseDelete(i.Interaction)
+	content := fmt.Sprintf("%s Started Refetching messages.\nI  will send a message when I'm done.\nEstimated Time: `1 Minute per every 5000 Messages in the Server`\nThis might take a while..", i.User().Mention())
+	s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent(content))
+	s.Rest.DeleteInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token())
 
 	// Update chain status
 	now := time.Now()
 	chainDoc.TrainedAt = &now
-	if _, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained_at": now}); err != nil {
+	if _, err = h.ChainsService.UpdateChainMeta(i.GuildID().String(), map[string]any{"trained_at": now}); err != nil {
 		logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
 		return
 	}
-	go func() {
-		startTime := time.Now()
-		messages, err := h.DataFetchService.FetchAllGuildMessages(i.GuildID)
-		if err != nil {
-			logger.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID, err)
-			// Revert chain status
-			chainDoc.TrainedAt = nil
-			if _, err = h.ChainsService.UpdateChainMeta(i.GuildID, map[string]any{"trained_at": nil}); err != nil {
-				logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
-			}
-			return
-		}
 
-		// Send completion message
-		s.ChannelMessageSend(i.ChannelID, fmt.Sprintf("<@%s> Finished Fetching messages.\nMessages fetched: `%s`\nTime elapsed: `%s`\nMessages/Second: `%s`",
-			userId,
-			utils.FormatNumber(float64(len(messages))),
-			time.Since(startTime).String(),
-			utils.FormatNumber(float64(len(messages))/(time.Since(startTime).Seconds()))))
-	}()
+	startTime := time.Now()
+	messages, err := h.DataFetchService.FetchAllGuildMessages(i.GuildID().String())
+	if err != nil {
+		logger.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID, err)
+		// Revert chain status
+		chainDoc.TrainedAt = nil
+		if _, err = h.ChainsService.UpdateChainMeta(i.GuildID().String(), map[string]any{"trained_at": nil}); err != nil {
+			logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
+		}
+		return
+	}
+
+	// Send completion message
+	finalMsg := fmt.Sprintf("%s Finished Fetching messages.\nMessages fetched: `%s`\nTime elapsed: `%s`\nMessages/Second: `%s`",
+		i.User().Mention(),
+		utils.FormatNumber(float64(len(messages))),
+		time.Since(startTime).String(),
+		utils.FormatNumber(
+			float64(len(messages))/(time.Since(startTime).Seconds()),
+		),
+	)
+
+	if _, err := s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent(finalMsg)); err != nil {
+		logger.Errorf("Failed to send training finished msg: %v", err)
+	}
+
 }

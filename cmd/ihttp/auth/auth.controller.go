@@ -4,15 +4,15 @@ import (
 	"rolando/internal/config"
 	"slices"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
 	"github.com/gin-gonic/gin"
 )
 
 type AuthController struct {
-	ds *discordgo.Session
+	ds *bot.Client
 }
 
-func NewController(ds *discordgo.Session) *AuthController {
+func NewController(ds *bot.Client) *AuthController {
 	return &AuthController{
 		ds: ds,
 	}
@@ -33,12 +33,12 @@ func (s *AuthController) GetUser(c *gin.Context) {
 		return
 	}
 	for _, guild := range *userGuilds {
-		guilds = append(guilds, guild.ID)
+		guilds = append(guilds, guild.ID.String())
 	}
 
 	c.JSON(200, gin.H{
 		"user":     user,
-		"is_owner": slices.Contains(config.OwnerIDs, user.ID),
+		"is_owner": slices.Contains(config.OwnerIDs, user.ID.String()),
 		"guilds":   guilds,
 	})
 }

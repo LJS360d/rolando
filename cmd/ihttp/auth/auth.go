@@ -10,11 +10,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/gin-gonic/gin"
 )
 
-func EnsureOwner(c *gin.Context, ds *discordgo.Session) (int, error) {
+func EnsureOwner(c *gin.Context, ds *bot.Client) (int, error) {
 	authorization := c.Request.Header.Get("Authorization")
 	if authorization == "" {
 		return 401, errors.New("Unauthorized")
@@ -23,13 +25,13 @@ func EnsureOwner(c *gin.Context, ds *discordgo.Session) (int, error) {
 	if err != nil {
 		return 500, err
 	}
-	if !slices.Contains(config.OwnerIDs, user.ID) {
+	if !slices.Contains(config.OwnerIDs, user.ID.String()) {
 		return 403, errors.New("Forbidden")
 	}
 	return 200, nil
 }
 
-func EnsureGuildMember(c *gin.Context, ds *discordgo.Session, guildId string) (int, error) {
+func EnsureGuildMember(c *gin.Context, ds *bot.Client, guildId string) (int, error) {
 	authorization := c.Request.Header.Get("Authorization")
 	if authorization == "" {
 		return 401, errors.New("Unauthorized")
@@ -38,17 +40,21 @@ func EnsureGuildMember(c *gin.Context, ds *discordgo.Session, guildId string) (i
 	if err != nil {
 		return 500, err
 	}
-	if slices.Contains(config.OwnerIDs, user.ID) {
+	if slices.Contains(config.OwnerIDs, user.ID.String()) {
 		return 200, nil
 	}
-	_, err = ds.GuildMember(guildId, user.ID)
+	gid, err := snowflake.Parse(guildId)
 	if err != nil {
+		return 400, fmt.Errorf("invalid guild id %v", err)
+	}
+	_, ok := ds.Caches.Member(gid, user.ID)
+	if !ok {
 		return 404, fmt.Errorf("not a guild member or invalid guild id %v", err)
 	}
 	return 200, nil
 }
 
-func FetchUserInfo(accessToken string) (user *discordgo.User, err error) {
+func FetchUserInfo(accessToken string) (user *discord.User, err error) {
 	// Set up the request
 	req, err := http.NewRequest("GET", "https://discord.com/api/v10/users/@me", nil)
 	if err != nil {
@@ -75,7 +81,7 @@ func FetchUserInfo(accessToken string) (user *discordgo.User, err error) {
 	return user, nil
 }
 
-func FetchUserGuilds(accessToken string, withCounts bool) (st *[]discordgo.UserGuild, err error) {
+func FetchUserGuilds(accessToken string, withCounts bool) (st *[]discord.Guild, err error) {
 	// Set up the request
 	v := url.Values{}
 

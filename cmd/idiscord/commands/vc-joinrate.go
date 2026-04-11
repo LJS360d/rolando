@@ -3,29 +3,30 @@ package commands
 import (
 	"strconv"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // implementation of /vc joinrate command
-func (h *SlashCommandsHandler) vcJoinRateCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	options := i.ApplicationCommandData().Options
+func (h *SlashCommandsHandler) vcJoinRateCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	options := i.SlashCommandInteractionData().Options
 	var rate *int
 	for _, option := range options {
-		if option.Name == "rate" && option.Type == discordgo.ApplicationCommandOptionInteger {
-			value := int(option.IntValue())
+		if option.Name == "rate" && option.Type == discord.ApplicationCommandOptionTypeInt {
+			value := int(option.Int())
 			rate = &value
 			break
 		}
 	}
 
-	guildID := i.GuildID
-	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
+	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
 	if err != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Failed to retrieve chain data.",
-				Flags:   discordgo.MessageFlagsEphemeral,
+				Flags:   discord.MessageFlagEphemeral,
 			},
 		})
 		return
@@ -36,11 +37,11 @@ func (h *SlashCommandsHandler) vcJoinRateCommand(s *discordgo.Session, i *discor
 			return
 		}
 		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"vc_join_rate": *rate}); err != nil {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
+			s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+				Type: discord.InteractionResponseTypeCreateMessage,
+				Data: discord.MessageCreate{
 					Content: "Failed to update VC join rate.",
-					Flags:   discordgo.MessageFlagsEphemeral,
+					Flags:   discord.MessageFlagEphemeral,
 				},
 			})
 			return
@@ -50,9 +51,9 @@ func (h *SlashCommandsHandler) vcJoinRateCommand(s *discordgo.Session, i *discor
 		} else {
 			ratePercent = float64(1 / float64(*rate) * 100)
 		}
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Set VC join rate to `" + strconv.Itoa(*rate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
 			},
 		})
@@ -64,9 +65,9 @@ func (h *SlashCommandsHandler) vcJoinRateCommand(s *discordgo.Session, i *discor
 	} else {
 		ratePercent = float64(1 / float64(chainDoc.VcJoinRate) * 100)
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeCreateMessage,
+		Data: discord.MessageCreate{
 			Content: "Current VC join rate is `" + strconv.Itoa(chainDoc.VcJoinRate) + "` (" + strconv.FormatFloat(ratePercent, 'f', 2, 64) + "%)",
 		},
 	})

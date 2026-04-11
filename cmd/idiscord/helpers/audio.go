@@ -1,119 +1,58 @@
 package helpers
 
 import (
-	"bufio"
+	"context"
 	"errors"
-	"io"
-	"os/exec"
-	"time"
+	"fmt"
 
-	"github.com/bwmarrin/discordgo"
-	"github.com/jonas747/ogg"
+	"github.com/disgoorg/disgo/voice"
 )
 
-func ConvertMP3ToOpusDecoder(mp3Path string) (*ogg.PacketDecoder, error) {
+// SendTTSToConn sets the provider and waits for it to finish.
+func SendTTSToConn(ctx context.Context, conn voice.Conn, provider voice.OpusFrameProvider) error {
+	if conn == nil {
+		return errors.New("voice connection is nil")
+	}
 
-	cmd := exec.Command("ffmpeg",
-		"-i", mp3Path,
-		"-acodec", "libopus", // Use libopus codec
-		"-b:a", "96K", // Audio bitrate
-		"-ar", "48000", // Sample rate
-		"-ac", "2", // Channels: stereo
-		"-f", "ogg", // Output format: Ogg container
-		"pipe:1", // Write output to stdout
-	)
+	done := make(chan error, 1)
 
-	pipe, err := cmd.StdoutPipe()
+	// Wrap the provider to detect when it finishes (EOF)
+	wrapped := &trackingProvider{
+		OpusFrameProvider: provider,
+		onFinished: func(err error) {
+			done <- err
+		},
+	}
+
+	if err := conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
+		return fmt.Errorf("failed to set speaking: %w", err)
+	}
+
+	conn.SetOpusFrameProvider(wrapped)
+
+	// Block until the internal audio sender hits EOF or context is cancelled
+	select {
+	case <-ctx.Done():
+		conn.SetOpusFrameProvider(nil)
+		return ctx.Err()
+	case err := <-done:
+		conn.SetSpeaking(ctx, 0)
+		conn.SetOpusFrameProvider(nil)
+		return err
+	}
+}
+
+// trackingProvider signals completion when ProvideOpusFrame returns an error/EOF
+type trackingProvider struct {
+	voice.OpusFrameProvider
+	onFinished func(error)
+}
+
+func (p *trackingProvider) ProvideOpusFrame() ([]byte, error) {
+	frame, err := p.OpusFrameProvider.ProvideOpusFrame()
 	if err != nil {
-		return nil, err
+		// Signal EOF or error back to the Wait loop
+		p.onFinished(err)
 	}
-
-	if err = cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	// decode the ogg buffer
-	d := ogg.NewPacketDecoder(ogg.NewDecoder(bufio.NewReaderSize(pipe, 65307)))
-	return d, nil
-}
-
-// ----- Streaming audio -----
-
-func StreamAudio(vc *discordgo.VoiceConnection, audio io.Reader) error {
-	vc.Speaking(true)
-	defer vc.Speaking(false)
-
-	buffer := make([]byte, 960)
-	packetCount := 0
-
-	for {
-		n, err := audio.Read(buffer)
-		if err == io.EOF || n == 0 {
-			break
-		}
-		if err != nil {
-			return errors.New("error reading audio: " + err.Error())
-		}
-
-		vc.OpusSend <- buffer[:n]
-
-		packetCount++
-		time.Sleep(time.Millisecond * 20)
-	}
-
-	return nil
-}
-
-func StreamAudioBuffer(vc *discordgo.VoiceConnection, audioBuffer []byte) error {
-	vc.Speaking(true)
-	defer vc.Speaking(false)
-
-	chunkSize := 960 // Opus frame size for 20ms of audio at 48kHz, stereo
-	totalLength := len(audioBuffer)
-	packetCount := 0
-
-	for offset := 0; offset < totalLength; offset += chunkSize {
-		end := offset + chunkSize
-		if end > totalLength {
-			end = totalLength
-		}
-
-		vc.OpusSend <- audioBuffer[offset:end]
-
-		packetCount++
-		time.Sleep(time.Millisecond * 20) // Maintain the 20ms timing for each frame
-	}
-
-	return nil
-}
-
-func StreamAudioDecoder(vc *discordgo.VoiceConnection, decoder *ogg.PacketDecoder) error {
-	vc.Speaking(true)
-	defer vc.Speaking(false)
-
-	// Create a buffer to hold the decoded packets
-	packetCount := 0
-
-	for {
-		// Decode the next packet from the Ogg stream
-		packet, _, err := decoder.Decode()
-		if err != nil {
-			if err.Error() == "EOF" {
-				// End of stream, stop streaming
-				break
-			}
-			return errors.New("error decoding audio packet: " + err.Error())
-		}
-
-		// Send the decoded Opus packet to Discord
-		vc.OpusSend <- packet
-
-		packetCount++
-
-		// Sleep to maintain the 20ms timing for each Opus frame
-		// You may adjust the sleep duration depending on the packet size and rate
-		time.Sleep(time.Millisecond * 20)
-	}
-
-	return nil
+	return frame, err
 }

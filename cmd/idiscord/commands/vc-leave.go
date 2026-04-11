@@ -5,43 +5,49 @@ import (
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
 	"rolando/internal/tts"
+	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // implementation of /vc leave command
-func (h *SlashCommandsHandler) vcLeaveCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	vc, exists := s.VoiceConnections[i.GuildID]
-	if !exists {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "I am not connected to a voice channel.",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+func (h *SlashCommandsHandler) vcLeaveCommand(client *bot.Client, event *events.ApplicationCommandInteractionCreate) {
+	guildID := *event.GuildID()
+
+	conn := h.Client.VoiceManager.GetConn(guildID)
+	if conn == nil {
+		err := event.CreateMessage(discord.NewMessageCreate().
+			WithContent("I am not connected to a voice channel.").
+			WithEphemeral(true))
+		if err != nil {
+			logger.Errorf("Failed to send interaction response: %v", err)
+		}
 		return
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "I am leaving the voice channel",
-			Flags:   discordgo.MessageFlagsEphemeral,
-		},
-	})
-	chainDoc, _ := h.ChainsService.GetChainDocument(i.GuildID)
-	d, err := tts.GenerateTTSDecoder("bye bye", chainDoc.TTSLanguage)
+
+	err := event.CreateMessage(discord.NewMessageCreate().
+		WithContent("I am leaving the voice channel").
+		WithEphemeral(true))
 	if err != nil {
-		logger.Errorf("Failed to generate TTS decoder: %v", err)
+		logger.Errorf("Failed to send interaction response: %v", err)
 		return
 	}
-	if err := helpers.StreamAudioDecoder(vc, d); err != nil {
+
+	chainDoc, _ := h.ChainsService.GetChainDocument(guildID.String())
+	provider, err := tts.GenerateTTSProvider("bye bye", chainDoc.TTSLanguage)
+	if err != nil {
+		logger.Errorf("Failed to generate TTS provider: %v", err)
+		return
+	}
+
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := helpers.SendTTSToConn(ctx, conn, provider); err != nil {
 		logger.Errorf("Failed to stream audio: %v", err)
 	} else {
 		logger.Infof("Spoke Bye Bye message in vc, leaving...")
 	}
-	err = vc.Disconnect(context.Background())
-	if err != nil {
-		logger.Errorf("Failed to disconnect from voice channel: %v", err)
-	}
+
+	conn.Close(ctx)
 }

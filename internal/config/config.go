@@ -6,13 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/joho/godotenv"
 )
 
 var (
 	Token                string
-	Intents              discordgo.Intent
+	Intents              gateway.Intents
 	OwnerIDs             []string
 	Version              string
 	InviteUrl            string
@@ -23,7 +24,7 @@ var (
 	StartupTime          time.Time
 	RunHttpServer        bool
 	PaywallsEnabled      bool
-	VoiceChatFeaturesSKU string
+	VoiceChatFeaturesSKU snowflake.ID
 	PremiumsPageLink     string
 )
 
@@ -72,30 +73,36 @@ func init() {
 	StartupTime = time.Now()
 
 	PaywallsEnabled = os.Getenv("PAYWALLS_ENABLED") == "true" || os.Getenv("PAYWALLS_ENABLED") == "1" || os.Getenv("PAYWALLS_ENABLED") == ""
-	VoiceChatFeaturesSKU = os.Getenv("VOICE_CHAT_FEATURES_SKU_ID")
+	voiceChatFeaturesSKUStr := os.Getenv("VOICE_CHAT_FEATURES_SKU_ID")
+	if voiceChatFeaturesSKUStr != "" {
+		VoiceChatFeaturesSKU, err = snowflake.Parse(voiceChatFeaturesSKUStr)
+		if err != nil {
+			log.Printf("VOICE_CHAT_FEATURES_SKU_ID '%s' is invalid snowflake\n", voiceChatFeaturesSKUStr)
+		}
+	}
 
 	PremiumsPageLink = os.Getenv("PREMIUMS_PAGE_LINK")
-	Intents = (discordgo.IntentDirectMessageReactions |
-		discordgo.IntentDirectMessageTyping |
-		discordgo.IntentDirectMessages |
-		discordgo.IntentGuildVoiceStates |
-		// discordgo.IntentAutoModerationConfiguration |
-		// discordgo.IntentAutoModerationExecution |
-		// discordgo.IntentDirectMessageReactions |
-		// discordgo.IntentGuildEmojisAndStickers |
-		discordgo.IntentGuildIntegrations |
-		discordgo.IntentGuildInvites |
-		// discordgo.IntentsGuildMembers |
-		discordgo.IntentGuildMessageReactions |
-		discordgo.IntentGuildMessageTyping |
-		discordgo.IntentGuildMessages |
-		// discordgo.IntentGuildModeration |
-		// discordgo.IntentGuildPresences |
-		// discordgo.IntentGuildScheduledEvents |
-		// discordgo.IntentGuildVoiceStates |
-		discordgo.IntentGuildWebhooks |
-		discordgo.IntentGuilds |
-		discordgo.IntentMessageContent)
+	Intents = (gateway.IntentDirectMessageReactions |
+		gateway.IntentDirectMessageTyping |
+		gateway.IntentDirectMessages |
+		gateway.IntentGuildVoiceStates |
+		// gateway.IntentAutoModerationConfiguration |
+		// gateway.IntentAutoModerationExecution |
+		// gateway.IntentDirectMessageReactions |
+		// gateway.IntentGuildEmojisAndStickers |
+		gateway.IntentGuildIntegrations |
+		gateway.IntentGuildInvites |
+		// gateway.IntentsGuildMembers |
+		gateway.IntentGuildMessageReactions |
+		gateway.IntentGuildMessageTyping |
+		gateway.IntentGuildMessages |
+		// gateway.IntentGuildModeration |
+		// gateway.IntentGuildPresences |
+		// gateway.IntentGuildScheduledEvents |
+		// gateway.IntentGuildVoiceStates |
+		gateway.IntentGuildWebhooks |
+		gateway.IntentGuilds |
+		gateway.IntentMessageContent)
 
 	log.Println("Config initialized")
 }

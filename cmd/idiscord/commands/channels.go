@@ -5,29 +5,20 @@ import (
 	"rolando/cmd/idiscord/helpers"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // implementation of /channels command
-func (h *SlashCommandsHandler) channelsCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	guild, err := s.State.Guild(i.GuildID)
-	if err != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Failed to retrieve guild information.",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
-		return
-	}
-
-	var channels []*discordgo.Channel
-	for _, channel := range guild.Channels {
-		if channel.Type != discordgo.ChannelTypeGuildVoice && channel.Type != discordgo.ChannelTypeGuildCategory {
-			channels = append(channels, channel)
+func (h *SlashCommandsHandler) channelsCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	var channels []discord.GuildChannel
+	s.Caches.ChannelsForGuild(*i.GuildID())(func(ch discord.GuildChannel) bool {
+		if ch.Type() == discord.ChannelTypeGuildText || ch.Type() == discord.ChannelTypeGuildNews {
+			channels = append(channels, ch)
 		}
-	}
+		return true // continue iterating
+	})
 
 	accessEmote := func(hasAccess bool) string {
 		if hasAccess {
@@ -45,8 +36,8 @@ func (h *SlashCommandsHandler) channelsCommand(s *discordgo.Session, i *discordg
 	))
 
 	for _, ch := range channels {
-		hasAccess := helpers.HasGuildTextChannelAccess(s, s.State.User.ID, ch)
-		fmt.Fprintf(responseBuilder, "%s <#%s>\n", accessEmote(hasAccess), ch.ID)
+		hasAccess := helpers.HasGuildTextChannelAccess(s, s.ID(), ch)
+		fmt.Fprintf(responseBuilder, "%s %s\n", accessEmote(hasAccess), ch.Mention())
 	}
 
 	responseText := responseBuilder.String()
@@ -54,10 +45,8 @@ func (h *SlashCommandsHandler) channelsCommand(s *discordgo.Session, i *discordg
 		responseText = "No available channels to display."
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: responseText,
-		},
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeCreateMessage,
+		Data: discord.NewMessageCreate().WithContent(responseText),
 	})
 }

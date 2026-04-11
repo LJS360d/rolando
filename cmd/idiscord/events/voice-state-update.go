@@ -9,43 +9,61 @@ import (
 	"rolando/internal/utils"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/events"
 )
 
 // for random vc joins (uses vc join rate)
 
 // handler for VOICE_STATE_UPDATE event
-func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Event) {
-	voiceStateUpdate, ok := e.Struct.(*discordgo.VoiceStateUpdate)
-	if !ok {
-		return
-	}
-	if voiceStateUpdate.UserID == s.State.User.ID || voiceStateUpdate.UserID == "" {
+func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
+	// Convert snowflake IDs to strings for internal use
+	userID := e.VoiceState.UserID.String()
+	guildID := e.VoiceState.GuildID.String()
+	botID := h.Client.ID().String()
+
+	if userID == botID || userID == "" {
 		// ignore updates for self or empty user ID
 		return
 	}
-	if voiceStateUpdate.ChannelID == "" || voiceStateUpdate.Deaf || voiceStateUpdate.Mute {
-		// ignore without channel (e.g. user left voice channel)
+	if e.VoiceState.ChannelID == nil || e.VoiceState.GuildDeaf || e.VoiceState.GuildMute || e.VoiceState.SelfDeaf || e.VoiceState.SelfMute {
+		// ignore without channel (user left voice channel)
 		// ignore user deafening or muting
-		//
 		return
 	}
-	_, alreadyInUse := s.VoiceConnections[voiceStateUpdate.GuildID]
-	if alreadyInUse {
+
+	// Check if already connected in this guild
+	conn := h.Client.VoiceManager.GetConn(e.VoiceState.GuildID)
+	if conn != nil {
+		logger.Warnf("User %s tried to join voice channel %s, but bot is already connected in guild %s", userID, e.VoiceState.ChannelID, guildID)
 		// stop if already in use in another vc within the guild
 		return
 	}
-	channel, err := s.State.Channel(voiceStateUpdate.ChannelID)
-	if err != nil {
-		logger.Errorf("Failed to fetch channel for voice state update event: %v", err)
+
+	// Get channel information
+	channel, ok := h.Client.Caches.Channel(*e.VoiceState.ChannelID)
+	if !ok {
+		logger.Errorf("Failed to fetch channel for voice state update event")
 		return
 	}
-	chainDoc, err := h.ChainsService.GetChainDocument(voiceStateUpdate.GuildID)
+
+	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
 	if err != nil {
-		logger.Errorf("Failed to fetch chain document for guild %s: %v", voiceStateUpdate.GuildID, err)
+		logger.Errorf("Failed to fetch chain document for guild %s: %v", guildID, err)
 		return
 	}
-	hasVcFeatures := GuildSubscriptionCheck(s, voiceStateUpdate.Member, chainDoc, config.VoiceChatFeaturesSKU)
+
+	// Get member for subscription check
+	member, err := h.Client.Rest.GetMember(e.VoiceState.GuildID, e.VoiceState.UserID)
+	if err != nil {
+		logger.Errorf("Failed to fetch member for voice state update: %v", err)
+		return
+	}
+	if member == nil {
+		logger.Warnf("Failed to fetch member for voice state update: member is nil")
+		return
+	}
+
+	hasVcFeatures := GuildSubscriptionCheck(h.Client, *member, chainDoc, config.VoiceChatFeaturesSKU)
 	if !hasVcFeatures {
 		return
 	}
@@ -56,29 +74,34 @@ func (h *EventsHandler) onVoiceStateUpdate(s *discordgo.Session, e *discordgo.Ev
 	if utils.GetRandom(1, chainDoc.VcJoinRate) != 1 {
 		return
 	}
+
 	go func() {
 		time.Sleep(time.Duration(2 * time.Second))
-		vcCtx, _ /* vcClose */ := context.WithCancel(context.Background())
-		vc, err := s.ChannelVoiceJoin(vcCtx, voiceStateUpdate.GuildID, voiceStateUpdate.ChannelID, false, false)
+		vcCtx, vcCancel := context.WithCancel(context.Background())
+		defer vcCancel()
+
+		// Create and open voice connection
+		conn := h.Client.VoiceManager.CreateConn(e.VoiceState.GuildID)
+		err := conn.Open(vcCtx, *e.VoiceState.ChannelID, false, false)
 		if err != nil {
-			logger.Errorf("Failed to join voice channel '%s': %v", channel.Name, err)
+			logger.Errorf("Failed to join voice channel '%s': %v", channel.Name(), err)
 			return
 		}
+
 		chain, _ := h.ChainsService.GetChain(chainDoc.ID)
-		d, err := tts.GenerateTTSDecoder(chain.TalkFiltered(100), chainDoc.TTSLanguage)
+		provider, err := tts.GenerateTTSProvider(chain.TalkFiltered(100), chainDoc.TTSLanguage)
 		if err != nil {
-			logger.Errorf("Failed to generate TTS decoder: %v", err)
+			logger.Errorf("Failed to generate TTS provider: %v", err)
+			conn.Close(vcCtx)
 			return
 		}
-		if err := helpers.StreamAudioDecoder(vc, d); err != nil {
+
+		if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
 			logger.Errorf("Failed to stream audio: %v", err)
 		}
-		err = vc.Disconnect(vcCtx)
-		// vcClose()
-		if err != nil {
-			logger.Errorf("Failed to disconnect from voice channel '%s' in '%s': %v", channel.Name, chainDoc.Name, err)
-		}
-		/// vcClose()
-		logger.Infof("Randomly spoke in voice channel '%s' in '%s'", channel.Name, chainDoc.Name)
+
+		conn.Close(vcCtx)
+
+		logger.Infof("Randomly spoke in voice channel '%s' in '%s'", channel.Name(), chainDoc.Name)
 	}()
 }

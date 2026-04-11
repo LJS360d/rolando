@@ -5,16 +5,16 @@ import (
 	"rolando/internal/repositories"
 	"strconv"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
 	"github.com/gin-gonic/gin"
 )
 
 type DataController struct {
 	messagesRepo *repositories.MessagesRepository
-	ds           *discordgo.Session
+	ds           *bot.Client
 }
 
-func NewController(ds *discordgo.Session, messagesRepo *repositories.MessagesRepository) *DataController {
+func NewController(ds *bot.Client, messagesRepo *repositories.MessagesRepository) *DataController {
 	return &DataController{
 		messagesRepo: messagesRepo,
 		ds:           ds,

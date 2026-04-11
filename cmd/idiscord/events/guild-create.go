@@ -4,21 +4,26 @@ import (
 	"fmt"
 	"rolando/internal/logger"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
-// handler for GUILD_CREATE event
-func (h *EventsHandler) onGuildCreate(s *discordgo.Session, e *discordgo.Event) {
-	guildCreate, ok := e.Struct.(*discordgo.GuildCreate)
-	if !ok {
-		return
-	}
-	logger.Infof("Joined guild %s", guildCreate.Name)
-	_, err := h.ChainsService.CreateChain(guildCreate.ID, guildCreate.Name)
+// handler for GuildJoin event
+func (h *EventsHandler) onGuildCreate(e *events.GuildJoin) {
+	logger.Infof("Joined guild %s", e.Guild.Name)
+	_, err := h.ChainsService.CreateChain(e.Guild.ID.String(), e.Guild.Name)
 	if err != nil {
 		logger.Errorf("Error creating chain: %s", err)
 		return
 	}
-	s.ChannelMessage(guildCreate.SystemChannelID, fmt.Sprintf("Hello %s.\nperform the command `/train` to use all the server's messages as training data", guildCreate.Name))
-	UpdatePresence(s)
+	if e.Guild.SystemChannelID != nil {
+		_, err = h.Client.Rest.CreateMessage(*e.Guild.SystemChannelID, discord.NewMessageCreate().
+			WithContent(
+				fmt.Sprintf("Hello %s.\nperform the command `/train` to use all the server's messages as training data", e.Guild.Name),
+			))
+		if err != nil {
+			logger.Errorf("Failed to send welcome message: %v", err)
+		}
+	}
+	UpdatePresence(h.Client)
 }

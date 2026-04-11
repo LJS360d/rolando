@@ -3,29 +3,30 @@ package commands
 import (
 	"strconv"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 )
 
 // implementation of /cohesion command
-func (h *SlashCommandsHandler) cohesionCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	options := i.ApplicationCommandData().Options
+func (h *SlashCommandsHandler) cohesionCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	options := i.SlashCommandInteractionData().Options
 	var cohesion *int
 	for _, option := range options {
-		if option.Name == "value" && option.Type == discordgo.ApplicationCommandOptionInteger {
-			value := int(option.IntValue())
+		if option.Name == "value" && option.Type == discord.ApplicationCommandOptionTypeInt {
+			value := int(option.Int())
 			cohesion = &value
 			break
 		}
 	}
 
-	guildID := i.GuildID
-	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
+	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
 	if err != nil {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Failed to retrieve chain data.",
-				Flags:   discordgo.MessageFlagsEphemeral,
+				Flags:   discord.MessageFlagEphemeral,
 			},
 		})
 		return
@@ -35,28 +36,28 @@ func (h *SlashCommandsHandler) cohesionCommand(s *discordgo.Session, i *discordg
 			return
 		}
 		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"n_gram_size": *cohesion}); err != nil {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
+			s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+				Type: discord.InteractionResponseTypeCreateMessage,
+				Data: discord.MessageCreate{
 					Content: "Failed to update cohesion value.",
-					Flags:   discordgo.MessageFlagsEphemeral,
+					Flags:   discord.MessageFlagEphemeral,
 				},
 			})
 			return
 		}
 
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
 				Content: "Set cohesion value to `" + strconv.Itoa(*cohesion) + "`",
 			},
 		})
 		return
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeCreateMessage,
+		Data: discord.MessageCreate{
 			Content: "Current cohesion value is `" + strconv.Itoa(chainDoc.NGramSize) + "`",
 		},
 	})

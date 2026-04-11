@@ -30,11 +30,12 @@ WORKDIR /home/appuser
 COPY --from=builder --chown=appuser:appgroup /app/bin/main .
 COPY --from=builder --chown=appuser:appgroup /app/.env .
 COPY --from=builder --chown=appuser:appgroup /app/vosk ./vosk
+COPY --from=builder --chown=appuser:appgroup /app/dave ./dave
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
-ENV LD_LIBRARY_PATH="/home/appuser/vosk/lib:$LD_LIBRARY_PATH" \
-    GO_ENV="production" \
-    PATH="/home/appuser:$PATH"
+ENV LD_LIBRARY_PATH="/home/appuser/vosk/lib:/home/appuser/dave/lib:$LD_LIBRARY_PATH"
+ENV GO_ENV="production"
+ENV PATH="/home/appuser:$PATH"
 
 EXPOSE 8080
 ENTRYPOINT ["./entrypoint.sh"]

@@ -3,20 +3,23 @@ package events
 import (
 	"rolando/internal/logger"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/events"
 )
 
 // handler for GUILD_UPDATE event
-func (h *EventsHandler) onGuildUpdate(s *discordgo.Session, e *discordgo.Event) {
-	guildUpdate, ok := e.Struct.(*discordgo.GuildUpdate)
+func (h *EventsHandler) onGuildUpdate(e *events.GuildUpdate) {
+	guildID := e.Guild.ID.String()
+
+	// Get the old guild from cache if available
+	oldGuild, ok := h.Client.Caches.Guild(e.Guild.ID)
 	if !ok {
+		logger.Errorf("Failed to fetch old guild for guild update event")
+		// Still update the chain meta with new data
+		h.ChainsService.UpdateChainMeta(guildID, map[string]interface{}{"name": e.Guild.Name})
+		logger.Infof("Guild %s updated to: %s", guildID, e.Guild.Name)
 		return
 	}
-	oldGuild, err := s.State.Guild(guildUpdate.ID)
-	if err != nil {
-		logger.Errorf("Failed to fetch guild for guild update event: %v", err)
-		return
-	}
-	h.ChainsService.UpdateChainMeta(oldGuild.ID, map[string]interface{}{"name": guildUpdate.Name})
-	logger.Infof("Guild %s updated: %s -> %s", guildUpdate.ID, oldGuild.Name, guildUpdate.Name)
+
+	h.ChainsService.UpdateChainMeta(guildID, map[string]interface{}{"name": e.Guild.Name})
+	logger.Infof("Guild %s updated: %s -> %s", guildID, oldGuild.Name, e.Guild.Name)
 }

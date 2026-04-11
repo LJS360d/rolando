@@ -8,16 +8,16 @@ import (
 	"rolando/internal/repositories"
 	"strconv"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
 	"github.com/gin-gonic/gin"
 )
 
 type AnalyticsController struct {
 	chainsService *services.ChainsService
-	ds            *discordgo.Session
+	ds            *bot.Client
 }
 
-func NewController(chainsService *services.ChainsService, ds *discordgo.Session) *AnalyticsController {
+func NewController(chainsService *services.ChainsService, ds *bot.Client) *AnalyticsController {
 	return &AnalyticsController{
 		chainsService: chainsService,
 		ds:            ds,

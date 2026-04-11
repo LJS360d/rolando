@@ -1,33 +1,35 @@
 package commands
 
 import (
-	"reflect"
 	"rolando/cmd/idiscord/services"
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"slices"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/snowflake/v2"
 )
 
 type SlashCommandsHandler struct {
-	Client        *discordgo.Session
+	Client        *bot.Client
 	ChainsService *services.ChainsService
 	Commands      map[string]SlashCommandHandler
 }
 
-type SlashCommandHandler func(s *discordgo.Session, i *discordgo.InteractionCreate)
+type SlashCommandHandler func(client *bot.Client, event *events.ApplicationCommandInteractionCreate)
 
 type SlashCommand struct {
-	Command  *discordgo.ApplicationCommand
+	Command  discord.ApplicationCommandCreate
 	Handler  SlashCommandHandler
 	GuildIds []string // Optional guild IDs to restrict the command to specific guilds
 }
 
 // Constructor function for SlashCommandsHandler
 func NewSlashCommandsHandler(
-	client *discordgo.Session,
+	client *bot.Client,
 	chainsService *services.ChainsService,
 ) *SlashCommandsHandler {
 	handler := &SlashCommandsHandler{
@@ -37,57 +39,55 @@ func NewSlashCommandsHandler(
 	}
 
 	// Initialize commands
-	var CohesionMinValue float64 = 2.0
 	handler.registerCommands([]SlashCommand{
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "train",
 				Description: "Fetches all available messages in the server to be used as training data",
 			},
 			Handler: handler.withAdminPermission(handler.trainCommand),
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "gif",
 				Description: "Returns a gif from the ones it knows",
 			},
 			Handler: handler.gifCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "image",
 				Description: "Returns an image from the ones it knows",
 			},
 			Handler: handler.imageCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "video",
 				Description: "Returns a video from the ones it knows",
 			},
 			Handler: handler.videoCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "analytics",
 				Description: "Returns analytics about the bot in this server",
 			},
 			Handler: handler.analyticsCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "togglepings",
 				Description: "Toggles wether pings are enabled or not",
 			},
 			Handler: handler.withAdminPermission(handler.togglePingsCommand),
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "replyrate",
 				Description: "View or set the reply rate",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Type:        discordgo.ApplicationCommandOptionInteger,
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionInt{
 						Name:        "rate",
 						Description: "the rate to set (leave empty to view)",
 						Required:    false,
@@ -97,12 +97,11 @@ func NewSlashCommandsHandler(
 			Handler: handler.replyRateCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "reactionrate",
 				Description: "View or set the reaction rate",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Type:        discordgo.ApplicationCommandOptionInteger,
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionInt{
 						Name:        "rate",
 						Description: "the rate to set (leave empty to view)",
 						Required:    false,
@@ -112,14 +111,13 @@ func NewSlashCommandsHandler(
 			Handler: handler.reactionRateCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "cohesion",
 				Description: "View or set the cohesion value; A higher value makes sentences more coherent",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Type:        discordgo.ApplicationCommandOptionInteger,
-						MinValue:    &CohesionMinValue,
-						MaxValue:    255,
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionInt{
+						MinValue:    new(2),
+						MaxValue:    new(255),
 						Name:        "value",
 						Description: "the value to set, must be at least 2 (leave empty to view)",
 						Required:    false,
@@ -129,12 +127,11 @@ func NewSlashCommandsHandler(
 			Handler: handler.cohesionCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "opinion",
 				Description: "Generates a random opinion based on the provided seed",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Type:        discordgo.ApplicationCommandOptionString,
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionString{
 						Name:        "about",
 						Description: "The seed of the message",
 						Required:    true,
@@ -144,12 +141,11 @@ func NewSlashCommandsHandler(
 			Handler: handler.opinionCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "wipe",
 				Description: "Deletes the given argument `data` from the training data",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Type:        discordgo.ApplicationCommandOptionString,
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionString{
 						Name:        "data",
 						Description: "The data to be deleted",
 						Required:    true,
@@ -159,49 +155,48 @@ func NewSlashCommandsHandler(
 			Handler: handler.wipeCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "channels",
 				Description: "View which channels can be accessed for training data",
 			},
 			Handler: handler.channelsCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "src",
 				Description: "Provides the URL to the repository with bot source code",
 			},
 			Handler: handler.srcCommand,
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "vc-join",
 				Description: "Joins the voice channel you are currently in",
 			},
 			Handler: handler.withGuildSubscription(config.VoiceChatFeaturesSKU, handler.vcJoinCommand),
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "vc-leave",
 				Description: "Leaves the voice channel you are currently in",
 			},
 			Handler: handler.withGuildSubscription(config.VoiceChatFeaturesSKU, handler.vcLeaveCommand),
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "vc-speak",
 				Description: "Speaks a message in the VC you are in, and then leaves",
 			},
 			Handler: handler.withGuildSubscription(config.VoiceChatFeaturesSKU, handler.vcSpeakCommand),
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "vc-language",
 				Description: "View or set the language to use when generating audio",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Type: discordgo.ApplicationCommandOptionInteger,
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionInt{
 						Name: "language",
-						Choices: []*discordgo.ApplicationCommandOptionChoice{
+						Choices: []discord.ApplicationCommandOptionChoiceInt{
 							{
 								Name:  "English",
 								Value: 0,
@@ -227,12 +222,11 @@ func NewSlashCommandsHandler(
 			Handler: handler.withGuildSubscription(config.VoiceChatFeaturesSKU, handler.vcLanguageCommand),
 		},
 		{
-			Command: &discordgo.ApplicationCommand{
+			Command: discord.SlashCommandCreate{
 				Name:        "vc-joinrate",
 				Description: "View or set the VC random join rate",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Type:        discordgo.ApplicationCommandOptionInteger,
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionInt{
 						Name:        "rate",
 						Description: "the rate to set (1/rate) (leave empty to view)",
 						Required:    false,
@@ -249,42 +243,43 @@ func NewSlashCommandsHandler(
 // registerCommands registers only new or modified slash commands
 func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 	// Fetch currently registered commands from Discord
-	registeredCommands, err := h.Client.ApplicationCommands(h.Client.State.User.ID, "")
+	registeredCommands, err := h.Client.Rest.GetGlobalCommands(h.Client.ApplicationID, false)
 	if err != nil {
 		logger.Errorf("Failed to fetch registered commands: %v", err)
-		registeredCommands = []*discordgo.ApplicationCommand{}
+		registeredCommands = []discord.ApplicationCommand{}
 	}
 
 	// Create a map of registered commands for fast lookup
-	registeredCommandsMap := make(map[string]*discordgo.ApplicationCommand)
+	registeredCommandsMap := make(map[string]discord.ApplicationCommand)
 	for _, cmd := range registeredCommands {
-		registeredCommandsMap[cmd.Name] = cmd
+		registeredCommandsMap[cmd.Name()] = cmd
 		isOutdated := !slices.ContainsFunc(commands, func(c SlashCommand) bool {
-			return shouldRefreshCommand(*cmd, *c.Command)
+			return shouldRefreshCommand(cmd, c.Command)
 		})
 		if isOutdated {
-			logger.Warnf("Removing outdated slash command: %s", cmd.Name)
-			h.Client.ApplicationCommandDelete(h.Client.State.User.ID, "", cmd.ID)
+			logger.Warnf("Removing outdated slash command: %s", cmd.Name())
+			h.Client.Rest.DeleteGlobalCommand(h.Client.ApplicationID, cmd.ID())
 		}
 	}
 
 	// Iterate through new commands and check if they are already registered
 	for _, cmd := range commands {
-		if existingCmd, exists := registeredCommandsMap[cmd.Command.Name]; exists {
+		if existingCmd, exists := registeredCommandsMap[cmd.Command.CommandName()]; exists {
 			// Compare if the new command differs in some way (e.g., updated description or options)
-			if !shouldRefreshCommand(*existingCmd, *cmd.Command) {
-				logger.Infof("Updating slash command: %s", cmd.Command.Name)
+			if shouldRefreshCommand(existingCmd, cmd.Command) {
+				logger.Infof("Updating slash command: %s", cmd.Command.CommandName())
 				for _, guildId := range cmd.GuildIds {
-					h.Client.ApplicationCommandDelete(h.Client.State.User.ID, guildId, existingCmd.ID)
-					_, err := h.Client.ApplicationCommandCreate(h.Client.State.User.ID, guildId, cmd.Command)
+					guildSnowflake := snowflake.MustParse(guildId)
+					h.Client.Rest.DeleteGuildCommand(h.Client.ApplicationID, guildSnowflake, existingCmd.ID())
+					_, err := h.Client.Rest.CreateGuildCommand(h.Client.ApplicationID, guildSnowflake, cmd.Command)
 					if err != nil {
 						logger.Errorf("Failed to register slash command: %v", err)
 					}
 				}
 				// If no guild IDs, create globally
 				if len(cmd.GuildIds) == 0 {
-					h.Client.ApplicationCommandDelete(h.Client.State.User.ID, "", existingCmd.ID)
-					_, err := h.Client.ApplicationCommandCreate(h.Client.State.User.ID, "", cmd.Command)
+					h.Client.Rest.DeleteGlobalCommand(h.Client.ApplicationID, existingCmd.ID())
+					_, err := h.Client.Rest.CreateGlobalCommand(h.Client.ApplicationID, cmd.Command)
 					if err != nil {
 						logger.Errorf("Failed to register slash command: %v", err)
 					}
@@ -292,86 +287,79 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 			}
 		} else {
 			// Register the new command
-			logger.Infof("Registering slash command: %s", cmd.Command.Name)
+			logger.Infof("Registering slash command: %s", cmd.Command.CommandName())
 			for _, guildId := range cmd.GuildIds {
-				_, err := h.Client.ApplicationCommandCreate(h.Client.State.User.ID, guildId, cmd.Command)
+				guildSnowflake := snowflake.MustParse(guildId)
+				_, err := h.Client.Rest.CreateGuildCommand(h.Client.ApplicationID, guildSnowflake, cmd.Command)
 				if err != nil {
 					logger.Errorf("Failed to register slash command: %v", err)
 				}
 			}
 			// If no guild IDs, create globally
 			if len(cmd.GuildIds) == 0 {
-				_, err := h.Client.ApplicationCommandCreate(h.Client.State.User.ID, "", cmd.Command)
+				_, err := h.Client.Rest.CreateGlobalCommand(h.Client.ApplicationID, cmd.Command)
 				if err != nil {
 					logger.Errorf("Failed to register slash command: %v", err)
 				}
 			}
 		}
-		h.Commands[cmd.Command.Name] = cmd.Handler
+		h.Commands[cmd.Command.CommandName()] = cmd.Handler
 	}
 }
 
 // Entry point for handling slash command interactions
-func (h *SlashCommandsHandler) OnSlashCommandInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.Type != discordgo.InteractionApplicationCommand {
-		return
-	}
-	commandName := i.ApplicationCommandData().Name
+func (h *SlashCommandsHandler) OnSlashCommandInteraction(event *events.ApplicationCommandInteractionCreate) {
+	commandName := event.SlashCommandInteractionData().CommandName()
 
 	var where string
-	if i.GuildID == "" {
+	if event.GuildID() == nil {
 		where = "DMs"
 	} else {
-		if guild, err := h.Client.Guild(i.GuildID); err != nil {
-			logger.Errorf("Failed to fetch guild '%s' for command interaction: %v", i.GuildID, err)
-			return
-		} else {
+		if guild, ok := h.Client.Caches.Guild(*event.GuildID()); ok {
 			where = guild.Name
+		} else {
+			logger.Errorf("Failed to fetch guild '%s' for command interaction", event.GuildID().String())
+			return
 		}
 	}
 
-	var who string
-	if i.User != nil {
-		who = i.User.Username
-	} else if i.Member != nil && i.Member.User != nil {
-		who = i.Member.User.Username
-	} else {
-		logger.Errorf("Failed to determine user for command interaction in '%s'", where)
-		return
-	}
+	who := event.User().EffectiveName()
+
 	startTime := time.Now()
 	logger.Infof("from '%s' in '%s': /%s", who, where, commandName)
 	if handler, exists := h.Commands[commandName]; exists {
-		handler(s, i) // Call the function bound to this command
+		handler(h.Client, event) // Call the function bound to this command
 	}
 	logger.Infof("/%s handler from '%s' in '%s' done in %s", commandName, who, where, time.Since(startTime).String())
 }
 
 // compares two commands to check if they are identical in the significant fields
-func shouldRefreshCommand(cached, loaded discordgo.ApplicationCommand) bool {
-	// For simplicity, compare the name, description, and options. extend this logic if necessary.
-	if cached.Name != loaded.Name {
-		return false
+func shouldRefreshCommand(cached discord.ApplicationCommand, loaded discord.ApplicationCommandCreate) bool {
+	if cached.Type() != loaded.Type() || cached.Name() != loaded.CommandName() {
+		return true
 	}
-	if cached.Description != loaded.Description {
-		return false
-	}
-	if len(cached.Options) != len(loaded.Options) {
-		return false
-	}
-	// Compare command options, if any
-	for i, option := range loaded.Options {
-		if len(option.Choices) != 0 {
-			// Compare each choice name and value
-			for j, choice := range option.Choices {
-				cachedChoice := cached.Options[i].Choices[j]
-				if choice.Name != cachedChoice.Name || float64(choice.Value.(int)) != cachedChoice.Value.(float64) {
-					return false
-				}
-			}
-		} else if !reflect.DeepEqual(option, cached.Options[i]) {
-			return false
-		}
-	}
-	return true
+	// switch cachedCmd := cached.(type) {
+	// case discord.SlashCommand:
+	// 	loadedCmd, ok := loaded.(discord.SlashCommandCreate)
+	// 	if !ok {
+	// 		return true
+	// 	}
+
+	// 	if cachedCmd.Description != loadedCmd.Description {
+	// 		return true
+	// 	}
+
+	// 	if !reflect.DeepEqual(cachedCmd.Options, loadedCmd.Options) {
+	// 		return true
+	// 	}
+
+	// 	// TODO
+	// 	// Check Permissions (Discord returns null or a value)
+	// 	// Note: Check if you care about DMPermissions vs Contexts here too
+
+	// case discord.UserCommand, discord.MessageCommand:
+	// 	// TODO
+	// }
+
+	return false
 }

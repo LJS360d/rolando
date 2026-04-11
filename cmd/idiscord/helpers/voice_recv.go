@@ -4,28 +4,29 @@ import (
 	"rolando/internal/logger"
 	"sync"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/disgoorg/disgo/voice"
+	"github.com/disgoorg/snowflake/v2"
 	"layeh.com/gopus"
 )
 
 // PCMPacket includes the raw PCM data along with Discord packet metadata.
 type PCMPacket struct {
-	*discordgo.Packet
-	PCM []int16
+	UserID    snowflake.ID
+	SSRC      uint32
+	Sequence  uint16
+	Timestamp uint32
+	PCM       []int16
 }
 
-// VoiceReceiver manages the decoding state for incoming voice packets.
-type VoiceReceiver struct {
+// VoskOpusReceiver implements voice.OpusFrameReceiver for Vosk STT processing.
+type VoskOpusReceiver struct {
 	// decoders holds the Opus decoders, keyed by SSRC.
-	decoders map[uint32]*gopus.Decoder
-	mu       sync.Mutex
-}
-
-// NewVoiceReceiver creates a new state manager for receiving and decoding PCM audio.
-func NewVoiceReceiver() *VoiceReceiver {
-	return &VoiceReceiver{
-		decoders: make(map[uint32]*gopus.Decoder),
-	}
+	decoders  map[uint32]*gopus.Decoder
+	mu        sync.Mutex
+	pcmChan   chan *PCMPacket
+	chainID   string
+	lang      string
+	closeOnce sync.Once
 }
 
 // Technically the below settings can be adjusted however that poses
@@ -40,63 +41,85 @@ const (
 	maxFrameSizeSamples = 5760
 )
 
-// ReceivePCM receives Opus packets from a VoiceConnection, decodes them to PCM,
-// and sends the results on the provided channel. This function blocks.
-func (vr *VoiceReceiver) ReceivePCM(v *discordgo.VoiceConnection, c chan<- *PCMPacket) {
-	defer close(c)
-	var err error
-
-	for {
-		if v.Status != discordgo.VoiceConnectionStatusReady || v.OpusRecv == nil {
-			// A small delay to prevent a busy loop if the connection is temporarily down.
-			// time.Sleep(100 * time.Millisecond)
-			// You may want to log this or handle it gracefully, but returning here
-			// will shut down the receiving goroutine.
-			logger.Errorf("VoiceReceiver: VoiceConnection is not ready, exiting ReceivePCM")
-			return
-		}
-
-		// Read Opus Packet
-		p, ok := <-v.OpusRecv
-		if !ok {
-			// Channel closed (VoiceConnection shut down)
-			return
-		}
-		if len(p.Opus) < 5 { // min of 5 bytes is a safe minimum for Discord Opus frames
-			continue
-		}
-
-		// Get or Create Decoder
-		vr.mu.Lock()
-		decoder, ok := vr.decoders[p.SSRC]
-		if !ok {
-			// Create a new decoder for the SSRC
-			decoder, err = gopus.NewDecoder(frameRate, channels)
-			if err != nil {
-				// Use the existing dgvoice OnError logger or a local one
-				logger.Errorf("error creating opus decoder: %v", err)
-				vr.mu.Unlock()
-				continue
-			}
-			vr.decoders[p.SSRC] = decoder
-		}
-		vr.mu.Unlock()
-
-		// Decode Opus to PCM
-		pcm, err := decoder.Decode(p.Opus, maxFrameSizeSamples, false)
-		if err != nil {
-			// actually i dont give a fuck if a packet is dropped because invalid or because gopus wants to make a fuss about it
-			// just move on, dont even want the logs in prod.
-			// logger.Errorf("Error decoding opus data: %v", err)
-			continue
-		}
-
-		// Send Decoded Packet
-		select {
-		case c <- &PCMPacket{Packet: p, PCM: pcm}:
-			// Successfully sent
-		default:
-			// Channel full/slow consumer, packet is dropped to avoid blocking
-		}
+// NewVoskOpusReceiver creates a new OpusFrameReceiver for Vosk STT.
+func NewVoskOpusReceiver(chainID, lang string, pcmChan chan *PCMPacket) *VoskOpusReceiver {
+	return &VoskOpusReceiver{
+		decoders: make(map[uint32]*gopus.Decoder),
+		pcmChan:  pcmChan,
+		chainID:  chainID,
+		lang:     lang,
 	}
+}
+
+// ReceiveOpusFrame is called by disgo for each incoming voice packet.
+// It decodes the Opus data to PCM and sends it to the pcmChan.
+func (r *VoskOpusReceiver) ReceiveOpusFrame(userID snowflake.ID, packet *voice.Packet) error {
+	if len(packet.Opus) < 5 {
+		// Skip invalid/too-small packets
+		return nil
+	}
+
+	// Get or create decoder for this SSRC
+	r.mu.Lock()
+	decoder, ok := r.decoders[packet.SSRC]
+	if !ok {
+		var err error
+		decoder, err = gopus.NewDecoder(frameRate, channels)
+		if err != nil {
+			r.mu.Unlock()
+			logger.Errorf("error creating opus decoder: %v", err)
+			return err
+		}
+		r.decoders[packet.SSRC] = decoder
+	}
+	r.mu.Unlock()
+
+	// Decode Opus to PCM
+	pcm, err := decoder.Decode(packet.Opus, maxFrameSizeSamples, false)
+	if err != nil {
+		// Drop invalid packets silently - don't spam logs
+		return nil
+	}
+
+	// Send decoded packet to the channel
+	pcmPacket := &PCMPacket{
+		UserID:    userID,
+		SSRC:      packet.SSRC,
+		Sequence:  packet.Sequence,
+		Timestamp: packet.Timestamp,
+		PCM:       pcm,
+	}
+
+	select {
+	case r.pcmChan <- pcmPacket:
+		// Successfully sent
+	default:
+		// Channel full/slow consumer, packet is dropped to avoid blocking
+	}
+
+	return nil
+}
+
+// CleanupUser is called when a user disconnects from voice.
+func (r *VoskOpusReceiver) CleanupUser(userID snowflake.ID) {
+	// We key decoders by SSRC, not userID, so we can't directly clean up here.
+	// The SSRC→userID mapping is managed by disgo internally.
+	// In practice, stale decoders don't cause issues since they're just memory.
+	// If needed, we could track SSRC→userID and clean up on disconnect.
+}
+
+// Close closes the PCM channel and cleans up resources.
+func (r *VoskOpusReceiver) Close() {
+	r.closeOnce.Do(func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		// Clean up all decoders
+		for ssrc := range r.decoders {
+			delete(r.decoders, ssrc)
+		}
+
+		// Close the PCM channel
+		close(r.pcmChan)
+	})
 }
