@@ -58,6 +58,7 @@ export interface BotGuild {
   features: string[];
   approximate_member_count: number;
   approximate_presence_count: number;
+  member_count?: number;
 }
 
 export type BotGuildWithChain = BotGuild & { chain: ChainAnalytics | null };
@@ -68,8 +69,8 @@ export function useGetBotGuildsAll(token: string) {
     queryFn: async () => {
       const response = await fetch(`/api/bot/guilds/all`, {
         headers: {
-          Authorization: token
-        }
+          Authorization: token,
+        },
       });
       if (!response.ok) throw new Error("Failed to fetch bot guilds");
       return response.json() as Promise<BotGuild[]>;
@@ -80,23 +81,28 @@ export function useGetBotGuildsAll(token: string) {
 export function useGetBotGuilds(
   token: string,
   pagination: globalThis.Ref<PageMeta>,
-  sortBy: globalThis.Ref<string>
+  sortBy: globalThis.Ref<string>,
 ) {
   return useQuery({
-    queryKey: ["/bot/guilds", pagination.value.page, pagination.value.pageSize, sortBy.value],
+    queryKey: [
+      "/bot/guilds",
+      pagination.value.page,
+      pagination.value.pageSize,
+      sortBy.value,
+    ],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(pagination.value.page),
         pageSize: String(pagination.value.pageSize),
-        sortBy: sortBy.value || "bytes"
+        sortBy: sortBy.value || "bytes",
       });
       const response = await fetch(`/api/bot/guilds?${params}`, {
         headers: {
-          Authorization: token
-        }
+          Authorization: token,
+        },
       });
       if (!response.ok) throw new Error("Failed to fetch bot guilds");
-      const res = await response.json() as Page<BotGuildWithChain[]>;
+      const res = (await response.json()) as Page<BotGuildWithChain[]>;
       pagination.value = res.meta;
       return res;
     },
@@ -109,8 +115,8 @@ export function useGetBotGuild(token: string, guildId: string) {
     queryFn: async () => {
       const response = await fetch(`/api/bot/guilds/${guildId}`, {
         headers: {
-          Authorization: token
-        }
+          Authorization: token,
+        },
       });
       if (!response.ok) throw new Error(`Failed to fetch bot guild ${guildId}`);
       return response.json() as Promise<BotGuild>;
@@ -148,35 +154,42 @@ export function leaveGuild(token: string, guildId: string) {
   return fetch(`/api/bot/guilds/${guildId}`, {
     method: "DELETE",
     headers: {
-      Authorization: token
-    }
-  })
+      Authorization: token,
+    },
+  });
 }
 
-export function broadcastMessage(token: string, content: string, guilds: Record<string, string | boolean>) {
+export function broadcastMessage(
+  token: string,
+  content: string,
+  guilds: Record<string, string | boolean>,
+) {
   const body = {
     content,
     guilds: Object.entries(guilds).map(([id, selected]) => ({
       id,
-      channel_id: selected ? "" : undefined
-    }))
-  }
+      channel_id: selected ? "" : undefined,
+    })),
+  };
   return fetch(`/api/bot/broadcast`, {
     method: "POST",
     body: JSON.stringify(body),
     headers: {
-      Authorization: token
-    }
-  })
+      Authorization: token,
+    },
+  });
 }
 
-export function updateChainDocument(token: string, chainId: string, fields: Record<string, any>) {
+export function updateChainDocument(
+  token: string,
+  chainId: string,
+  fields: Record<string, any>,
+) {
   return fetch(`/api/bot/guilds/${chainId}`, {
     method: "PUT",
     body: JSON.stringify(fields),
     headers: {
-      Authorization: token
-    }
-  })
-
+      Authorization: token,
+    },
+  });
 }

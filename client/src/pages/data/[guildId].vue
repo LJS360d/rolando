@@ -1,31 +1,24 @@
 <template>
   <v-container>
     <template v-if="!isLoadingGuild && !isErrorGuild && guild">
-      <v-card
-        flat
-        :prepend-avatar="guildIconUrl(guild.id, guild.icon)"
-      >
+      <v-card flat :prepend-avatar="guildIconUrl(guild.id, guild.icon)">
         <template #title>
           <span class="font-weight-light">{{ guild.name }}</span>
         </template>
         <template #subtitle>
-          <span class="text-sm"><b>{{ guild.approximate_member_count }}</b> members</span>
+          <span class="text-sm"
+            ><b>{{ guild.member_count ?? guild.approximate_member_count }}</b>
+            members</span
+          >
         </template>
-        <template
-          v-if="!!chain"
-          #text
-        >
-          <v-row
-            justify="center"
-            class="pa-3 pb-0"
-          >
-            <span>{{ formatBytes(chain?.bytes ?? 0) }} / {{ formatBytes(1024 ** 2 *
-              (chain?.max_size_mb ?? 0)) }}</span>
+        <template v-if="!!chain" #text>
+          <v-row justify="center" class="pa-3 pb-0">
+            <span
+              >{{ formatBytes(chain?.bytes ?? 0) }} /
+              {{ formatBytes(1024 ** 2 * (chain?.max_size_mb ?? 0)) }}</span
+            >
           </v-row>
-          <v-row
-            justify="space-between"
-            class="pa-3"
-          >
+          <v-row justify="space-between" class="pa-3">
             <v-col cols="12">
               <v-row
                 v-for="(field, key) in getChainAnalytics()"
@@ -40,16 +33,10 @@
         </template>
       </v-card>
     </template>
-    <v-skeleton-loader
-      v-else-if="!isErrorGuild"
-      type="card-avatar"
-    />
-    <v-alert
-      v-else
-      type="error"
-      class="text-body-2"
-    >
-      Oops, big error occured, please report it to the creator on <a :href="discordServerInvite">the discord</a>
+    <v-skeleton-loader v-else-if="!isErrorGuild" type="card-avatar" />
+    <v-alert v-else type="error" class="text-body-2">
+      Oops, big error occured, please report it to the creator on
+      <a :href="discordServerInvite">the discord</a>
     </v-alert>
     <v-divider class="my-4" />
     <template v-if="pagination.totalPages > 1">
@@ -64,10 +51,7 @@
           :class="{ 'bg-dark': i % 2 !== 0 }"
         >
           <template #title>
-            <p
-              class="message-content"
-              v-html="renderedMessages[i]"
-            />
+            <p class="message-content" v-html="renderedMessages[i]" />
           </template>
         </v-list-item>
       </v-list>
@@ -76,11 +60,7 @@
       v-else-if="!isErrorMessages"
       type="list-item-three-line"
     />
-    <v-alert
-      v-else
-      type="error"
-      class="text-body-2"
-    >
+    <v-alert v-else type="error" class="text-body-2">
       There was an error loading the messages
     </v-alert>
     <template v-if="pagination.totalPages > 1">
@@ -116,22 +96,27 @@ export default defineComponent({
     const guildQuery = useGetBotGuild(auth.token!, guildId);
     const messagesQuery = useGetGuildData(auth.token!, guildId, pagination);
 
-    const renderedMessages = computed(() => messagesQuery.data.value?.data?.map((text: string) => {
-      const rawHtml = marked(text, { async: false });
-      return DOMPurify.sanitize(rawHtml);
-    }) ?? []);
-
-    watch(() => pagination.value.page,
-      () => {
-        messagesQuery.refetch();
-      },
-      { immediate: true }
+    const renderedMessages = computed(
+      () =>
+        messagesQuery.data.value?.data?.map((text: string) => {
+          const rawHtml = marked(text, { async: false });
+          return DOMPurify.sanitize(rawHtml);
+        }) ?? [],
     );
-    watch(() => pagination.value.pageSize,
+
+    watch(
+      () => pagination.value.page,
       () => {
         messagesQuery.refetch();
       },
-      { immediate: true }
+      { immediate: true },
+    );
+    watch(
+      () => pagination.value.pageSize,
+      () => {
+        messagesQuery.refetch();
+      },
+      { immediate: true },
     );
 
     return {

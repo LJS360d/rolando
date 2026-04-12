@@ -192,7 +192,7 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 			"owner":                      m.Guild.OwnerID.String(),
 			"permissions":                "",
 			"features":                   m.Guild.Features,
-			"approximate_member_count":   m.Guild.ApproximateMemberCount,
+			"approximate_member_count":   m.Guild.MemberCount,
 			"approximate_presence_count": m.Guild.ApproximatePresenceCount,
 		}
 		if m.Chain != nil {
