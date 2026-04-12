@@ -100,6 +100,7 @@ func (h *SlashCommandsHandler) vcJoinCommand(client *bot.Client, i *events.Appli
 		provider, err := tts.GenerateTTSProvider("i am here", chainDoc.TTSLanguage)
 		if err != nil {
 			logger.Errorf("Failed to generate TTS provider: %v", err)
+			conn.Close(vcCtx)
 			return
 		}
 		if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
@@ -129,14 +130,11 @@ func getVCUsers(h *SlashCommandsHandler, guildID snowflake.ID, channelID snowfla
 
 func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteractionCreate, conn voice.Conn, vcCtx context.Context, voiceChannel discord.Channel, chainDoc *repositories.Chain, chain *model.MarkovChain) {
 	var ttsMutex sync.Mutex
+	var doneOnce sync.Once
 	done := make(chan struct{})
-	var once sync.Once
 	triggerCleanup := func() {
-		once.Do(func() {
-			select {
-			case done <- struct{}{}: // Send signal to unblock the main function's select
-			default: // Don't block
-			}
+		doneOnce.Do(func() {
+			close(done)
 		})
 	}
 
@@ -173,9 +171,7 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 	// use the 'done' channel to instruct other goroutines to stop *before* cleanup.
 	defer func(updateListener bot.EventListener) {
 		h.Client.RemoveEventListeners(updateListener)
-		// It's safe to close here because the main function (where this defer runs)
-		// is about to exit. All goroutines that listen to 'done' will unblock.
-		close(done)
+		triggerCleanup() // safely closes the done channel exactly once
 		conn.Close(vcCtx)
 		stt.FreeRecognizer(chain.ID)
 		logger.Infof("Cleanup complete for VC '%s' in '%s'", channelName, chainDoc.Name)
@@ -229,7 +225,6 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 				var audioData bytes.Buffer
 				binary.Write(&audioData, binary.LittleEndian, pcm)
 				text, err := stt.SpeechToTextNative(&audioData, chainDoc.TTSLanguage, chainDoc.ID)
-
 				if err != nil {
 					logger.Errorf("Failed Speech to Text: %v", err)
 					continue

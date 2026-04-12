@@ -241,7 +241,7 @@ func (mc *MarkovChain) TalkFiltered(length int) string {
 	gt := mc.Talk(length)
 
 	// Remove URLs
-	reURL := regexp.MustCompile(`(?:https?|ftp|file|mailto):\/\/[^\s]+|(?:www\.)[^\s]+`)
+	reURL := regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+|[a-zA-Z][a-zA-Z0-9+.-]*:[^\s]+|(?:www\.)[^\s]+`)
 	gt = reURL.ReplaceAllString(gt, "")
 
 	// Remove special characters

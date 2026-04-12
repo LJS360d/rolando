@@ -1,6 +1,7 @@
 package stt
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -85,12 +86,26 @@ func FreeRecognizer(guildId string) {
 }
 
 func SpeechToTextNative(audio io.Reader, lang string, guildId string) (string, error) {
-	var bytes []byte
-	_, err := audio.Read(bytes)
+	bytes, err := io.ReadAll(audio)
 	if err != nil {
 		return "", err
 	}
 	return SpeechToTextNativeFromBytes(bytes, lang, guildId)
+}
+
+// stereoToMono converts stereo PCM (interleaved int16 little-endian) to mono PCM
+func stereoToMono(stereo []byte) []byte {
+	numFrames := len(stereo) / 4
+	mono := make([]byte, numFrames*2)
+	for i := 0; i < numFrames; i++ {
+		srcIdx := i * 4
+		dstIdx := i * 2
+		left := int16(binary.LittleEndian.Uint16(stereo[srcIdx : srcIdx+2]))
+		right := int16(binary.LittleEndian.Uint16(stereo[srcIdx+2 : srcIdx+4]))
+		avg := int16((int32(left) + int32(right)) / 2)
+		binary.LittleEndian.PutUint16(mono[dstIdx:], uint16(avg))
+	}
+	return mono
 }
 
 func SpeechToTextNativeFromBytes(bytes []byte, lang string, guildId string) (string, error) {
@@ -98,7 +113,21 @@ func SpeechToTextNativeFromBytes(bytes []byte, lang string, guildId string) (str
 	if err != nil {
 		return "", err
 	}
-	rec.AcceptWaveform(bytes)
+	// Convert stereo PCM to mono since Vosk expects mono audio
+	monoBytes := stereoToMono(bytes)
+	if rec.AcceptWaveform(monoBytes) == 1 {
+		// Final result after utterance completion
+		jsonStr := rec.Result()
+		var result struct {
+			Text string `json:"text"`
+		}
+		err = json.Unmarshal([]byte(jsonStr), &result)
+		if err != nil {
+			return "", err
+		}
+		return result.Text, nil
+	}
+	// Partial result for ongoing speech
 	jsonStr := rec.PartialResult()
 	var result struct {
 		Text string `json:"partial"`

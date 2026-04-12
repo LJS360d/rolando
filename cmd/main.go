@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/signal"
 	"rolando/internal/config"
@@ -45,6 +46,12 @@ func main() {
 		),
 		bot.WithVoiceManagerConfigOpts(
 			voice.WithDaveSessionCreateFunc(golibdave.NewSession),
+			// supress all logs
+			voice.WithDaveSessionLogger(slog.New(slog.DiscardHandler)),
+			voice.WithConnConfigOpts(
+				voice.WithConnDaveSessionLogger(slog.New(slog.DiscardHandler)),
+				voice.WithConnLogger(slog.New(slog.DiscardHandler)),
+			),
 		),
 		bot.WithCacheConfigOpts(
 			cache.WithCaches(
