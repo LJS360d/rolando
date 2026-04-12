@@ -1,4 +1,6 @@
 #!lua name=markov
+---@meta
+---@diagnostic disable: undefined-global
 
 -- ---------------------------------------------------------------------------
 -- Key helpers
