@@ -25,7 +25,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libsqlite3-0 \
     libopusfile0 \
     ffmpeg \
-    espeak-ng \
     ca-certificates \
     # curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
