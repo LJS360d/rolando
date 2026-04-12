@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"rolando/internal/data"
 
 	"github.com/disgoorg/disgo/bot"
@@ -10,6 +11,7 @@ import (
 
 // implementation of /vc language command
 func (h *SlashCommandsHandler) vcLanguageCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	ctx := context.Background()
 	var lang string
 	for _, option := range i.SlashCommandInteractionData().Options {
 		if option.Name == "language" && option.Type == discord.ApplicationCommandOptionTypeInt {
@@ -18,7 +20,7 @@ func (h *SlashCommandsHandler) vcLanguageCommand(s *bot.Client, i *events.Applic
 		}
 	}
 
-	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
+	chainDoc, err := h.ChainsService.GetChainConf(ctx, i.GuildID().String())
 	if err != nil {
 		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeCreateMessage,
@@ -34,7 +36,7 @@ func (h *SlashCommandsHandler) vcLanguageCommand(s *bot.Client, i *events.Applic
 		if !h.checkAdmin(i) {
 			return
 		}
-		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"tts_language": lang}); err != nil {
+		if _, err := h.ChainsService.UpdateChainMeta(ctx, chainDoc.ID, map[string]interface{}{"tts_language": lang}); err != nil {
 			s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 				Type: discord.InteractionResponseTypeCreateMessage,
 				Data: discord.MessageCreate{

@@ -1,6 +1,7 @@
 package buttons
 
 import (
+	"context"
 	"fmt"
 	"rolando/internal/logger"
 	"rolando/internal/utils"
@@ -13,12 +14,13 @@ import (
 
 // Handle 'confirm-train' button interaction
 func (h *ButtonsHandler) onConfirmTrain(s *bot.Client, i *events.ComponentInteractionCreate) {
+	ctx := context.Background()
 	// Defer the update
 	s.Rest.CreateInteractionResponse(i.ComponentInteraction.ID(), i.ComponentInteraction.Token(), discord.InteractionResponse{
 		Type: discord.InteractionResponseTypeDeferredCreateMessage,
 	})
 
-	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
+	chainDoc, err := h.ChainsService.GetChainConf(ctx, i.GuildID().String())
 	if err != nil {
 		logger.Errorf("Failed to fetch chainDoc for guild %s: %v", i.GuildID, err)
 		return
@@ -39,7 +41,7 @@ func (h *ButtonsHandler) onConfirmTrain(s *bot.Client, i *events.ComponentIntera
 	// Update chain status
 	now := time.Now()
 	chainDoc.TrainedAt = &now
-	if _, err = h.ChainsService.UpdateChainMeta(i.GuildID().String(), map[string]any{"trained_at": now}); err != nil {
+	if _, err = h.ChainsService.UpdateChainMeta(ctx, i.GuildID().String(), map[string]any{"trained_at": now}); err != nil {
 		logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
 		return
 	}
@@ -50,7 +52,7 @@ func (h *ButtonsHandler) onConfirmTrain(s *bot.Client, i *events.ComponentIntera
 		logger.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID, err)
 		// Revert chain status
 		chainDoc.TrainedAt = nil
-		if _, err = h.ChainsService.UpdateChainMeta(i.GuildID().String(), map[string]any{"trained_at": nil}); err != nil {
+		if _, err = h.ChainsService.UpdateChainMeta(ctx, i.GuildID().String(), map[string]any{"trained_at": nil}); err != nil {
 			logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
 		}
 		return

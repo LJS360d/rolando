@@ -7,6 +7,7 @@ import (
 	"rolando/cmd/ihttp/auth"
 	"rolando/internal/config"
 	"rolando/internal/logger"
+	"rolando/internal/repositories"
 	"runtime"
 	"slices"
 	"sort"
@@ -21,12 +22,14 @@ import (
 
 type BotController struct {
 	chainsService *services.ChainsService
+	markovRepo    *repositories.RedisRepository
 	ds            *bot.Client
 }
 
-func NewController(chainsService *services.ChainsService, ds *bot.Client) *BotController {
+func NewController(chainsService *services.ChainsService, markovRepo *repositories.RedisRepository, ds *bot.Client) *BotController {
 	return &BotController{
 		chainsService: chainsService,
+		markovRepo:    markovRepo,
 		ds:            ds,
 	}
 }
@@ -156,7 +159,7 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	}
 	sortBy := c.Query("sortBy")
 
-	chainMap, err := analytics.BuildAllChainsAnalyticsMap(s.chainsService)
+	chainMap, err := analytics.BuildAllChainsAnalyticsMap(s.chainsService, s.markovRepo)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -262,7 +265,7 @@ func (s *BotController) UpdateChainDoc(c *gin.Context) {
 		return
 	}
 	// DB fields update
-	chainDoc, err := s.chainsService.UpdateChainMeta(guildId, fields)
+	chainDoc, err := s.chainsService.UpdateChainMeta(c.Request.Context(), guildId, fields)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -373,7 +376,7 @@ func (s *BotController) LeaveGuild(c *gin.Context) {
 		return
 	}
 	c.JSON(204, nil)
-	err = s.chainsService.DeleteChain(guildId.String())
+	err = s.chainsService.DeleteChain(c.Request.Context(), guildId.String())
 	if err != nil {
 		logger.Errorf("Failed to delete chain after leaving guild: %v", err)
 		return

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/disgoorg/disgo/bot"
@@ -30,19 +31,7 @@ func (h *SlashCommandsHandler) wipeCommand(s *bot.Client, i *events.ApplicationC
 		return
 	}
 
-	chain, err := h.ChainsService.GetChain(i.GuildID().String())
-	if err != nil {
-		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
-			Type: discord.InteractionResponseTypeCreateMessage,
-			Data: discord.MessageCreate{
-				Content: "Failed to retrieve chain data.",
-				Flags:   discord.MessageFlagEphemeral,
-			},
-		})
-		return
-	}
-
-	err = h.ChainsService.DeleteTextData(i.GuildID().String(), data)
+	err := h.ChainsService.DeleteTextData(context.Background(), i.GuildID().String(), data)
 	if err != nil {
 		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeCreateMessage,
@@ -54,7 +43,6 @@ func (h *SlashCommandsHandler) wipeCommand(s *bot.Client, i *events.ApplicationC
 		return
 	}
 
-	chain.Delete(data)
 	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 		Type: discord.InteractionResponseTypeCreateMessage,
 		Data: discord.MessageCreate{

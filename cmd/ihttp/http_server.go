@@ -16,13 +16,15 @@ import (
 
 type HttpServer struct {
 	ChainsService  *services.ChainsService
+	MarkovRepo     *repositories.RedisRepository
 	DiscordSession *bot.Client
 	MessagesRepo   *repositories.MessagesRepository
 }
 
-func NewHttpServer(discordSession *bot.Client, chainsService *services.ChainsService, messagesRepo *repositories.MessagesRepository) *HttpServer {
+func NewHttpServer(discordSession *bot.Client, chainsService *services.ChainsService, markovRepo *repositories.RedisRepository, messagesRepo *repositories.MessagesRepository) *HttpServer {
 	return &HttpServer{
 		ChainsService:  chainsService,
+		MarkovRepo:     markovRepo,
 		DiscordSession: discordSession,
 		MessagesRepo:   messagesRepo,
 	}
@@ -37,8 +39,8 @@ func (s *HttpServer) Start() {
 		gin.Recovery(),
 	)
 
-	analyticsController := analytics.NewController(s.ChainsService, s.DiscordSession)
-	botController := httpBot.NewController(s.ChainsService, s.DiscordSession)
+	analyticsController := analytics.NewController(s.ChainsService, s.MarkovRepo, s.DiscordSession)
+	botController := httpBot.NewController(s.ChainsService, s.MarkovRepo, s.DiscordSession)
 	authController := auth.NewController(s.DiscordSession)
 	dataController := data.NewController(s.DiscordSession, s.MessagesRepo)
 	// Routes

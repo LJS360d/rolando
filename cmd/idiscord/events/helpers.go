@@ -13,7 +13,7 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 )
 
-func GuildSubscriptionCheck(client *bot.Client, member discord.Member, chainDoc *repositories.Chain, skuId snowflake.ID) bool {
+func GuildSubscriptionCheck(client *bot.Client, member discord.Member, chainDoc *repositories.ChainConfig, skuId snowflake.ID) bool {
 	if !config.PaywallsEnabled {
 		return true
 	}

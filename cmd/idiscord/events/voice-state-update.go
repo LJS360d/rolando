@@ -16,6 +16,8 @@ import (
 
 // handler for VOICE_STATE_UPDATE event
 func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
+	ctx := context.Background()
+
 	// Convert snowflake IDs to strings for internal use
 	userID := e.VoiceState.UserID.String()
 	guildID := e.VoiceState.GuildID.String()
@@ -46,7 +48,7 @@ func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
 		return
 	}
 
-	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
+	chainDoc, err := h.ChainsService.GetChainConf(ctx, guildID)
 	if err != nil {
 		logger.Errorf("Failed to fetch chain document for guild %s: %v", guildID, err)
 		return
@@ -88,8 +90,12 @@ func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
 			return
 		}
 
-		chain, _ := h.ChainsService.GetChain(chainDoc.ID)
-		provider, err := tts.GenerateTTSProvider(chain.TalkFiltered(100), chainDoc.TTSLanguage)
+		content, err := h.ChainsService.RedisRepo.GenerateFiltered(vcCtx, guildID, 100, chainDoc.NGramSize)
+		if err != nil {
+			logger.Errorf("Failed to generate text: %v", err)
+			return
+		}
+		provider, err := tts.GenerateTTSProvider(content, chainDoc.TTSLanguage)
 		if err != nil {
 			logger.Errorf("Failed to generate TTS provider: %v", err)
 			conn.Close(vcCtx)

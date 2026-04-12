@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"rolando/internal/config"
 	"rolando/internal/logger"
@@ -14,9 +15,10 @@ import (
 
 // implementation of /train command
 func (h *SlashCommandsHandler) trainCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	ctx := context.Background()
 	guildID := i.GuildID().String()
-	h.ChainsService.GetChain(guildID)
-	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
+
+	chainDoc, err := h.ChainsService.GetChainConf(ctx, guildID)
 	if err != nil {
 		logger.Errorf("Failed to fetch chain document for guild %s: %v", guildID, err)
 		return

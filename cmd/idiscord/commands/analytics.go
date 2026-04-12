@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"rolando/internal/config"
 	"rolando/internal/logger"
@@ -14,18 +15,18 @@ import (
 
 // implementation of /analytics command
 func (h *SlashCommandsHandler) analyticsCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
-	// Fetch the chain data for the given guild
-	chain, err := h.ChainsService.GetChain(i.GuildID().String())
-	if err != nil {
-		logger.Errorf("Failed to fetch chain for guild %s: %v", i.GuildID, err)
-		return
-	}
-	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
+	ctx := context.Background()
+
+	chainConf, err := h.ChainsService.GetChainConf(ctx, i.GuildID().String())
 	if err != nil {
 		logger.Errorf("Failed to fetch chain document for guild %s: %v", i.GuildID, err)
 		return
 	}
-	analytics := model.NewMarkovChainAnalyzer(chain).GetRawAnalytics()
+	analytics, err := model.NewMarkovChainAnalyzer(chainConf, h.ChainsService.RedisRepo).GetRawAnalytics(ctx)
+	if err != nil {
+		logger.Errorf("failed to analyze chain: %v", err)
+		return
+	}
 	// Constructing the embed
 	botUser, ok := s.Caches.SelfUser()
 	if !ok {
@@ -85,7 +86,7 @@ func (h *SlashCommandsHandler) analyticsCommand(s *bot.Client, i *events.Applica
 			},
 			{
 				Name:   "Size",
-				Value:  fmt.Sprintf("```%s / %s```", utils.FormatBytes(analytics.Size), utils.FormatBytes(uint64(chainDoc.MaxSizeMb*1024*1024))),
+				Value:  fmt.Sprintf("```%s / %s```", utils.FormatBytes(analytics.Size), utils.FormatBytes(uint64(chainConf.MaxSizeMb*1024*1024))),
 				Inline: new(true),
 			},
 		},

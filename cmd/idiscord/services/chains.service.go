@@ -1,269 +1,208 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"rolando/internal/logger"
-	"rolando/internal/model"
 	"rolando/internal/repositories"
-	"rolando/internal/utils"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/snowflake/v2"
 )
 
 type ChainsService struct {
-	mu           sync.RWMutex
 	session      *bot.Client
-	chainsMap    map[string]*model.MarkovChain
-	chainsRepo   repositories.ChainsRepository
-	messagesRepo repositories.MessagesRepository
+	chainsRepo   *repositories.ChainsRepository
+	RedisRepo    *repositories.RedisRepository
+	messagesRepo *repositories.MessagesRepository
+
+	// rebuildMu prevents concurrent rebuilds of the same guild.
+	rebuildMu sync.Map // map[string]*sync.Mutex
 }
 
-// NewChainsService initializes a new ChainsService.
-func NewChainsService(client *bot.Client, chainsRepo repositories.ChainsRepository, messagesRepo repositories.MessagesRepository) *ChainsService {
+func NewChainsService(
+	client *bot.Client,
+	chainsRepo *repositories.ChainsRepository,
+	redisRepo *repositories.RedisRepository,
+	messagesRepo *repositories.MessagesRepository,
+) *ChainsService {
 	return &ChainsService{
-		chainsMap:    make(map[string]*model.MarkovChain),
-		chainsRepo:   chainsRepo,
-		messagesRepo: messagesRepo,
 		session:      client,
+		chainsRepo:   chainsRepo,
+		RedisRepo:    redisRepo,
+		messagesRepo: messagesRepo,
 	}
 }
 
-// GetChain retrieves a Markov chain by ID, creating it if not already loaded.
-func (cs *ChainsService) GetChain(id string) (*model.MarkovChain, error) {
-	cs.mu.RLock()
-	chain, exists := cs.chainsMap[id]
-	cs.mu.RUnlock()
-
-	if exists {
-		return chain, nil
-	}
-	gid, err := snowflake.Parse(id)
+// GetChainConf returns the config for a guild, creating it if unknown.
+// Reads from the Redis cache first; SQLite is only hit on a true miss.
+func (cs *ChainsService) GetChainConf(ctx context.Context, id string) (*repositories.ChainConfig, error) {
+	doc, err := cs.chainsRepo.GetChainByID(id)
 	if err != nil {
-		return nil, err
+		gid, parseErr := snowflake.Parse(id)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		guild, ok := cs.session.Caches.Guild(gid)
+		if !ok {
+			return nil, fmt.Errorf("guild %s not found in cache", id)
+		}
+		return cs.CreateChain(ctx, id, guild.Name)
 	}
-	guild, ok := cs.session.Caches.Guild(gid)
-	if !ok {
-		return nil, fmt.Errorf("guild with id '%s' not found in cache", id)
-	}
-	// Create a new chain if it doesn't exist
-	return cs.CreateChain(id, guild.Name)
+	return doc, nil
 }
 
-func (cs *ChainsService) GetAllChains() ([]*model.MarkovChain, error) {
-	chainDocs, err := cs.chainsRepo.GetAll()
-	if err != nil {
-		return nil, err
-	}
-	var chains []*model.MarkovChain
-	for _, chainDoc := range chainDocs {
-		chain, _ := cs.GetChain(chainDoc.ID)
-		chains = append(chains, chain)
-	}
-	return chains, nil
+func (cs *ChainsService) GetAllChains(_ context.Context) ([]*repositories.ChainConfig, error) {
+	return cs.chainsRepo.GetAll()
 }
 
-func (cs *ChainsService) GetChainsPage(limit, offset int) ([]*model.MarkovChain, int64, error) {
-	chainDocs, total, err := cs.chainsRepo.GetChainsPage(limit, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	var chains []*model.MarkovChain
-	for _, chainDoc := range chainDocs {
-		chain, _ := cs.GetChain(chainDoc.ID)
-		chains = append(chains, chain)
-	}
-	return chains, total, nil
+func (cs *ChainsService) GetChainsPage(_ context.Context, limit, offset int) ([]*repositories.ChainConfig, int64, error) {
+	return cs.chainsRepo.GetChainsPage(limit, offset)
 }
 
-// GetChainDocument retrieves the chain document from the repository.
-func (cs *ChainsService) GetChainDocument(id string) (*repositories.Chain, error) {
-	return cs.chainsRepo.GetChainByID(id)
-}
-
-// CreateChain initializes a new Markov chain and saves it in the repository.
-func (cs *ChainsService) CreateChain(id, name string) (*model.MarkovChain, error) {
+func (cs *ChainsService) CreateChain(_ context.Context, id, name string) (*repositories.ChainConfig, error) {
 	logger.Infof("Creating chain: %s", name)
-	cs.mu.Lock()
-	chain := model.NewMarkovChain(id, 10, 2, true, []string{}, cs.messagesRepo)
-	_, exists := cs.chainsMap[id]
-	if exists {
-		cs.mu.Unlock()
-		return nil, fmt.Errorf("chain %s already exists", name)
-	}
-	cs.chainsMap[id] = chain
-	_, err := cs.chainsRepo.CreateChain(id, name)
-	cs.mu.Unlock()
-	if err != nil {
-		return nil, err
-	}
-	return chain, nil
+	return cs.chainsRepo.CreateChain(id, name)
 }
 
-// UpdateChainState updates the Markov chain's state with new text data.
-func (cs *ChainsService) UpdateChainState(id string, text []string) (*model.MarkovChain, error) {
-	chain, err := cs.GetChain(id)
+// UpdateChainState ingests a batch of raw messages into Redis.
+// The guild's configured size limit is enforced inside the Lua function.
+func (cs *ChainsService) UpdateChainState(ctx context.Context, id string, texts []string) error {
+	chain, err := cs.GetChainConf(ctx, id)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	chain.ProvideData(text)
-	return chain, nil
+	if err := cs.RedisRepo.TrainBatch(ctx, id, texts, chain.NGramSize, chain.MaxSizeBytes()); err != nil {
+		logger.Errorf("UpdateChainState train error for %s: %v", id, err)
+	}
+	return nil
 }
 
-// DeleteTextData deletes specific text data from a chain.
-func (cs *ChainsService) DeleteTextData(id, data string) error {
+// DeleteTextData removes a message from both Redis and the SQLite message store.
+func (cs *ChainsService) DeleteTextData(ctx context.Context, id, data string) error {
+	chain, err := cs.GetChainConf(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := cs.RedisRepo.Delete(ctx, id, data, chain.NGramSize); err != nil {
+		logger.Errorf("DeleteTextData redis error for %s: %v", id, err)
+	}
 	return cs.messagesRepo.DeleteGuildMessage(id, data)
 }
 
-// UpdateChainMeta updates the chain's properties in memory and in the repository.
-func (cs *ChainsService) UpdateChainMeta(id string, fields map[string]any) (*repositories.Chain, error) {
+// UpdateChainMeta applies field-level updates to SQLite and refreshes the
+// Redis config cache.  If n_gram_size changes, a rebuild is triggered in the
+// background.
+func (cs *ChainsService) UpdateChainMeta(ctx context.Context, id string, fields map[string]any) (*repositories.ChainConfig, error) {
 	if _, ok := fields["id"]; ok {
 		return nil, errors.New("cannot change field 'id'")
 	}
-	chain, err := cs.GetChain(id)
+
+	oldChain, err := cs.GetChainConf(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	// Reply Rate immediate update
-	if replyRateRaw, ok := fields["reply_rate"]; ok {
-		replyRate, err := parseToInt(replyRateRaw)
-		if err != nil {
-			return nil, errors.New("reply_rate must be an integer, " + err.Error())
-		}
-		chain.ReplyRate = replyRate
+
+	updated, err := cs.chainsRepo.UpdateChain(id, fields)
+	if err != nil {
+		return nil, err
 	}
-	// NGramSize immediate update
-	if nGramSizeRaw, ok := fields["n_gram_size"]; ok {
-		nGramSize, err := parseToInt(nGramSizeRaw)
-		if err != nil {
-			return nil, errors.New("n_gram_size must be an integer, " + err.Error())
-		}
-		if nGramSize != chain.NGramSize {
-			messages, err := cs.GetChainMessages(id)
-			if err != nil {
-				return nil, errors.New("failed to retrieve messages for chain " + id + ": " + err.Error())
-			}
-			go func() {
-				chainDoc, err := cs.GetChainDocument(id)
-				if err != nil {
-					logger.Errorf("Failed to update n_gram_size for chain %s: %v", id, err)
-					return
-				}
-				logger.Infof("Updating n_gram_size for chain %s to %d", chainDoc.Name, nGramSize)
-				chain.ChangeNGramSize(nGramSize, messages)
-			}()
-		}
+
+	// If the n-gram order changed the entire chain must be rebuilt.
+	if updated.NGramSize != oldChain.NGramSize {
+		go cs.rebuildChain(id, updated.NGramSize)
 	}
-	// Pings immediate update
-	if pingsRaw, ok := fields["pings"]; ok {
-		pings, ok := pingsRaw.(bool)
-		if !ok {
-			return nil, errors.New("pings must be a boolean")
-		}
-		chain.Pings = pings
-	}
-	// TODO implement when max_size of a chain becomes actually relevant
-	// MaxSizeMb immediate update
-	// if MaxSizeMbRaw, ok := fields["max_size_mb"]; ok {
-	// 	maxSizeMb, ok := MaxSizeMbRaw.(int)
-	// 	if !ok {
-	// 		return nil, errors.New("max_size_mb must be an integer " + err.Error())
-	// 	}
-	// 	chain.MaxSizeMb = maxSizeMb
-	// }
-	return cs.chainsRepo.UpdateChain(id, fields)
+
+	return updated, nil
 }
 
-// DeleteChain removes a chain from memory and the repository.
-func (cs *ChainsService) DeleteChain(id string) error {
-	chainDoc, err := cs.chainsRepo.GetChainByID(id)
+// DeleteChain removes all data for a guild: Redis state, SQLite config, and
+// stored messages.
+func (cs *ChainsService) DeleteChain(ctx context.Context, id string) error {
+	doc, err := cs.chainsRepo.GetChainByID(id)
 	if err != nil {
 		return err
 	}
 	logger.Warnf("Deleting chain: %s", id)
-	cs.mu.Lock()
-	delete(cs.chainsMap, id)
-	cs.mu.Unlock()
-	err = cs.chainsRepo.DeleteChain(chainDoc.ID)
-	if err != nil {
+
+	if err := cs.RedisRepo.ClearGuild(ctx, id); err != nil {
+		logger.Errorf("DeleteChain: ClearGuild failed for %s: %v", id, err)
+	}
+	if err := cs.chainsRepo.DeleteChain(doc.ID); err != nil {
 		return err
 	}
-	err = cs.messagesRepo.DeleteAllGuildMessages(id)
-	if err != nil {
+	if err := cs.messagesRepo.DeleteAllGuildMessages(id); err != nil {
 		return err
 	}
-	logger.Infof("Chain %s and associated messages deleted successfully", chainDoc.Name)
+	logger.Infof("Chain %s deleted", doc.Name)
 	return nil
 }
 
-// LoadChains loads all chains from the repository into memory in parallel.
-func (cs *ChainsService) LoadChains() error {
-	logger.Infof("Loading chains...")
-	startTime := time.Now()
-	chains, err := cs.chainsRepo.GetAll()
-	if err != nil {
-		return err
-	}
-
-	err = utils.ParallelTaskRunner(chains, func(chain *repositories.Chain) error {
-		messages, err := cs.GetChainMessages(chain.ID)
-		if err != nil {
-			logger.Errorf("Error loading messages for chain %s: %v", chain.ID, err)
-			return err
-		}
-
-		// The chainsMap is a shared resource, so we must lock before writing
-		cs.mu.Lock()
-		cs.chainsMap[chain.ID] = model.NewMarkovChain(
-			chain.ID,
-			chain.ReplyRate,
-			chain.NGramSize,
-			chain.Pings,
-			messages,
-			cs.messagesRepo,
-		)
-		cs.mu.Unlock()
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	logger.Infof("Loaded %d chains in %s", len(cs.chainsMap), time.Since(startTime))
-	return nil
-}
-
-// GetChainMessages retrieves messages associated with a specific chain.
 func (cs *ChainsService) GetChainMessages(id string) ([]string, error) {
 	messages, err := cs.messagesRepo.GetAllGuildMessages(id)
 	if err != nil {
 		return nil, err
 	}
-	var texts []string
-	for _, message := range messages {
-		texts = append(texts, message.Content)
+	texts := make([]string, 0, len(messages))
+	for _, m := range messages {
+		texts = append(texts, m.Content)
 	}
 	return texts, nil
 }
 
-// GetChainsMemUsage calculates the memory usage of all chains in memory.
-func (cs *ChainsService) GetChainsMemUsage() int64 {
-	cs.mu.RLock()
-	defer cs.mu.RUnlock()
+// ---------- rebuild ----------
 
-	var totalSize int64
-	for _, chain := range cs.chainsMap {
-		totalSize += int64(utils.MeasureSize(chain))
+// rebuildChain clears and re-trains a guild's chain with a new n-gram size.
+// A per-guild mutex prevents duplicate concurrent rebuilds (e.g. if the user
+// hammers the config endpoint).
+func (cs *ChainsService) rebuildChain(id string, newNGramSize int) {
+	// Per-guild mutex — load-or-store a *sync.Mutex for this id.
+	mu, _ := cs.rebuildMu.LoadOrStore(id, &sync.Mutex{})
+	guildMu := mu.(*sync.Mutex)
+
+	if !guildMu.TryLock() {
+		logger.Warnf("rebuildChain: rebuild already in progress for %s, skipping", id)
+		return
 	}
-	return totalSize
+	defer guildMu.Unlock()
+
+	ctx := context.Background()
+
+	doc, err := cs.chainsRepo.GetChainByID(id)
+	if err != nil {
+		logger.Errorf("rebuildChain: failed to load chain %s: %v", id, err)
+		return
+	}
+	logger.Infof("Rebuilding chain %s with n_gram_size=%d", doc.Name, newNGramSize)
+
+	if err := cs.RedisRepo.ClearGuild(ctx, id); err != nil {
+		logger.Errorf("rebuildChain: ClearGuild failed for %s: %v", id, err)
+		return
+	}
+
+	messages, err := cs.GetChainMessages(id)
+	if err != nil {
+		logger.Errorf("rebuildChain: GetChainMessages failed for %s: %v", id, err)
+		return
+	}
+
+	if err := cs.RedisRepo.TrainBatch(ctx, id, messages, newNGramSize, doc.MaxSizeBytes()); err != nil {
+		logger.Errorf("rebuildChain: TrainBatch failed for %s: %v", id, err)
+		return
+	}
+
+	// Reconcile the byte counter after a full rebuild.
+	if _, err := cs.RedisRepo.ReconcileBytes(ctx, id); err != nil {
+		logger.Warnf("rebuildChain: ReconcileBytes failed for %s: %v", id, err)
+	}
+
+	logger.Infof("Rebuild complete for %s", doc.Name)
 }
 
-// ---------- Helpers -----------
+// ---------- helpers ----------
 
 func parseToInt(v any) (int, error) {
 	switch val := v.(type) {
@@ -274,6 +213,6 @@ func parseToInt(v any) (int, error) {
 	case string:
 		return strconv.Atoi(val)
 	default:
-		return 0, fmt.Errorf("invalid type for integer parsing: %T", val)
+		return 0, fmt.Errorf("unsupported type %T", val)
 	}
 }

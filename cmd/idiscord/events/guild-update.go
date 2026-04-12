@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"rolando/internal/logger"
 
 	"github.com/disgoorg/disgo/events"
@@ -15,11 +16,11 @@ func (h *EventsHandler) onGuildUpdate(e *events.GuildUpdate) {
 	if !ok {
 		logger.Errorf("Failed to fetch old guild for guild update event")
 		// Still update the chain meta with new data
-		h.ChainsService.UpdateChainMeta(guildID, map[string]interface{}{"name": e.Guild.Name})
+		h.ChainsService.UpdateChainMeta(context.Background(), guildID, map[string]interface{}{"name": e.Guild.Name})
 		logger.Infof("Guild %s updated to: %s", guildID, e.Guild.Name)
 		return
 	}
 
-	h.ChainsService.UpdateChainMeta(guildID, map[string]interface{}{"name": e.Guild.Name})
+	h.ChainsService.UpdateChainMeta(context.Background(), guildID, map[string]interface{}{"name": e.Guild.Name})
 	logger.Infof("Guild %s updated: %s -> %s", guildID, oldGuild.Name, e.Guild.Name)
 }

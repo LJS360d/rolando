@@ -1,6 +1,6 @@
 .PHONY: all build run dev lint clean vosk dave run-docker
 
-VERSION      := 4.0.0
+VERSION      := 4.1.0
 BUILD_DIR    := bin
 MAIN_PACKAGE := ./cmd
 BINARY_NAME  := main
@@ -93,6 +93,10 @@ ifeq ($(ENV),production)
 else
 	docker compose -p rolando up -d --build --force-recreate
 endif
+
+run-redis:
+	@echo "[run-redis] starting redis"
+	@docker compose -p rolando up -d redis
 
 # ── DAVE ──────────────────────────────────────────────────────────────────────
 

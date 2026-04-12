@@ -1,9 +1,10 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"math"
-	"rolando/internal/utils"
+	"rolando/internal/repositories"
 )
 
 type ChainAnalytics struct {
@@ -20,61 +21,79 @@ type ChainAnalytics struct {
 
 type NumericChainAnalytics struct {
 	ComplexityScore int    `json:"complexity_score"`
-	Gifs            int    `json:"gifs"`
-	Images          int    `json:"images"`
-	Videos          int    `json:"videos"`
+	Gifs            int64  `json:"gifs"`
+	Images          int64  `json:"images"`
+	Videos          int64  `json:"videos"`
 	ReplyRate       int    `json:"reply_rate"`
 	NGramSize       int    `json:"n_gram_size"`
-	Words           int    `json:"words"`
-	Messages        uint32 `json:"messages"`
+	Words           int64  `json:"words"`
+	Messages        int64  `json:"messages"`
 	Size            uint64 `json:"bytes"`
 }
 
 type MarkovChainAnalyzer struct {
-	chain *MarkovChain
+	chain     *repositories.ChainConfig
+	redisRepo *repositories.RedisRepository
 }
 
-func NewMarkovChainAnalyzer(chain *MarkovChain) *MarkovChainAnalyzer {
-	return &MarkovChainAnalyzer{chain: chain}
+func NewMarkovChainAnalyzer(chain *repositories.ChainConfig, redisRepo *repositories.RedisRepository) *MarkovChainAnalyzer {
+	return &MarkovChainAnalyzer{chain: chain, redisRepo: redisRepo}
 }
 
-func (mca *MarkovChainAnalyzer) GetComplexity() int {
-	stateSize := len(mca.chain.State)
-	highValueWords := 0
-	for _, nextWords := range mca.chain.State {
-		for _, wordValue := range nextWords {
-			if wordValue > 15 {
-				highValueWords++
-			}
-		}
+// complexityScore computes a cheap, stable metric:
+//
+//	log2( prefixes * log2(messages + 2) + 1 )
+//
+// Grows with vocabulary breadth (prefixes) and depth (messages trained).
+// All inputs come from O(1) Redis GET calls.
+func complexityScore(prefixes, messages int64) int {
+	if prefixes <= 0 {
+		return 0
 	}
-	return int(math.Ceil(math.Log2(float64(10*stateSize*highValueWords + 1))))
+	depth := math.Log2(float64(messages) + 2)
+	return int(math.Ceil(math.Log2(float64(prefixes)*depth + 1)))
 }
 
-func (mca *MarkovChainAnalyzer) GetAnalytics() ChainAnalytics {
+func (mca *MarkovChainAnalyzer) GetAnalytics(ctx context.Context) (ChainAnalytics, error) {
+	raw, err := mca.getRaw(ctx)
+	if err != nil {
+		return ChainAnalytics{}, err
+	}
 	return ChainAnalytics{
-		ComplexityScore: fmt.Sprintf("%d", mca.GetComplexity()),
-		Gifs:            fmt.Sprintf("%d", len(mca.chain.MediaStore.Gifs)),
-		Images:          fmt.Sprintf("%d", len(mca.chain.MediaStore.Images)),
-		Videos:          fmt.Sprintf("%d", len(mca.chain.MediaStore.Videos)),
-		ReplyRate:       fmt.Sprintf("%d", mca.chain.ReplyRate),
-		NGramSize:       fmt.Sprintf("%d", mca.chain.NGramSize),
-		Words:           fmt.Sprintf("%d", len(mca.chain.State)),
-		Messages:        fmt.Sprintf("%d", mca.chain.MessageCounter),
-		Size:            utils.FormatBytes(uint64(utils.MeasureSize(mca.chain.State))),
-	}
+		ComplexityScore: fmt.Sprintf("%d", raw.ComplexityScore),
+		Gifs:            fmt.Sprintf("%d", raw.Gifs),
+		Images:          fmt.Sprintf("%d", raw.Images),
+		Videos:          fmt.Sprintf("%d", raw.Videos),
+		ReplyRate:       fmt.Sprintf("%d", raw.ReplyRate),
+		NGramSize:       fmt.Sprintf("%d", raw.NGramSize),
+		Words:           fmt.Sprintf("%d", raw.Words),
+		Messages:        fmt.Sprintf("%d", raw.Messages),
+		Size:            fmt.Sprintf("%d", raw.Size),
+	}, nil
 }
 
-func (mca *MarkovChainAnalyzer) GetRawAnalytics() NumericChainAnalytics {
+func (mca *MarkovChainAnalyzer) GetRawAnalytics(ctx context.Context) (NumericChainAnalytics, error) {
+	return mca.getRaw(ctx)
+}
+
+func (mca *MarkovChainAnalyzer) getRaw(ctx context.Context) (NumericChainAnalytics, error) {
+	prefixes, messages, size, err := mca.redisRepo.GetStats(ctx, mca.chain.ID)
+	if err != nil {
+		return NumericChainAnalytics{}, err
+	}
+	gifs, images, videos, err := mca.redisRepo.GetMediaCounts(ctx, mca.chain.ID)
+	if err != nil {
+		return NumericChainAnalytics{}, err
+	}
 	return NumericChainAnalytics{
-		ComplexityScore: mca.GetComplexity(),
-		Gifs:            len(mca.chain.MediaStore.Gifs),
-		Images:          len(mca.chain.MediaStore.Images),
-		Videos:          len(mca.chain.MediaStore.Videos),
+		ComplexityScore: complexityScore(prefixes, messages),
+		Gifs:            gifs,
+		Images:          images,
+		Videos:          videos,
 		ReplyRate:       mca.chain.ReplyRate,
 		NGramSize:       mca.chain.NGramSize,
-		Words:           len(mca.chain.State),
-		Messages:        mca.chain.MessageCounter,
-		Size:            uint64(utils.MeasureSize(mca.chain.State)),
-	}
+		Words:           prefixes,
+		Messages:        messages,
+		Size:            size,
+	}, nil
 }

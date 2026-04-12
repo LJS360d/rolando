@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"rolando/internal/utils"
 
 	"github.com/disgoorg/disgo/bot"
@@ -30,7 +31,7 @@ func (h *SlashCommandsHandler) opinionCommand(s *bot.Client, i *events.Applicati
 		return
 	}
 
-	chain, err := h.ChainsService.GetChain(i.GuildID().String())
+	chain, err := h.ChainsService.GetChainConf(context.Background(), i.GuildID().String())
 	if err != nil {
 		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeCreateMessage,
@@ -42,8 +43,18 @@ func (h *SlashCommandsHandler) opinionCommand(s *bot.Client, i *events.Applicati
 		return
 	}
 
-	// Generate text with random length between 8 and 40
-	msg := chain.GenerateTextFromSeed(about, utils.GetRandom(8, 40))
+	msg, err := h.ChainsService.RedisRepo.GenerateFromSeed(context.Background(), i.GuildID().String(), about, utils.GetRandom(8, 40), chain.NGramSize)
+	if err != nil {
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
+				Content: "Failed to generate text.",
+				Flags:   discord.MessageFlagEphemeral,
+			},
+		})
+		return
+	}
+
 	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 		Type: discord.InteractionResponseTypeCreateMessage,
 		Data: discord.MessageCreate{

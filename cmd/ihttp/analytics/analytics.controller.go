@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"context"
 	"rolando/cmd/idiscord/services"
 	"rolando/cmd/ihttp/auth"
 	"rolando/internal/logger"
@@ -14,12 +15,14 @@ import (
 
 type AnalyticsController struct {
 	chainsService *services.ChainsService
+	markovRepo    *repositories.RedisRepository
 	ds            *bot.Client
 }
 
-func NewController(chainsService *services.ChainsService, ds *bot.Client) *AnalyticsController {
+func NewController(chainsService *services.ChainsService, markovRepo *repositories.RedisRepository, ds *bot.Client) *AnalyticsController {
 	return &AnalyticsController{
 		chainsService: chainsService,
+		markovRepo:    markovRepo,
 		ds:            ds,
 	}
 }
@@ -32,7 +35,7 @@ func (s *AnalyticsController) GetChainAnalytics(c *gin.Context) {
 		c.JSON(errCode, gin.H{"error": err.Error()})
 		return
 	}
-	chainDoc, err := s.chainsService.GetChainDocument(chainId)
+	chainDoc, err := s.chainsService.GetChainConf(context.Background(), chainId)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -41,13 +44,17 @@ func (s *AnalyticsController) GetChainAnalytics(c *gin.Context) {
 		c.JSON(404, gin.H{"error": "chain not found"})
 		return
 	}
-	chain, err := s.chainsService.GetChain(chainDoc.ID)
+	chain, err := s.chainsService.GetChainConf(context.Background(), chainDoc.ID)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	analyzer := model.NewMarkovChainAnalyzer(chain)
-	rawAnalytics := analyzer.GetRawAnalytics()
+	analyzer := model.NewMarkovChainAnalyzer(chain, s.markovRepo)
+	rawAnalytics, err := analyzer.GetRawAnalytics(context.Background())
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
 
 	c.JSON(200, getSerializableAnalytics(&rawAnalytics, chainDoc))
 }
@@ -59,7 +66,7 @@ func (s *AnalyticsController) GetAllChainsAnalytics(c *gin.Context) {
 		c.JSON(errCode, gin.H{"error": err.Error()})
 		return
 	}
-	chains, err := s.chainsService.GetAllChains()
+	chains, err := s.chainsService.GetAllChains(context.Background())
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -70,18 +77,22 @@ func (s *AnalyticsController) GetAllChainsAnalytics(c *gin.Context) {
 			logger.Warnf("nil chain detected in GetAllChainsAnalytics, skipping...")
 			continue
 		}
-		analyzer := model.NewMarkovChainAnalyzer(chain)
-		chainDoc, err := s.chainsService.GetChainDocument(chain.ID)
+		analyzer := model.NewMarkovChainAnalyzer(chain, s.markovRepo)
+		chainDoc, err := s.chainsService.GetChainConf(context.Background(), chain.ID)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 		if chainDoc == nil {
-			logger.Warnf("GetChainDocument returned nil for chain %s, skipping", chain.ID)
+			logger.Warnf("GetChainConf returned nil for chain %s, skipping", chain.ID)
 			continue
 		}
 
-		rawAnalytics := analyzer.GetRawAnalytics()
+		rawAnalytics, err := analyzer.GetRawAnalytics(context.Background())
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 		chainAnalytics := getSerializableAnalytics(&rawAnalytics, chainDoc)
 		allAnalytics = append(allAnalytics, chainAnalytics)
 	}
@@ -106,25 +117,29 @@ func (s *AnalyticsController) GetChainsAnalyticsPaginated(c *gin.Context) {
 
 	offset := (page - 1) * pageSize
 
-	chains, total, err := s.chainsService.GetChainsPage(pageSize, offset)
+	chains, total, err := s.chainsService.GetChainsPage(context.Background(), pageSize, offset)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 	content := make([]gin.H, 0)
 	for _, chain := range chains {
-		analyzer := model.NewMarkovChainAnalyzer(chain)
-		chainDoc, err := s.chainsService.GetChainDocument(chain.ID)
+		analyzer := model.NewMarkovChainAnalyzer(chain, s.markovRepo)
+		chainDoc, err := s.chainsService.GetChainConf(context.Background(), chain.ID)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 		if chainDoc == nil {
-			logger.Warnf("GetChainDocument returned nil for chain %s, skipping", chain.ID)
+			logger.Warnf("GetChainConf returned nil for chain %s, skipping", chain.ID)
 			continue
 		}
 
-		rawAnalytics := analyzer.GetRawAnalytics()
+		rawAnalytics, err := analyzer.GetRawAnalytics(context.Background())
+		if err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 		chainAnalytics := getSerializableAnalytics(&rawAnalytics, chainDoc)
 		content = append(content, chainAnalytics)
 	}
@@ -144,24 +159,28 @@ func (s *AnalyticsController) GetChainsAnalyticsPaginated(c *gin.Context) {
 
 // BuildAllChainsAnalyticsMap returns a map of chain ID to serializable analytics for all chains.
 // Used by the bot controller for server-side sorting of guilds by chain metrics.
-func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService) (map[string]gin.H, error) {
-	chains, err := chainsService.GetAllChains()
+func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService, markovRepo *repositories.RedisRepository) (map[string]gin.H, error) {
+	chains, err := chainsService.GetAllChains(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	m := make(map[string]gin.H, len(chains))
 	for _, chain := range chains {
-		chainDoc, err := chainsService.GetChainDocument(chain.ID)
+		chainDoc, err := chainsService.GetChainConf(context.Background(), chain.ID)
 		if err != nil || chainDoc == nil {
 			continue
 		}
-		rawAnalytics := model.NewMarkovChainAnalyzer(chain).GetRawAnalytics()
+		analyzer := model.NewMarkovChainAnalyzer(chain, markovRepo)
+		rawAnalytics, err := analyzer.GetRawAnalytics(context.Background())
+		if err != nil {
+			continue
+		}
 		m[chain.ID] = getSerializableAnalytics(&rawAnalytics, chainDoc)
 	}
 	return m, nil
 }
 
-func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDoc *repositories.Chain) gin.H {
+func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDoc *repositories.ChainConfig) gin.H {
 	return gin.H{
 		"complexity_score": rawAnalytics.ComplexityScore,
 		"gifs":             rawAnalytics.Gifs,
@@ -171,7 +190,6 @@ func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDo
 		"n_gram_size":      rawAnalytics.NGramSize,
 		"words":            rawAnalytics.Words,
 		"messages":         rawAnalytics.Messages,
-		"bytes":            rawAnalytics.Size,
 		"id":               chainDoc.ID,
 		"name":             chainDoc.Name,
 		"max_size_mb":      chainDoc.MaxSizeMb,

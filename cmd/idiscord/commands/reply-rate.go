@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/disgoorg/disgo/bot"
@@ -10,6 +11,7 @@ import (
 
 // implementation of /replyrate command
 func (h *SlashCommandsHandler) replyRateCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	ctx := context.Background()
 	options := i.SlashCommandInteractionData().Options
 	var rate *int
 	for _, option := range options {
@@ -20,7 +22,7 @@ func (h *SlashCommandsHandler) replyRateCommand(s *bot.Client, i *events.Applica
 		}
 	}
 
-	chainDoc, err := h.ChainsService.GetChainDocument(i.GuildID().String())
+	chainDoc, err := h.ChainsService.GetChainConf(ctx, i.GuildID().String())
 	if err != nil {
 		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeCreateMessage,
@@ -36,7 +38,7 @@ func (h *SlashCommandsHandler) replyRateCommand(s *bot.Client, i *events.Applica
 		if !h.checkAdmin(i, "You are not authorized to change the reply rate.") {
 			return
 		}
-		if _, err := h.ChainsService.UpdateChainMeta(chainDoc.ID, map[string]interface{}{"reply_rate": *rate}); err != nil {
+		if _, err := h.ChainsService.UpdateChainMeta(ctx, chainDoc.ID, map[string]interface{}{"reply_rate": *rate}); err != nil {
 			s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 				Type: discord.InteractionResponseTypeCreateMessage,
 				Data: discord.MessageCreate{

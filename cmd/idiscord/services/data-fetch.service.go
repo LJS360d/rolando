@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"rolando/cmd/idiscord/helpers"
@@ -117,7 +118,7 @@ func (d *DataFetchService) fetchChannelMessages(channel discord.Channel, guildID
 			break
 		}
 
-		go d.ChainService.UpdateChainState(guildID, batch)
+		go d.ChainService.UpdateChainState(context.Background(), guildID, batch)
 		go d.messagesRepo.AddMessagesToGuild(guildID, batch)
 
 		allMessages = append(allMessages, batch...)

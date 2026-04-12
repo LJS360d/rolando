@@ -44,3 +44,5 @@ vosk*.zip
 *.opus
 
 dave
+
+/data/*

@@ -1,12 +1,12 @@
 package messages
 
 import (
-	"fmt"
+	"context"
 	"math/rand"
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/data"
 	"rolando/internal/logger"
-	"rolando/internal/model"
+	"rolando/internal/repositories"
 	"rolando/internal/utils"
 	"slices"
 
@@ -40,13 +40,8 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 	// 3. Concurrent Chain State Update (Non-Blocking)
 	// Update chain state for content and attachments concurrently with other operations.
 	go func() {
-		// Only fetch/create chainDoc and chain once here, as they are used for all subsequent calls.
-		chainDoc, err := h.ChainsService.GetChainDocument(guild.ID.String())
-		if err != nil {
-			logger.Errorf("Failed to fetch chain doc in '%s': %v", guild.Name, err)
-			return
-		}
-		chain, err := h.ChainsService.GetChain(guild.ID.String())
+		// Only fetch/create chainConf_ and chain once here, as they are used for all subsequent calls.
+		chainConf, err := h.ChainsService.GetChainConf(context.Background(), guild.ID.String())
 		if err != nil {
 			logger.Errorf("Failed to fetch chain in '%s': %v", guild.Name, err)
 			return
@@ -65,7 +60,7 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 		}
 
 		if len(messages) > 0 {
-			if _, err := h.ChainsService.UpdateChainState(guild.ID.String(), messages); err != nil {
+			if err := h.ChainsService.UpdateChainState(context.Background(), guild.ID.String(), messages); err != nil {
 				logger.Errorf("Failed to update chain state in '%s': %v", guild.Name, err)
 			}
 		}
@@ -73,19 +68,19 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 		// Must use the fetched chain/chainDoc from *this* goroutine
 		botMember, _ := h.Client.Caches.Member(guild.ID, h.Client.ID())
 		if helpers.MentionsUser(m, botMember) {
-			h.handleReply(m, chain)
+			h.handleReply(m, chainConf)
 		}
-		if ratedChoice(chain.ReplyRate) {
-			h.handleRandomMessage(m, guild.Name, chain)
+		if ratedChoice(chainConf.ReplyRate) {
+			h.handleRandomMessage(m, guild.Name, chainConf)
 		}
-		if ratedChoice(chainDoc.ReactionRate) {
+		if ratedChoice(chainConf.ReactionRate) {
 			h.handleReaction(m, guild.Name)
 		}
 	}()
 }
 
 // handleReply sends a message in reply to a mention.
-func (h *MessageHandler) handleReply(m discord.Message, chain *model.MarkovChain) {
+func (h *MessageHandler) handleReply(m discord.Message, chain *repositories.ChainConfig) {
 	message, err := h.getMessage(chain)
 	if err != nil {
 		logger.Errorf("Failed to generate text for mention reply in '%s': %v", m.GuildID, err)
@@ -109,7 +104,7 @@ func (h *MessageHandler) handleReply(m discord.Message, chain *model.MarkovChain
 }
 
 // handleRandomMessage sends a non-reply/quiet-reply message.
-func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string, chain *model.MarkovChain) {
+func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string, chain *repositories.ChainConfig) {
 	message, err := h.getMessage(chain)
 	if err != nil {
 		logger.Errorf("Failed to generate text for random message in '%s': %v", guildName, err)
@@ -170,14 +165,20 @@ func ratedChoice(rate int) bool {
 }
 
 // Generate a message based on chain probabilities
-func (h *MessageHandler) getMessage(chain *model.MarkovChain) (string, error) {
+func (h *MessageHandler) getMessage(chain *repositories.ChainConfig) (string, error) {
 	// Generate a random number between 4 and 25 (inclusive).
 	random := utils.GetRandom(4, 25)
 
 	switch {
 	// (21/22 or approx. 95.5%) to just talk.
 	case random <= 21:
-		return chain.Talk(random), nil
+		{
+			msg, err := h.ChainsService.RedisRepo.Generate(context.Background(), chain.ID, random, chain.NGramSize)
+			if err != nil {
+				return "", err
+			}
+			return msg, nil
+		}
 
 	// (2/22 or approx. 9.1%) for a GIF
 	case random <= 23:
@@ -195,24 +196,20 @@ func (h *MessageHandler) getMessage(chain *model.MarkovChain) (string, error) {
 
 // tryGetMediaOrTalk attempts to retrieve a specific type of media;
 // if unavailable, it falls back to generating a text message.
-func (h *MessageHandler) tryGetMediaOrTalk(chain *model.MarkovChain, mediaType string, random int) (string, error) {
-	var hasMedia bool
-
-	switch mediaType {
-	case "gif":
-		hasMedia = len(chain.MediaStore.Gifs) > 0
-	case "image":
-		hasMedia = len(chain.MediaStore.Images) > 0
-	case "video":
-		hasMedia = len(chain.MediaStore.Videos) > 0
-	default:
-		return "", fmt.Errorf("unsupported media type: %s", mediaType)
+func (h *MessageHandler) tryGetMediaOrTalk(chain *repositories.ChainConfig, mediaType string, random int) (string, error) {
+	ctx := context.Background()
+	media, err := h.ChainsService.RedisRepo.GetRandomMedia(ctx, chain.ID, mediaType)
+	if err != nil {
+		return "", err
 	}
-
-	if hasMedia {
-		return chain.MediaStore.GetMedia(mediaType)
+	if media != "" {
+		return media, nil
 	}
 
 	// Fallback to text generation if media is not available.
-	return chain.Talk(random), nil
+	msg, err := h.ChainsService.RedisRepo.Generate(ctx, chain.ID, random, chain.NGramSize)
+	if err != nil {
+		return "", err
+	}
+	return msg, nil
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/voice"
 	"github.com/disgoorg/godave/golibdave"
+	"github.com/redis/go-redis/v9"
 )
 
 // LDFLAGS
@@ -36,10 +37,20 @@ func main() {
 	config.Version = Version
 	logger.Infof("Version: %s", config.Version)
 	logger.Debugf("Env: %s", config.Env)
-	logger.Debugln("Creating discord client...")
-
 	ctx := context.Background()
 
+	logger.Debugln("Connecting to Redis at", config.RedisUrl)
+	opt, err := redis.ParseURL(config.RedisUrl)
+	if err != nil {
+		logger.Fatalf("failed to parse redis url: %v", err)
+	}
+	rdb := redis.NewClient(opt)
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		logger.Fatalf("failed to ping redis: %v", err)
+	}
+	logger.Debugln("Connected to Redis")
+
+	logger.Debugln("Creating discord client...")
 	client, err := disgo.New(config.Token,
 		bot.WithGatewayConfigOpts(
 			gateway.WithIntents(config.Intents),
@@ -83,11 +94,12 @@ func main() {
 	if err != nil {
 		logger.Fatalf("error creating messages repository: %v", err)
 	}
-	chainsRepo, err := repositories.NewChainsRepository(config.DatabasePath)
+	chainsRepo, err := repositories.NewChainsRepository(config.DatabasePath, rdb)
 	if err != nil {
 		logger.Fatalf("error creating chains repository: %v", err)
 	}
-	chainsService := services.NewChainsService(client, *chainsRepo, *messagesRepo)
+	redisRepo := repositories.NewRedisRepository(rdb)
+	chainsService := services.NewChainsService(client, chainsRepo, redisRepo, messagesRepo)
 	dataFetchService := services.NewDataFetchService(client, chainsService, messagesRepo)
 	// Handlers
 	messagesHandler := messages.NewMessageHandler(client, chainsService)
@@ -95,7 +107,6 @@ func main() {
 	buttonsHandler := buttons.NewButtonsHandler(client, dataFetchService, chainsService)
 	eventsHandler := events.NewEventsHandler(client, chainsService)
 	logger.Debugln("All services initialized")
-	chainsService.LoadChains()
 
 	client.EventManager.AddEventListeners(
 		bot.NewListenerFunc(commandsHandler.OnSlashCommandInteraction),
@@ -110,7 +121,7 @@ func main() {
 	}
 	logger.Infof("Logged in as %s#%s", botUser.Username, botUser.Discriminator)
 	if config.RunHttpServer {
-		srv := ihttp.NewHttpServer(client, chainsService, messagesRepo)
+		srv := ihttp.NewHttpServer(client, chainsService, redisRepo, messagesRepo)
 		srv.Start()
 	}
 	logger.Infof("Startup time: %s", time.Since(config.StartupTime).String())

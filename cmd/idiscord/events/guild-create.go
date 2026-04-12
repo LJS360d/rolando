@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"fmt"
 	"rolando/internal/logger"
 
@@ -11,7 +12,7 @@ import (
 // handler for GuildJoin event
 func (h *EventsHandler) onGuildCreate(e *events.GuildJoin) {
 	logger.Infof("Joined guild %s", e.Guild.Name)
-	_, err := h.ChainsService.CreateChain(e.Guild.ID.String(), e.Guild.Name)
+	_, err := h.ChainsService.CreateChain(context.Background(), e.Guild.ID.String(), e.Guild.Name)
 	if err != nil {
 		logger.Errorf("Error creating chain: %s", err)
 		return

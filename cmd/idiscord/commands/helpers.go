@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"rolando/internal/config"
 	"rolando/internal/logger"
 	"strings"
@@ -89,7 +90,7 @@ func (h *SlashCommandsHandler) guildSubscriptionCheck(s *bot.Client, i *events.A
 		}
 	}
 	guildID := i.GuildID().String()
-	chainDoc, err := h.ChainsService.GetChainDocument(guildID)
+	chainDoc, err := h.ChainsService.GetChainConf(context.Background(), guildID)
 	if err != nil {
 		logger.Errorf("Failed to retrieve chain data for guild %s for subscription check: %v", guildID, err)
 		return false

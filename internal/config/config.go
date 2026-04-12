@@ -19,6 +19,7 @@ var (
 	InviteUrl            string
 	Env                  string
 	DatabasePath         string
+	RedisUrl             string
 	ServerAddress        string
 	LogWebhook           string
 	StartupTime          time.Time
@@ -64,6 +65,11 @@ func init() {
 	if DatabasePath == "" {
 		log.Println("DATABASE_PATH not set in the environment")
 		DatabasePath = "rolando.db"
+	}
+	RedisUrl = os.Getenv("REDIS_URL")
+	if RedisUrl == "" {
+		log.Println("REDIS_URL not set in the environment")
+		RedisUrl = "redis://localhost:6379"
 	}
 	ServerAddress = os.Getenv("SERVER_ADDRESS")
 	if ServerAddress == "" {

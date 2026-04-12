@@ -9,7 +9,6 @@ import (
 	"io"
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
-	"rolando/internal/model"
 	"rolando/internal/repositories"
 	"rolando/internal/stt"
 	"rolando/internal/tts"
@@ -27,7 +26,6 @@ import (
 
 // implementation of /vc join command
 func (h *SlashCommandsHandler) vcJoinCommand(client *bot.Client, i *events.ApplicationCommandInteractionCreate) {
-	// step 0: defer a response to the interaction
 	err := i.DeferCreateMessage(true)
 	if err != nil {
 		logger.Errorf("Failed to defer interaction response: %v", err)
@@ -87,14 +85,9 @@ func (h *SlashCommandsHandler) vcJoinCommand(client *bot.Client, i *events.Appli
 		}
 
 		// step 4: generate a static TTS audio and stream it to the vc
-		chainDoc, err := h.ChainsService.GetChainDocument(guildID.String())
+		chainDoc, err := h.ChainsService.GetChainConf(vcCtx, guildID.String())
 		if err != nil {
 			logger.Errorf("Failed to retrieve chain document: %v", err)
-			return
-		}
-		chain, err := h.ChainsService.GetChain(chainDoc.ID)
-		if err != nil {
-			logger.Errorf("Failed to retrieve chain: %v", err)
 			return
 		}
 		provider, err := tts.GenerateTTSProvider("i am here", chainDoc.TTSLanguage)
@@ -110,7 +103,7 @@ func (h *SlashCommandsHandler) vcJoinCommand(client *bot.Client, i *events.Appli
 		}
 
 		// step 5: start listening in the vc
-		listenVc(h, i, conn, vcCtx, voiceChannel, chainDoc, chain)
+		listenVc(h, i, conn, vcCtx, voiceChannel, chainDoc)
 	}()
 
 }
@@ -128,7 +121,7 @@ func getVCUsers(h *SlashCommandsHandler, guildID snowflake.ID, channelID snowfla
 	return users, nil
 }
 
-func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteractionCreate, conn voice.Conn, vcCtx context.Context, voiceChannel discord.Channel, chainDoc *repositories.Chain, chain *model.MarkovChain) {
+func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteractionCreate, conn voice.Conn, vcCtx context.Context, voiceChannel discord.Channel, chainConf *repositories.ChainConfig) {
 	var ttsMutex sync.Mutex
 	var doneOnce sync.Once
 	done := make(chan struct{})
@@ -155,7 +148,7 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 			}
 
 			if e.VoiceState.UserID == botUserID {
-				logger.Infof("Left voice channel '%s' in '%s', initiating cleanup...", channelName, chainDoc.Name)
+				logger.Infof("Left voice channel '%s' in '%s', initiating cleanup...", channelName, chainConf.Name)
 				triggerCleanup()
 				return
 			}
@@ -173,8 +166,8 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 		h.Client.RemoveEventListeners(updateListener)
 		triggerCleanup() // safely closes the done channel exactly once
 		conn.Close(vcCtx)
-		stt.FreeRecognizer(chain.ID)
-		logger.Infof("Cleanup complete for VC '%s' in '%s'", channelName, chainDoc.Name)
+		stt.FreeRecognizer(chainConf.ID)
+		logger.Infof("Cleanup complete for VC '%s' in '%s'", channelName, chainConf.Name)
 	}(listener)
 
 	go func() {
@@ -197,7 +190,7 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 
 	go func() {
 		pcmChan := make(chan *helpers.PCMPacket, 10)
-		receiver := helpers.NewVoskOpusReceiver(chainDoc.ID, chainDoc.TTSLanguage, pcmChan)
+		receiver := helpers.NewVoskOpusReceiver(chainConf.ID, chainConf.TTSLanguage, pcmChan)
 
 		// Register the opus frame receiver with the voice connection
 		conn.SetOpusFrameReceiver(receiver)
@@ -224,7 +217,7 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 				pcm := packet.Sequence
 				var audioData bytes.Buffer
 				binary.Write(&audioData, binary.LittleEndian, pcm)
-				text, err := stt.SpeechToTextNative(&audioData, chainDoc.TTSLanguage, chainDoc.ID)
+				text, err := stt.SpeechToTextNative(&audioData, chainConf.TTSLanguage, chainConf.ID)
 				if err != nil {
 					logger.Errorf("Failed Speech to Text: %v", err)
 					continue
@@ -232,7 +225,7 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 
 				random := utils.GetRandom(1, 1000)
 				if text != "" {
-					chain.UpdateState(text)
+					h.ChainsService.RedisRepo.Train(vcCtx, guildID.String(), text, chainConf.NGramSize, chainConf.MaxSizeBytes())
 					if strings.Contains(text, "rolando") {
 						random = 1
 					}
@@ -249,14 +242,23 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 						return
 					}
 
-					provider, err := tts.GenerateTTSProvider(chain.TalkFiltered(10), chainDoc.TTSLanguage)
+					msg, err := h.ChainsService.RedisRepo.GenerateFiltered(vcCtx, guildID.String(), 10, chainConf.NGramSize)
 					if err != nil {
-						logger.Errorf("Failed to generate random TTS provider in '%s' in '%s': %v", channelName, chainDoc.Name, err)
+						logger.Errorf("Failed to generate random text in '%s' in '%s': %v", channelName, chainConf.Name, err)
+						return
+					}
+					if msg == "" {
+						logger.Warnln("Generated empty msg in vc handler")
+						return
+					}
+					provider, err := tts.GenerateTTSProvider(msg, chainConf.TTSLanguage)
+					if err != nil {
+						logger.Errorf("Failed to generate random TTS provider in '%s' in '%s': %v", channelName, chainConf.Name, err)
 						return
 					}
 					if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
 						if !errors.Is(err, io.EOF) {
-							logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", channelName, chainDoc.Name, err)
+							logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", channelName, chainConf.Name, err)
 							triggerCleanup()
 						}
 					}
@@ -275,6 +277,6 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 		// go into the defer block for cleanup
 		return
 	case <-time.After(8 * time.Hour): // timeout after 8 hours
-		logger.Infof("VC Timeout in '%s' in '%s', initiating cleanup...", channelName, chainDoc.Name)
+		logger.Infof("VC Timeout in '%s' in '%s', initiating cleanup...", channelName, chainConf.Name)
 	}
 }

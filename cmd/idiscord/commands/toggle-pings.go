@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"context"
+
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -9,7 +11,7 @@ import (
 // implementation of /togglepings command
 func (h *SlashCommandsHandler) togglePingsCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
 	guildID := i.GuildID().String()
-	chain, err := h.ChainsService.GetChain(guildID)
+	chain, err := h.ChainsService.GetChainConf(context.Background(), guildID)
 	if err != nil {
 		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeCreateMessage,
@@ -21,7 +23,7 @@ func (h *SlashCommandsHandler) togglePingsCommand(s *bot.Client, i *events.Appli
 		return
 	}
 
-	if _, err := h.ChainsService.UpdateChainMeta(guildID, map[string]interface{}{"pings": !chain.Pings}); err != nil {
+	if _, err := h.ChainsService.UpdateChainMeta(context.Background(), guildID, map[string]interface{}{"pings": !chain.Pings}); err != nil {
 		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeCreateMessage,
 			Data: discord.MessageCreate{

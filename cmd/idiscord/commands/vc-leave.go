@@ -14,6 +14,7 @@ import (
 
 // implementation of /vc leave command
 func (h *SlashCommandsHandler) vcLeaveCommand(client *bot.Client, event *events.ApplicationCommandInteractionCreate) {
+	ctx := context.Background()
 	guildID := *event.GuildID()
 
 	conn := h.Client.VoiceManager.GetConn(guildID)
@@ -35,14 +36,14 @@ func (h *SlashCommandsHandler) vcLeaveCommand(client *bot.Client, event *events.
 		return
 	}
 
-	chainDoc, _ := h.ChainsService.GetChainDocument(guildID.String())
+	chainDoc, _ := h.ChainsService.GetChainConf(ctx, guildID.String())
 	provider, err := tts.GenerateTTSProvider("bye bye", chainDoc.TTSLanguage)
 	if err != nil {
 		logger.Errorf("Failed to generate TTS provider: %v", err)
 		return
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, _ = context.WithTimeout(ctx, 5*time.Second)
 	if err := helpers.SendTTSToConn(ctx, conn, provider); err != nil {
 		logger.Errorf("Failed to stream audio: %v", err)
 	} else {

@@ -68,14 +68,17 @@ func (h *SlashCommandsHandler) vcSpeakCommand(client *bot.Client, event *events.
 			conn = existingConn
 		}
 
-		chainDoc, err := h.ChainsService.GetChainDocument(guildID.String())
+		chainDoc, err := h.ChainsService.GetChainConf(vcCtx, guildID.String())
 		if err != nil {
 			client.Rest.UpdateInteractionResponse(appID, token, discord.NewMessageUpdate().WithContent("Failed to retrieve chain data."))
 			return
 		}
 
-		chain, _ := h.ChainsService.GetChain(chainDoc.ID)
-		content := chain.TalkFiltered(100)
+		content, err := h.ChainsService.RedisRepo.GenerateFiltered(vcCtx, guildID.String(), 100, chainDoc.NGramSize)
+		if err != nil {
+			logger.Errorf("Failed to generate text: %v", err)
+			return
+		}
 		_, err = client.Rest.UpdateInteractionResponse(appID, token, discord.NewMessageUpdate().WithContent(content))
 		if err != nil {
 			logger.Errorf("Failed to update interaction response: %v", err)
