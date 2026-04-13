@@ -28,6 +28,18 @@ func HasGuildTextChannelAccess(client *bot.Client, userId snowflake.ID, channel 
 	)
 }
 
+// HasGuildTextChannelAccess checks if the bot user has access to the specified guild text channel.
+func HasGuildAddReactionsPermissions(client *bot.Client, userId snowflake.ID, channel discord.GuildChannel) bool {
+	member, ok := client.Caches.Member(channel.GuildID(), userId)
+	if !ok {
+		return false
+	}
+	permissions := client.Caches.MemberPermissionsInChannel(channel, member)
+	return permissions.Has(
+		discord.PermissionAddReactions,
+	)
+}
+
 // MentionsUser checks if the user is mentioned in the message.
 func MentionsUser(message discord.Message, member discord.Member) bool {
 	// Check direct mentions

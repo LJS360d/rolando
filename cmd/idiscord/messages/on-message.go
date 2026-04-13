@@ -73,7 +73,7 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 		if ratedChoice(chainConf.ReplyRate) {
 			h.handleRandomMessage(m, guild.Name, chainConf)
 		}
-		if ratedChoice(chainConf.ReactionRate) {
+		if ratedChoice(chainConf.ReactionRate) && helpers.HasGuildAddReactionsPermissions(h.Client, h.Client.ID(), channel) {
 			h.handleReaction(m, guild.Name)
 		}
 	}()
@@ -108,6 +108,10 @@ func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string
 	message, err := h.getMessage(chain)
 	if err != nil {
 		logger.Errorf("Failed to generate text for random message in '%s': %v", guildName, err)
+		return
+	}
+	if message == "" {
+		// ignore empty
 		return
 	}
 	if ratedChoice(10) /* 10% */ {

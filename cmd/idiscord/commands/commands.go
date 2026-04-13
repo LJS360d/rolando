@@ -44,6 +44,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "train",
 				Description: "Fetches all available messages in the server to be used as training data",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.withAdminPermission(handler.trainCommand),
 		},
@@ -51,6 +54,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "gif",
 				Description: "Returns a gif from the ones it knows",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.gifCommand,
 		},
@@ -58,6 +64,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "image",
 				Description: "Returns an image from the ones it knows",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.imageCommand,
 		},
@@ -65,6 +74,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "video",
 				Description: "Returns a video from the ones it knows",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.videoCommand,
 		},
@@ -72,6 +84,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "analytics",
 				Description: "Returns analytics about the bot in this server",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.analyticsCommand,
 		},
@@ -79,6 +94,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "togglepings",
 				Description: "Toggles wether pings are enabled or not",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.withAdminPermission(handler.togglePingsCommand),
 		},
@@ -86,6 +104,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "replyrate",
 				Description: "View or set the reply rate",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 				Options: []discord.ApplicationCommandOption{
 					discord.ApplicationCommandOptionInt{
 						Name:        "rate",
@@ -100,6 +121,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "reactionrate",
 				Description: "View or set the reaction rate",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 				Options: []discord.ApplicationCommandOption{
 					discord.ApplicationCommandOptionInt{
 						Name:        "rate",
@@ -114,6 +138,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "cohesion",
 				Description: "View or set the cohesion value; A higher value makes sentences more coherent",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 				Options: []discord.ApplicationCommandOption{
 					discord.ApplicationCommandOptionInt{
 						MinValue:    new(2),
@@ -130,6 +157,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "opinion",
 				Description: "Generates a random opinion based on the provided seed",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 				Options: []discord.ApplicationCommandOption{
 					discord.ApplicationCommandOptionString{
 						Name:        "about",
@@ -144,6 +174,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "wipe",
 				Description: "Deletes the given argument `data` from the training data",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 				Options: []discord.ApplicationCommandOption{
 					discord.ApplicationCommandOptionString{
 						Name:        "data",
@@ -158,6 +191,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "channels",
 				Description: "View which channels can be accessed for training data",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.channelsCommand,
 		},
@@ -165,6 +201,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "src",
 				Description: "Provides the URL to the repository with bot source code",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.srcCommand,
 		},
@@ -172,6 +211,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "vc-join",
 				Description: "Joins the voice channel you are currently in",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.withGuildSubscription(config.VoiceChatFeaturesSKU, handler.vcJoinCommand),
 		},
@@ -179,6 +221,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "vc-leave",
 				Description: "Leaves the voice channel you are currently in",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.withGuildSubscription(config.VoiceChatFeaturesSKU, handler.vcLeaveCommand),
 		},
@@ -186,6 +231,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "vc-speak",
 				Description: "Speaks a message in the VC you are in, and then leaves",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 			},
 			Handler: handler.withGuildSubscription(config.VoiceChatFeaturesSKU, handler.vcSpeakCommand),
 		},
@@ -193,6 +241,9 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "vc-language",
 				Description: "View or set the language to use when generating audio",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 				Options: []discord.ApplicationCommandOption{
 					discord.ApplicationCommandOptionInt{
 						Name: "language",
@@ -225,11 +276,15 @@ func NewSlashCommandsHandler(
 			Command: discord.SlashCommandCreate{
 				Name:        "vc-joinrate",
 				Description: "View or set the VC random join rate",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
 				Options: []discord.ApplicationCommandOption{
 					discord.ApplicationCommandOptionInt{
 						Name:        "rate",
 						Description: "the rate to set (1/rate) (leave empty to view)",
-						Required:    false,
+
+						Required: false,
 					},
 				},
 			},
@@ -249,6 +304,7 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 		registeredCommands = []discord.ApplicationCommand{}
 	}
 
+	forceRefresh := config.ForceCommandRefresh
 	// Create a map of registered commands for fast lookup
 	registeredCommandsMap := make(map[string]discord.ApplicationCommand)
 	for _, cmd := range registeredCommands {
@@ -266,7 +322,7 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 	for _, cmd := range commands {
 		if existingCmd, exists := registeredCommandsMap[cmd.Command.CommandName()]; exists {
 			// Compare if the new command differs in some way (e.g., updated description or options)
-			if shouldRefreshCommand(existingCmd, cmd.Command) {
+			if forceRefresh || shouldRefreshCommand(existingCmd, cmd.Command) {
 				logger.Infof("Updating slash command: %s", cmd.Command.CommandName())
 				for _, guildId := range cmd.GuildIds {
 					guildSnowflake := snowflake.MustParse(guildId)

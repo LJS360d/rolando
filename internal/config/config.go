@@ -24,6 +24,7 @@ var (
 	LogWebhook           string
 	StartupTime          time.Time
 	RunHttpServer        bool
+	ForceCommandRefresh  bool
 	PaywallsEnabled      bool
 	VoiceChatFeaturesSKU snowflake.ID
 	PremiumsPageLink     string
@@ -75,6 +76,7 @@ func init() {
 	if ServerAddress == "" {
 		ServerAddress = "127.0.0.1:8080"
 	}
+	ForceCommandRefresh = os.Getenv("FORCE_COMMAND_REFRESH") == "true" || os.Getenv("FORCE_COMMAND_REFRESH") == "1" || os.Getenv("FORCE_COMMAND_REFRESH") == ""
 	RunHttpServer = os.Getenv("RUN_HTTP_SERVER") == "true" || os.Getenv("RUN_HTTP_SERVER") == "1" || os.Getenv("RUN_HTTP_SERVER") == ""
 	StartupTime = time.Now()
 
