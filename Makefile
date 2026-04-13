@@ -89,7 +89,7 @@ clean:
 
 run-docker:
 ifeq ($(ENV),production)
-	docker compose -p rolando --profile prod up -d --build --force-recreate
+	docker compose -p rolando --profile prod up -d --build
 else
 	docker compose -p rolando up -d --build --force-recreate
 endif
