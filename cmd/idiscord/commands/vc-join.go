@@ -225,7 +225,7 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 
 				random := utils.GetRandom(1, 1000)
 				if text != "" {
-					h.ChainsService.RedisRepo.Train(vcCtx, guildID.String(), text, chainConf.NGramSize, chainConf.MaxSizeBytes())
+					h.ChainsService.Train(vcCtx, guildID.String(), text, chainConf.NGramSize, chainConf.MaxSizeBytes(), chainConf.MarkovMaxBranches)
 					if strings.Contains(text, "rolando") {
 						random = 1
 					}
@@ -242,7 +242,7 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 						return
 					}
 
-					msg, err := h.ChainsService.RedisRepo.GenerateFiltered(vcCtx, guildID.String(), 10, chainConf.NGramSize)
+					msg, err := h.ChainsService.GenerateFiltered(vcCtx, guildID.String(), 10, chainConf.NGramSize)
 					if err != nil {
 						logger.Errorf("Failed to generate random text in '%s' in '%s': %v", channelName, chainConf.Name, err)
 						return

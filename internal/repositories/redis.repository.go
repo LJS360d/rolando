@@ -27,7 +27,7 @@ func NewRedisRepository(rdb *redis.Client) *RedisRepository {
 // Train ingests a single message into the chain for the given guild.
 // URLs are classified and stored in media sets instead.
 // maxSizeBytes = 0 means unlimited.
-func (r *RedisRepository) Train(ctx context.Context, guildID, message string, nGramSize, maxSizeBytes int) error {
+func (r *RedisRepository) Train(ctx context.Context, guildID, message string, nGramSize, maxSizeBytes, maxBranches int) error {
 	if strings.HasPrefix(message, "https://") {
 		kind := classifyURL(message)
 		return r.rdb.FCall(ctx, "add_media", []string{guildID}, kind, message).Err()
@@ -44,8 +44,8 @@ func (r *RedisRepository) Train(ctx context.Context, guildID, message string, nG
 		return nil
 	}
 
-	args := make([]any, 0, 2+len(pairs))
-	args = append(args, int64(maxSizeBytes), int64(1)) // max_size_bytes, message_count
+	args := make([]any, 0, 3+len(pairs))
+	args = append(args, int64(maxSizeBytes), int64(maxBranches), int64(1)) // max_size, max_branching, message_count
 	for _, p := range pairs {
 		args = append(args, p)
 	}
@@ -56,7 +56,7 @@ func (r *RedisRepository) Train(ctx context.Context, guildID, message string, nG
 // TrainBatch ingests multiple messages using a single FCall per flush window.
 // This replaces the old per-n-gram pipeline, cutting round-trips from O(tokens)
 // to O(messages/flushEvery).
-func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messages []string, nGramSize, maxSizeBytes int) error {
+func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messages []string, nGramSize, maxSizeBytes, maxBranches int) error {
 	const maxPairsPerCall = 4096 // keeps individual ARGV lists sane
 
 	pairs := make([]string, 0, 512)
@@ -66,8 +66,8 @@ func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messag
 		if len(pairs) == 0 {
 			return nil
 		}
-		args := make([]any, 0, 2+len(pairs))
-		args = append(args, int64(maxSizeBytes), int64(msgCount))
+		args := make([]any, 0, 3+len(pairs))
+		args = append(args, int64(maxSizeBytes), int64(maxBranches), int64(msgCount))
 		for _, p := range pairs {
 			args = append(args, p)
 		}
@@ -170,6 +170,16 @@ func (r *RedisRepository) GetStats(ctx context.Context, guildID string) (uniqueP
 // never on the hot path.
 func (r *RedisRepository) ReconcileBytes(ctx context.Context, guildID string) (uint64, error) {
 	return r.rdb.FCall(ctx, "reconcile_bytes", []string{guildID}).Uint64()
+}
+
+// CapBranching walks all state hashes for the guild and drops lowest-count
+// transitions until each hash has at most maxBranches fields. maxBranches <= 0 is a no-op.
+// Run after lowering markov_max_branches or to reclaim RAM on existing data.
+func (r *RedisRepository) CapBranching(ctx context.Context, guildID string, maxBranches int) (removed int64, err error) {
+	if maxBranches <= 0 {
+		return 0, nil
+	}
+	return r.rdb.FCall(ctx, "cap_branching", []string{guildID}, maxBranches).Int64()
 }
 
 // GetGuildSize returns the current estimated byte count (cheap counter read).

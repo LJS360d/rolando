@@ -6,8 +6,8 @@ import (
 	"rolando/cmd/ihttp/analytics"
 	"rolando/cmd/ihttp/auth"
 	"rolando/internal/config"
+	"rolando/internal/hostmem"
 	"rolando/internal/logger"
-	"rolando/internal/repositories"
 	"runtime"
 	"slices"
 	"sort"
@@ -22,14 +22,12 @@ import (
 
 type BotController struct {
 	chainsService *services.ChainsService
-	markovRepo    *repositories.RedisRepository
 	ds            *bot.Client
 }
 
-func NewController(chainsService *services.ChainsService, markovRepo *repositories.RedisRepository, ds *bot.Client) *BotController {
+func NewController(chainsService *services.ChainsService, ds *bot.Client) *BotController {
 	return &BotController{
 		chainsService: chainsService,
-		markovRepo:    markovRepo,
 		ds:            ds,
 	}
 }
@@ -159,7 +157,7 @@ func (s *BotController) GetBotGuildsPaginated(c *gin.Context) {
 	}
 	sortBy := c.Query("sortBy")
 
-	chainMap, err := analytics.BuildAllChainsAnalyticsMap(s.chainsService, s.markovRepo)
+	chainMap, err := analytics.BuildAllChainsAnalyticsMap(s.chainsService)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -344,17 +342,39 @@ func (s *BotController) GetBotResources(c *gin.Context) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
+	hostSnap, _ := hostmem.ReadStats()
+	host := gin.H{}
+	if hostSnap.HostTotalBytes > 0 {
+		used := hostSnap.HostTotalBytes - hostSnap.HostAvailableBytes
+		if used > hostSnap.HostTotalBytes {
+			used = hostSnap.HostTotalBytes
+		}
+		host = gin.H{
+			"total_bytes":     hostSnap.HostTotalBytes,
+			"available_bytes": hostSnap.HostAvailableBytes,
+			"used_bytes":      used,
+		}
+	}
+
+	rss := hostSnap.ProcessRSSBytes
+	process := gin.H{
+		"rss_bytes":     rss,
+		"alloc_bytes":   m.HeapAlloc + m.StackInuse,
+		"total_alloc":   m.TotalAlloc,
+		"sys":           m.Sys,
+		"heap_alloc":    m.HeapAlloc,
+		"heap_inuse":    m.HeapInuse,
+		"heap_sys":      m.HeapSys,
+		"stack_in_use":  m.StackInuse,
+		"gc_count":      m.NumGC,
+		"next_gc_bytes": m.NextGC,
+	}
+
 	c.JSON(200, gin.H{
 		"startup_timestamp_unix": config.StartupTime.Unix(),
 		"cpu_cores":              runtime.NumCPU(),
-		"memory": gin.H{
-			"total_alloc":  m.TotalAlloc,
-			"sys":          m.Sys,
-			"heap_alloc":   m.HeapAlloc,
-			"heap_sys":     m.HeapSys,
-			"stack_in_use": m.StackInuse,
-			"gc_count":     m.NumGC,
-		},
+		"host":                   host,
+		"process":                process,
 	})
 }
 

@@ -15,12 +15,8 @@
       <template #text>
         <memory-usage-bar
           v-if="chains && resources"
-          :current="
-            resources?.memory.stack_in_use + resources?.memory.heap_alloc
-          "
-          :max="resources?.memory.sys"
-          :peak="resources?.memory.heap_sys"
-          :blocks="computedBlocks"
+          :resources="resources"
+          :chain-segments="chainSegments"
         />
       </template>
     </v-card>
@@ -130,7 +126,7 @@
               <template v-if="!!guild.chain">
                 <guild-edit-btn
                   :guild="guild"
-                  :chain="guild.chain!"
+                  :chain="guild.chain"
                   @confirm="updateChain"
                 />
               </template>
@@ -303,8 +299,13 @@ export default {
     };
   },
   computed: {
-    computedBlocks() {
-      return this.chains?.map((c) => Number(c.bytes)) || [];
+    chainSegments(): { name: string; bytes: number }[] {
+      return (
+        this.chains?.map((c) => ({
+          name: c.name || c.id,
+          bytes: Number(c.bytes),
+        })) ?? []
+      ).toSorted((a,b) => -((a.bytes ?? 0) - (b.bytes ?? 0)));
     },
   },
   methods: {
@@ -347,26 +348,34 @@ export default {
         }
       };
     },
-    updateChain: async function (chain: globalThis.Ref<ChainAnalytics>) {
+    updateChain: async function (chain: Partial<ChainAnalytics>) {
+      if (!chain.id) {
+        this.snackbar.visible = true;
+        this.snackbar.message = "Cannot update chain: missing id";
+        this.snackbar.color = "error";
+        return;
+      }
       try {
-        const res = await updateChainDocument(this.token, chain.value.id, {
-          premium: chain.value.premium,
-          pings: chain.value.pings_enabled,
-          reply_rate: chain.value.reply_rate,
-          reaction_rate: chain.value.reaction_rate,
-          n_gram_size: chain.value.n_gram_size,
-          max_size_mb: chain.value.max_size_mb,
+        const res = await updateChainDocument(this.token, chain.id, {
+          premium: chain.premium,
+          pings: chain.pings_enabled,
+          reply_rate: chain.reply_rate,
+          reaction_rate: chain.reaction_rate,
+          n_gram_size: chain.n_gram_size,
+          max_size_mb: chain.max_size_mb,
+          markov_max_branches: chain.markov_max_branches,
         });
         if (!res.ok) {
           throw new Error("Failed to update chain");
         }
         this.snackbar.visible = true;
-        this.snackbar.message = `Successfully updated chain '${chain.value.name}'`;
+        this.snackbar.message = `Successfully updated chain '${chain.name ?? chain.id}'`;
         this.snackbar.color = "success";
         this.chainsRefetch();
+        this.botGuildsQuery.refetch();
       } catch (error) {
         this.snackbar.visible = true;
-        this.snackbar.message = `Failed to update chain '${chain.value.name}': ${error}`;
+        this.snackbar.message = `Failed to update chain '${chain.name ?? chain.id}': ${error}`;
         this.snackbar.color = "error";
       }
     },

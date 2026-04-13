@@ -29,6 +29,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// sqlite3 data/rolando.db "BEGIN TRANSACTION; ALTER TABLE chains RENAME TO chain_configs; UPDATE chain_configs SET max_size_mb = max_size_mb + 25; COMMIT;"
+
 func main() {
 	dbPath := flag.String("db", config.DatabasePath, "path to SQLite messages database")
 	redisAddr := flag.String("redis", config.RedisUrl, "Redis URL")
@@ -71,25 +73,18 @@ func main() {
 	for _, chain := range chains {
 		start := time.Now()
 
-		// 1. Load messages from SQLite.
-		messages, err := messagesRepo.GetAllGuildMessages(chain.ID)
-		if err != nil {
-			logger.Printf("  [SKIP] %s (%s): load messages failed: %v", chain.Name, chain.ID, err)
+		var totalRows int
+		trainErr := messagesRepo.ScanGuildMessageContents(chain.ID, 2000, func(texts []string) error {
+			totalRows += len(texts)
+			return markovRepo.TrainBatch(ctx, chain.ID, texts, chain.NGramSize, 0, chain.MarkovMaxBranches)
+		})
+		if trainErr != nil {
+			logger.Printf("  [ERR]  %s (%s): train failed: %v", chain.Name, chain.ID, trainErr)
 			continue
 		}
 
-		texts := make([]string, 0, len(messages))
-		for _, m := range messages {
-			texts = append(texts, m.Content)
-		}
-
-		// 2. Train the chain (size limit intentionally bypassed during migration
-		//    so we faithfully restore existing data; the limit will be enforced
-		//    from the first live write after migration).
-		if err := markovRepo.TrainBatch(ctx, chain.ID, texts, chain.NGramSize, 0); err != nil {
-			logger.Printf("  [ERR]  %s (%s): train failed: %v", chain.Name, chain.ID, err)
-			continue
-		}
+		// Train path: size limit intentionally bypassed during migration so we faithfully
+		// restore existing data; the limit is enforced from the first live write after migration.
 
 		// 3. Reconcile the byte counter against the true MEMORY USAGE values so
 		//    the size-limit check is accurate from day one post-migration.
@@ -106,7 +101,7 @@ func main() {
 
 		elapsed := time.Since(start).Round(time.Millisecond)
 		logger.Printf("  [OK]   %-30s  %6d messages  n_gram=%d  ~%s  %s",
-			chain.Name, len(texts), chain.NGramSize,
+			chain.Name, totalRows, chain.NGramSize,
 			formatBytes(trueBytes), elapsed)
 	}
 

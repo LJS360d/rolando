@@ -10,6 +10,7 @@
 </template>
 
 <script lang="ts">
+import { apiFetch } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
 import { ref } from 'vue';
 
@@ -38,13 +39,9 @@ export default defineComponent({
   methods: {
     getInvite: async function () {
       try {
-        const response = await fetch(`/api/bot/guilds/${this.guildId}/invite`,
-          {
-            headers: {
-              Authorization: this.token
-            }
-          }
-        );
+        const response = await apiFetch(`/bot/guilds/${this.guildId}/invite`, {
+          token: this.token,
+        });
 
         if (!response.ok) {
           throw new Error('Failed to fetch invite');

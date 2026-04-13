@@ -121,7 +121,7 @@ func main() {
 	}
 	logger.Infof("Logged in as %s#%s", botUser.Username, botUser.Discriminator)
 	if config.RunHttpServer {
-		srv := ihttp.NewHttpServer(client, chainsService, redisRepo, messagesRepo)
+		srv := ihttp.NewHttpServer(client, chainsService, messagesRepo)
 		srv.Start()
 	}
 	logger.Infof("Startup time: %s", time.Since(config.StartupTime).String())

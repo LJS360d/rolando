@@ -43,7 +43,7 @@ func (h *SlashCommandsHandler) opinionCommand(s *bot.Client, i *events.Applicati
 		return
 	}
 
-	msg, err := h.ChainsService.RedisRepo.GenerateFromSeed(context.Background(), i.GuildID().String(), about, utils.GetRandom(8, 40), chain.NGramSize)
+	msg, err := h.ChainsService.GenerateFromSeed(context.Background(), i.GuildID().String(), about, utils.GetRandom(8, 40), chain.NGramSize)
 	if err != nil {
 		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeCreateMessage,

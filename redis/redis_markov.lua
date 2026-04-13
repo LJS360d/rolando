@@ -5,13 +5,41 @@
 -- ---------------------------------------------------------------------------
 -- Key helpers
 -- ---------------------------------------------------------------------------
+local STATE_MARKER = ":state:"
 local function state_key(guild_id, prefix) return "markov:" .. guild_id .. ":state:" .. prefix end
-local function prefixes_key(guild_id) return "markov:" .. guild_id .. ":prefixes" end
+local function state_keys_match(guild_id) return "markov:" .. guild_id .. ":state:*" end
+local function legacy_prefixes_set_key(guild_id) return "markov:" .. guild_id .. ":prefixes" end
+local function prefix_from_state_key(key)
+  local p = string.find(key, STATE_MARKER, 1, true)
+  if not p then return "" end
+  return string.sub(key, p + #STATE_MARKER)
+end
 local function stats_prefix_key(guild_id) return "stats:" .. guild_id .. ":unique_prefixes" end
 local function stats_msg_key(guild_id) return "stats:" .. guild_id .. ":message_count" end
 local function stats_bytes_key(guild_id) return "stats:" .. guild_id .. ":estimated_bytes" end
 local function media_key(guild_id, kind) return "media:" .. guild_id .. ":" .. kind end
 local function config_key(guild_id) return "config:" .. guild_id end
+
+-- Keep at most max_f distinct next-token fields per state hash (by highest counts).
+-- Drops lowest-count edges first. max_f <= 0 disables pruning.
+local function prune_transition_hash(sk, max_f)
+  if max_f <= 0 then return end
+  local n = redis.call('HLEN', sk)
+  if n <= max_f then return end
+  local flat = redis.call('HGETALL', sk)
+  local rows = {}
+  for i = 1, #flat, 2 do
+    rows[#rows + 1] = { tonumber(flat[i + 1]) or 0, flat[i] }
+  end
+  table.sort(rows, function(a, b)
+    if a[1] ~= b[1] then return a[1] < b[1] end
+    return a[2] < b[2]
+  end)
+  local drop = n - max_f
+  for i = 1, drop do
+    redis.call('HDEL', sk, rows[i][2])
+  end
+end
 
 -- ---------------------------------------------------------------------------
 -- split_tokens  (used only by generate_markov; tokenisation lives in Go)
@@ -27,8 +55,9 @@ end
 -- ---------------------------------------------------------------------------
 -- train_batch  KEYS[1]=guild_id
 --              ARGV[1]=max_size_bytes  (0 = unlimited)
---              ARGV[2]=message_count   (number of messages in this batch)
---              ARGV[3..N] = pairs packed as "prefix\0next_word"
+--              ARGV[2]=max_branching    (0 = unlimited distinct next-tokens per prefix)
+--              ARGV[3]=message_count   (number of messages in this batch)
+--              ARGV[4..N] = pairs packed as "prefix\0next_word"
 --
 -- Ingests an entire pre-tokenised batch in a single FCall.
 -- Returns 1=written, 0=size limit already reached (nothing written).
@@ -36,7 +65,8 @@ end
 local function train_batch(keys, args)
   local guild_id       = keys[1]
   local max_size_bytes = tonumber(args[1]) or 0
-  local message_count  = tonumber(args[2]) or 0
+  local max_branching  = tonumber(args[2]) or 0
+  local message_count  = tonumber(args[3]) or 0
 
   -- Fast size-limit pre-check via the cheap counter
   if max_size_bytes > 0 then
@@ -46,11 +76,10 @@ local function train_batch(keys, args)
     end
   end
 
-  local pk           = prefixes_key(guild_id)
   local added_bytes  = 0
   local new_prefixes = 0
 
-  for i = 3, #args do
+  for i = 4, #args do
     local pair = args[i]
     local sep  = string.find(pair, "\0", 1, true)
 
@@ -62,10 +91,10 @@ local function train_batch(keys, args)
       local is_new    = redis.call('EXISTS', sk) == 0
 
       redis.call('HINCRBY', sk, next_word, 1)
+      prune_transition_hash(sk, max_branching)
 
       if is_new then
         new_prefixes = new_prefixes + 1
-        redis.call('SADD', pk, prefix)
         added_bytes = added_bytes + #sk + 64      -- key name + Redis key overhead
       end
       added_bytes = added_bytes + #next_word + 16 -- hash field + integer value
@@ -88,7 +117,7 @@ end
 
 -- ---------------------------------------------------------------------------
 -- train_markov  KEYS[1]=guild_id  ARGV[1]=prefix  ARGV[2]=next_word
---               ARGV[3]=max_size_bytes  (0 = unlimited)
+--               ARGV[3]=max_size_bytes  ARGV[4]=max_branching (0 = unlimited)
 --
 -- Single-pair write for real-time ingestion of one message.
 -- Returns 1=written, 0=size limit hit.
@@ -98,6 +127,7 @@ local function train_markov(keys, args)
   local prefix         = args[1]
   local next_word      = args[2]
   local max_size_bytes = tonumber(args[3]) or 0
+  local max_branching  = tonumber(args[4]) or 0
 
   if max_size_bytes > 0 then
     local current = tonumber(redis.call('GET', stats_bytes_key(guild_id)) or "0") or 0
@@ -110,11 +140,11 @@ local function train_markov(keys, args)
   local is_new = redis.call('EXISTS', sk) == 0
 
   redis.call('HINCRBY', sk, next_word, 1)
+  prune_transition_hash(sk, max_branching)
 
   local added = #next_word + 16
   if is_new then
     redis.call('INCR', stats_prefix_key(guild_id))
-    redis.call('SADD', prefixes_key(guild_id), prefix)
     added = added + #sk + 64
   end
   redis.call('INCRBY', stats_bytes_key(guild_id), added)
@@ -136,7 +166,9 @@ end
 local function find_prefix(keys, args)
   local guild_id = keys[1]
   local seed     = args[1] or ""
-  local pk       = prefixes_key(guild_id)
+  local matchpat = state_keys_match(guild_id)
+
+  math.randomseed(tonumber(redis.call('TIME')[1]) + tonumber(redis.call('TIME')[2]))
 
   if seed ~= "" then
     if redis.call('EXISTS', state_key(guild_id, seed)) == 1 then
@@ -146,11 +178,12 @@ local function find_prefix(keys, args)
     local cursor   = "0"
     local matching = {}
     repeat
-      local res = redis.call('SSCAN', pk, cursor, "COUNT", 100)
+      local res = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', 100)
       cursor = res[1]
       for _, key in ipairs(res[2]) do
-        if string.find(key, seed, 1, true) then
-          table.insert(matching, key)
+        local pref = prefix_from_state_key(key)
+        if pref ~= "" and string.find(pref, seed, 1, true) then
+          table.insert(matching, pref)
           if #matching >= 200 then
             cursor = "0"
             break
@@ -160,12 +193,25 @@ local function find_prefix(keys, args)
     until cursor == "0"
 
     if #matching > 0 then
-      math.randomseed(tonumber(redis.call('TIME')[1]) + tonumber(redis.call('TIME')[2]))
       return matching[math.random(1, #matching)]
     end
   end
 
-  return redis.call('SRANDMEMBER', pk) or ""
+  local cursor      = "0"
+  local chosen_key  = nil
+  local n           = 0
+  repeat
+    local res = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', 200)
+    cursor = res[1]
+    for _, key in ipairs(res[2]) do
+      n = n + 1
+      if math.random(n) == 1 then
+        chosen_key = key
+      end
+    end
+  until cursor == "0"
+
+  return chosen_key and prefix_from_state_key(chosen_key) or ""
 end
 
 -- ---------------------------------------------------------------------------
@@ -256,7 +302,6 @@ local function delete_markov(keys, args)
     redis.call('HDEL', sk, next_word)
     if redis.call('HLEN', sk) == 0 then
       redis.call('DEL', sk)
-      redis.call('SREM', prefixes_key(guild_id), prefix)
       redis.call('DECR', stats_prefix_key(guild_id))
       freed = freed + #sk + 64
     end
@@ -292,22 +337,22 @@ local function reconcile_bytes(keys, _args)
   local guild_id    = keys[1]
   local total_bytes = 0
 
+  redis.call('DEL', legacy_prefixes_set_key(guild_id))
+
   local function add_size(key)
     local usage = redis.call('MEMORY', 'USAGE', key, 'SAMPLES', 0)
     if usage then total_bytes = total_bytes + usage end
   end
 
-  local pk     = prefixes_key(guild_id)
   local cursor = "0"
+  local matchpat = state_keys_match(guild_id)
   repeat
-    local res = redis.call('SSCAN', pk, cursor, 'COUNT', 100)
+    local res = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', 100)
     cursor = res[1]
-    for _, prefix in ipairs(res[2]) do
-      add_size(state_key(guild_id, prefix))
+    for _, sk in ipairs(res[2]) do
+      add_size(sk)
     end
   until cursor == "0"
-
-  add_size(pk)
   add_size(stats_prefix_key(guild_id))
   add_size(stats_msg_key(guild_id))
   add_size(stats_bytes_key(guild_id))
@@ -324,18 +369,17 @@ end
 -- ---------------------------------------------------------------------------
 local function clear_guild(keys, _args)
   local guild_id = keys[1]
-  local pk       = prefixes_key(guild_id)
+  redis.call('DEL', legacy_prefixes_set_key(guild_id))
 
   local cursor   = "0"
+  local matchpat = state_keys_match(guild_id)
   repeat
-    local res = redis.call('SSCAN', pk, cursor, "COUNT", 200)
+    local res = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', 200)
     cursor = res[1]
-    for _, prefix in ipairs(res[2]) do
-      redis.call('DEL', state_key(guild_id, prefix))
+    for _, sk in ipairs(res[2]) do
+      redis.call('DEL', sk)
     end
   until cursor == "0"
-
-  redis.call('DEL', pk)
   redis.call('SET', stats_prefix_key(guild_id), 0)
   redis.call('SET', stats_msg_key(guild_id), 0)
   redis.call('SET', stats_bytes_key(guild_id), 0)
@@ -404,6 +448,30 @@ local function get_guild_memory_usage(keys, args)
   return reconcile_bytes(keys, args)
 end
 
+-- cap_branching  KEYS[1]=guild_id  ARGV[1]=max_branching
+-- Retroactively prunes every state hash to at most max_branching fields (by count).
+-- Returns number of transition fields removed.
+local function cap_branching(keys, args)
+  local guild_id = keys[1]
+  local max_f    = tonumber(args[1]) or 0
+  if max_f <= 0 then return 0 end
+
+  local removed  = 0
+  local cursor   = "0"
+  local matchpat = state_keys_match(guild_id)
+  repeat
+    local res = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', 200)
+    cursor = res[1]
+    for _, sk in ipairs(res[2]) do
+      local before = redis.call('HLEN', sk)
+      prune_transition_hash(sk, max_f)
+      removed = removed + (before - redis.call('HLEN', sk))
+    end
+  until cursor == "0"
+
+  return removed
+end
+
 -- ---------------------------------------------------------------------------
 -- Registration
 -- ---------------------------------------------------------------------------
@@ -424,3 +492,4 @@ redis.register_function('remove_media', remove_media)
 redis.register_function('get_random_media', get_random_media)
 redis.register_function('get_media_counts', get_media_counts)
 redis.register_function('get_guild_memory_usage', get_guild_memory_usage)
+redis.register_function('cap_branching', cap_branching)

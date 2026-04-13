@@ -54,7 +54,7 @@ func (h *SlashCommandsHandler) withGuildSubscription(skuId snowflake.ID, cb Slas
 	return func(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
 		canUse := h.guildSubscriptionCheck(s, i, skuId)
 		if !canUse {
-			logger.Warnf("Guild %s is not subscribed to SKU %s", i.GuildID, skuId)
+			logger.Warnf("Guild %s is not subscribed to SKU %s", i.GuildID().String(), skuId)
 			var content string
 			content = "Hey the usage of this command is not free! You can start supporting the project and get premium access by buying a subscription right now"
 			if config.PremiumsPageLink != "" {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"rolando/cmd/idiscord/services"
 	"rolando/cmd/ihttp/auth"
+	ianalytics "rolando/internal/analytics"
 	"rolando/internal/logger"
-	"rolando/internal/model"
 	"rolando/internal/repositories"
 	"strconv"
 
@@ -15,14 +15,12 @@ import (
 
 type AnalyticsController struct {
 	chainsService *services.ChainsService
-	markovRepo    *repositories.RedisRepository
 	ds            *bot.Client
 }
 
-func NewController(chainsService *services.ChainsService, markovRepo *repositories.RedisRepository, ds *bot.Client) *AnalyticsController {
+func NewController(chainsService *services.ChainsService, ds *bot.Client) *AnalyticsController {
 	return &AnalyticsController{
 		chainsService: chainsService,
-		markovRepo:    markovRepo,
 		ds:            ds,
 	}
 }
@@ -49,7 +47,7 @@ func (s *AnalyticsController) GetChainAnalytics(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	analyzer := model.NewMarkovChainAnalyzer(chain, s.markovRepo)
+	analyzer := s.chainsService.NewMarkovAnalyzer(chain)
 	rawAnalytics, err := analyzer.GetRawAnalytics(context.Background())
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -77,7 +75,7 @@ func (s *AnalyticsController) GetAllChainsAnalytics(c *gin.Context) {
 			logger.Warnf("nil chain detected in GetAllChainsAnalytics, skipping...")
 			continue
 		}
-		analyzer := model.NewMarkovChainAnalyzer(chain, s.markovRepo)
+		analyzer := s.chainsService.NewMarkovAnalyzer(chain)
 		chainDoc, err := s.chainsService.GetChainConf(context.Background(), chain.ID)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -124,7 +122,7 @@ func (s *AnalyticsController) GetChainsAnalyticsPaginated(c *gin.Context) {
 	}
 	content := make([]gin.H, 0)
 	for _, chain := range chains {
-		analyzer := model.NewMarkovChainAnalyzer(chain, s.markovRepo)
+		analyzer := s.chainsService.NewMarkovAnalyzer(chain)
 		chainDoc, err := s.chainsService.GetChainConf(context.Background(), chain.ID)
 		if err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -159,7 +157,7 @@ func (s *AnalyticsController) GetChainsAnalyticsPaginated(c *gin.Context) {
 
 // BuildAllChainsAnalyticsMap returns a map of chain ID to serializable analytics for all chains.
 // Used by the bot controller for server-side sorting of guilds by chain metrics.
-func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService, markovRepo *repositories.RedisRepository) (map[string]gin.H, error) {
+func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService) (map[string]gin.H, error) {
 	chains, err := chainsService.GetAllChains(context.Background())
 	if err != nil {
 		return nil, err
@@ -170,7 +168,7 @@ func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService, markovRep
 		if err != nil || chainDoc == nil {
 			continue
 		}
-		analyzer := model.NewMarkovChainAnalyzer(chain, markovRepo)
+		analyzer := chainsService.NewMarkovAnalyzer(chain)
 		rawAnalytics, err := analyzer.GetRawAnalytics(context.Background())
 		if err != nil {
 			continue
@@ -180,7 +178,7 @@ func BuildAllChainsAnalyticsMap(chainsService *services.ChainsService, markovRep
 	return m, nil
 }
 
-func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDoc *repositories.ChainConfig) gin.H {
+func getSerializableAnalytics(rawAnalytics *ianalytics.NumericChainAnalytics, chainDoc *repositories.ChainConfig) gin.H {
 	return gin.H{
 		"complexity_score": rawAnalytics.ComplexityScore,
 		"gifs":             rawAnalytics.Gifs,
@@ -190,9 +188,11 @@ func getSerializableAnalytics(rawAnalytics *model.NumericChainAnalytics, chainDo
 		"n_gram_size":      rawAnalytics.NGramSize,
 		"words":            rawAnalytics.Words,
 		"messages":         rawAnalytics.Messages,
+		"bytes":            rawAnalytics.Size,
 		"id":               chainDoc.ID,
 		"name":             chainDoc.Name,
-		"max_size_mb":      chainDoc.MaxSizeMb,
+		"max_size_mb":         chainDoc.MaxSizeMb,
+		"markov_max_branches": chainDoc.MarkovMaxBranches,
 		"pings_enabled":    chainDoc.Pings,
 		"premium":          chainDoc.Premium,
 		"trained_at":       chainDoc.TrainedAt,

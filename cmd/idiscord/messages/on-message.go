@@ -173,7 +173,7 @@ func (h *MessageHandler) getMessage(chain *repositories.ChainConfig) (string, er
 	// (21/22 or approx. 95.5%) to just talk.
 	case random <= 21:
 		{
-			msg, err := h.ChainsService.RedisRepo.Generate(context.Background(), chain.ID, random, chain.NGramSize)
+			msg, err := h.ChainsService.Generate(context.Background(), chain.ID, random, chain.NGramSize)
 			if err != nil {
 				return "", err
 			}
@@ -198,7 +198,7 @@ func (h *MessageHandler) getMessage(chain *repositories.ChainConfig) (string, er
 // if unavailable, it falls back to generating a text message.
 func (h *MessageHandler) tryGetMediaOrTalk(chain *repositories.ChainConfig, mediaType string, random int) (string, error) {
 	ctx := context.Background()
-	media, err := h.ChainsService.RedisRepo.GetRandomMedia(ctx, chain.ID, mediaType)
+	media, err := h.ChainsService.GetRandomMedia(ctx, chain.ID, mediaType)
 	if err != nil {
 		return "", err
 	}
@@ -207,7 +207,7 @@ func (h *MessageHandler) tryGetMediaOrTalk(chain *repositories.ChainConfig, medi
 	}
 
 	// Fallback to text generation if media is not available.
-	msg, err := h.ChainsService.RedisRepo.Generate(ctx, chain.ID, random, chain.NGramSize)
+	msg, err := h.ChainsService.Generate(ctx, chain.ID, random, chain.NGramSize)
 	if err != nil {
 		return "", err
 	}

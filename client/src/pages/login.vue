@@ -32,6 +32,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiFetch } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 
@@ -47,11 +48,9 @@ const accessToken = params.get('access_token');
 const authStore = useAuthStore();
 
 if (accessToken) {
-  fetch('/api/auth/@me', {
+  apiFetch('/auth/@me', {
     method: 'GET',
-    headers: {
-      Authorization: accessToken,
-    },
+    token: accessToken,
   })
     .then(async (res) => {
       const body = await res.json();

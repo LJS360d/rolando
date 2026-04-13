@@ -1,4 +1,4 @@
-package model
+package analytics
 
 import (
 	"context"
@@ -40,12 +40,6 @@ func NewMarkovChainAnalyzer(chain *repositories.ChainConfig, redisRepo *reposito
 	return &MarkovChainAnalyzer{chain: chain, redisRepo: redisRepo}
 }
 
-// complexityScore computes a cheap, stable metric:
-//
-//	log2( prefixes * log2(messages + 2) + 1 )
-//
-// Grows with vocabulary breadth (prefixes) and depth (messages trained).
-// All inputs come from O(1) Redis GET calls.
 func complexityScore(prefixes, messages int64) int {
 	if prefixes <= 0 {
 		return 0

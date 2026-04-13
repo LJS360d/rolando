@@ -29,7 +29,7 @@ func (h *SlashCommandsHandler) mediaCommand(s *bot.Client, i *events.Application
 	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 		Type: discord.InteractionResponseTypeDeferredCreateMessage,
 	})
-	media, err := h.ChainsService.RedisRepo.GetRandomMedia(context.Background(), i.GuildID().String(), kind)
+	media, err := h.ChainsService.GetRandomMedia(context.Background(), i.GuildID().String(), kind)
 	if err != nil || media == "" {
 		media = fmt.Sprintf("No valid %s found.", kind)
 	}

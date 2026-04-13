@@ -19,8 +19,9 @@ type ChainConfig struct {
 	ReplyRate    int        `gorm:"default:10"      json:"reply_rate"`
 	ReactionRate int        `gorm:"default:30"      json:"reaction_rate"`
 	VcJoinRate   int        `gorm:"default:100"     json:"vc_join_rate"`
-	MaxSizeMb    int        `gorm:"default:25"      json:"max_size_mb"`
-	NGramSize    int        `gorm:"default:2"       json:"n_gram_size"`
+	MaxSizeMb         int `gorm:"default:25" json:"max_size_mb"`
+	NGramSize         int `gorm:"default:2"  json:"n_gram_size"`
+	MarkovMaxBranches int `gorm:"default:0"  json:"markov_max_branches"`
 	TTSLanguage  string     `gorm:"default:'en'"    json:"tts_language"`
 	Pings        bool       `gorm:"default:true"    json:"pings"`
 	TrainedAt    *time.Time `gorm:"default:null"    json:"trained_at"`
@@ -201,6 +202,7 @@ func chainConfigToArgs(c *ChainConfig) []any {
 		"vc_join_rate", strconv.Itoa(c.VcJoinRate),
 		"max_size_mb", strconv.Itoa(c.MaxSizeMb),
 		"n_gram_size", strconv.Itoa(c.NGramSize),
+		"markov_max_branches", strconv.Itoa(c.MarkovMaxBranches),
 		"tts_language", c.TTSLanguage,
 		"pings", pings,
 		"trained_at", trainedAt,
@@ -231,6 +233,11 @@ func chainConfigFromMap(m map[string]string) (*ChainConfig, error) {
 	}
 	if c.NGramSize, err = strconv.Atoi(m["n_gram_size"]); err != nil {
 		return nil, fmt.Errorf("n_gram_size: %w", err)
+	}
+	if s := m["markov_max_branches"]; s != "" {
+		if c.MarkovMaxBranches, err = strconv.Atoi(s); err != nil {
+			return nil, fmt.Errorf("markov_max_branches: %w", err)
+		}
 	}
 
 	c.Pings = m["pings"] == "1"

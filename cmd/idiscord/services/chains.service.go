@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"rolando/internal/analytics"
 	"rolando/internal/logger"
 	"rolando/internal/repositories"
 	"strconv"
@@ -16,7 +17,7 @@ import (
 type ChainsService struct {
 	session      *bot.Client
 	chainsRepo   *repositories.ChainsRepository
-	RedisRepo    *repositories.RedisRepository
+	redisRepo    *repositories.RedisRepository
 	messagesRepo *repositories.MessagesRepository
 
 	// rebuildMu prevents concurrent rebuilds of the same guild.
@@ -32,9 +33,33 @@ func NewChainsService(
 	return &ChainsService{
 		session:      client,
 		chainsRepo:   chainsRepo,
-		RedisRepo:    redisRepo,
+		redisRepo:    redisRepo,
 		messagesRepo: messagesRepo,
 	}
+}
+
+func (cs *ChainsService) NewMarkovAnalyzer(chain *repositories.ChainConfig) *analytics.MarkovChainAnalyzer {
+	return analytics.NewMarkovChainAnalyzer(chain, cs.redisRepo)
+}
+
+func (cs *ChainsService) Train(ctx context.Context, guildID, message string, nGramSize, maxSizeBytes, maxBranches int) error {
+	return cs.redisRepo.Train(ctx, guildID, message, nGramSize, maxSizeBytes, maxBranches)
+}
+
+func (cs *ChainsService) Generate(ctx context.Context, guildID string, maxLength, nGramSize int) (string, error) {
+	return cs.redisRepo.Generate(ctx, guildID, maxLength, nGramSize)
+}
+
+func (cs *ChainsService) GenerateFromSeed(ctx context.Context, guildID, seed string, maxLength, nGramSize int) (string, error) {
+	return cs.redisRepo.GenerateFromSeed(ctx, guildID, seed, maxLength, nGramSize)
+}
+
+func (cs *ChainsService) GenerateFiltered(ctx context.Context, guildID string, maxLength, nGramSize int) (string, error) {
+	return cs.redisRepo.GenerateFiltered(ctx, guildID, maxLength, nGramSize)
+}
+
+func (cs *ChainsService) GetRandomMedia(ctx context.Context, guildID, kind string) (string, error) {
+	return cs.redisRepo.GetRandomMedia(ctx, guildID, kind)
 }
 
 // GetChainConf returns the config for a guild, creating it if unknown.
@@ -75,7 +100,7 @@ func (cs *ChainsService) UpdateChainState(ctx context.Context, id string, texts 
 	if err != nil {
 		return err
 	}
-	if err := cs.RedisRepo.TrainBatch(ctx, id, texts, chain.NGramSize, chain.MaxSizeBytes()); err != nil {
+	if err := cs.redisRepo.TrainBatch(ctx, id, texts, chain.NGramSize, chain.MaxSizeBytes(), chain.MarkovMaxBranches); err != nil {
 		logger.Errorf("UpdateChainState train error for %s: %v", id, err)
 	}
 	return nil
@@ -87,7 +112,7 @@ func (cs *ChainsService) DeleteTextData(ctx context.Context, id, data string) er
 	if err != nil {
 		return err
 	}
-	if err := cs.RedisRepo.Delete(ctx, id, data, chain.NGramSize); err != nil {
+	if err := cs.redisRepo.Delete(ctx, id, data, chain.NGramSize); err != nil {
 		logger.Errorf("DeleteTextData redis error for %s: %v", id, err)
 	}
 	return cs.messagesRepo.DeleteGuildMessage(id, data)
@@ -116,6 +141,20 @@ func (cs *ChainsService) UpdateChainMeta(ctx context.Context, id string, fields 
 		go cs.rebuildChain(id, updated.NGramSize)
 	}
 
+	if _, touched := fields["markov_max_branches"]; touched && updated.MarkovMaxBranches > 0 &&
+		updated.MarkovMaxBranches != oldChain.MarkovMaxBranches {
+		go func(guildID string, cap int) {
+			n, err := cs.redisRepo.CapBranching(context.Background(), guildID, cap)
+			if err != nil {
+				logger.Errorf("CapBranching for %s: %v", guildID, err)
+				return
+			}
+			if n > 0 {
+				logger.Infof("CapBranching %s: removed %d low-weight transitions (cap=%d)", guildID, n, cap)
+			}
+		}(id, updated.MarkovMaxBranches)
+	}
+
 	return updated, nil
 }
 
@@ -128,7 +167,7 @@ func (cs *ChainsService) DeleteChain(ctx context.Context, id string) error {
 	}
 	logger.Warnf("Deleting chain: %s", id)
 
-	if err := cs.RedisRepo.ClearGuild(ctx, id); err != nil {
+	if err := cs.redisRepo.ClearGuild(ctx, id); err != nil {
 		logger.Errorf("DeleteChain: ClearGuild failed for %s: %v", id, err)
 	}
 	if err := cs.chainsRepo.DeleteChain(doc.ID); err != nil {
@@ -178,7 +217,7 @@ func (cs *ChainsService) rebuildChain(id string, newNGramSize int) {
 	}
 	logger.Infof("Rebuilding chain %s with n_gram_size=%d", doc.Name, newNGramSize)
 
-	if err := cs.RedisRepo.ClearGuild(ctx, id); err != nil {
+	if err := cs.redisRepo.ClearGuild(ctx, id); err != nil {
 		logger.Errorf("rebuildChain: ClearGuild failed for %s: %v", id, err)
 		return
 	}
@@ -189,13 +228,13 @@ func (cs *ChainsService) rebuildChain(id string, newNGramSize int) {
 		return
 	}
 
-	if err := cs.RedisRepo.TrainBatch(ctx, id, messages, newNGramSize, doc.MaxSizeBytes()); err != nil {
+	if err := cs.redisRepo.TrainBatch(ctx, id, messages, newNGramSize, doc.MaxSizeBytes(), doc.MarkovMaxBranches); err != nil {
 		logger.Errorf("rebuildChain: TrainBatch failed for %s: %v", id, err)
 		return
 	}
 
 	// Reconcile the byte counter after a full rebuild.
-	if _, err := cs.RedisRepo.ReconcileBytes(ctx, id); err != nil {
+	if _, err := cs.redisRepo.ReconcileBytes(ctx, id); err != nil {
 		logger.Warnf("rebuildChain: ReconcileBytes failed for %s: %v", id, err)
 	}
 

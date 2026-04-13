@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"rolando/internal/config"
 	"rolando/internal/logger"
-	"rolando/internal/model"
 	"rolando/internal/utils"
 
 	"github.com/disgoorg/disgo/bot"
@@ -22,7 +21,7 @@ func (h *SlashCommandsHandler) analyticsCommand(s *bot.Client, i *events.Applica
 		logger.Errorf("Failed to fetch chain document for guild %s: %v", i.GuildID, err)
 		return
 	}
-	analytics, err := model.NewMarkovChainAnalyzer(chainConf, h.ChainsService.RedisRepo).GetRawAnalytics(ctx)
+	analytics, err := h.ChainsService.NewMarkovAnalyzer(chainConf).GetRawAnalytics(ctx)
 	if err != nil {
 		logger.Errorf("failed to analyze chain: %v", err)
 		return

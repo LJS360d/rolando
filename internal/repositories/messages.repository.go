@@ -113,6 +113,36 @@ func (repo *MessagesRepository) GetAllGuildMessages(guildID string) ([]Message, 
 	return messages, nil
 }
 
+// ScanGuildMessageContents streams message bodies in primary-key order without loading
+// an entire guild into memory at once. batchSize defaults to 2000 if <= 0.
+func (repo *MessagesRepository) ScanGuildMessageContents(guildID string, batchSize int, fn func(contents []string) error) error {
+	if batchSize <= 0 {
+		batchSize = 2000
+	}
+	var lastID uint
+	for {
+		var rows []Message
+		q := repo.DB.Where("guild_id = ?", guildID)
+		if lastID > 0 {
+			q = q.Where("id > ?", lastID)
+		}
+		if err := q.Order("id").Limit(batchSize).Find(&rows).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		contents := make([]string, len(rows))
+		for i := range rows {
+			contents[i] = rows[i].Content
+		}
+		lastID = rows[len(rows)-1].ID
+		if err := fn(contents); err != nil {
+			return err
+		}
+	}
+}
+
 // GetGuildMessagesPage fetches messages with pagination and returns metadata
 func (repo *MessagesRepository) GetGuildMessagesPage(guildID string, limit, offset int) ([]Message, int64, error) {
 	var messages []Message

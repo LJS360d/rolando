@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/vue-query";
 import type { ChainAnalytics } from "./analytics";
 import type { Page, PageMeta } from "./common";
+import { apiFetch } from "./http";
 
 export interface BotUser {
   accent_color: number;
@@ -42,7 +43,7 @@ export function useGetBotUser() {
   return useQuery({
     queryKey: ["/bot/user"],
     queryFn: async () => {
-      const response = await fetch(`/api/bot/user`);
+      const response = await apiFetch("/bot/user");
       if (!response.ok) throw new Error("Failed to fetch bot user");
       return response.json() as Promise<BotUser>;
     },
@@ -67,11 +68,7 @@ export function useGetBotGuildsAll(token: string) {
   return useQuery({
     queryKey: ["/bot/guilds/all"],
     queryFn: async () => {
-      const response = await fetch(`/api/bot/guilds/all`, {
-        headers: {
-          Authorization: token,
-        },
-      });
+      const response = await apiFetch("/bot/guilds/all", { token });
       if (!response.ok) throw new Error("Failed to fetch bot guilds");
       return response.json() as Promise<BotGuild[]>;
     },
@@ -96,11 +93,7 @@ export function useGetBotGuilds(
         pageSize: String(pagination.value.pageSize),
         sortBy: sortBy.value || "bytes",
       });
-      const response = await fetch(`/api/bot/guilds?${params}`, {
-        headers: {
-          Authorization: token,
-        },
-      });
+      const response = await apiFetch(`/bot/guilds?${params}`, { token });
       if (!response.ok) throw new Error("Failed to fetch bot guilds");
       const res = (await response.json()) as Page<BotGuildWithChain[]>;
       pagination.value = res.meta;
@@ -113,37 +106,44 @@ export function useGetBotGuild(token: string, guildId: string) {
   return useQuery({
     queryKey: [`/bot/guilds/${guildId}`],
     queryFn: async () => {
-      const response = await fetch(`/api/bot/guilds/${guildId}`, {
-        headers: {
-          Authorization: token,
-        },
-      });
+      const response = await apiFetch(`/bot/guilds/${guildId}`, { token });
       if (!response.ok) throw new Error(`Failed to fetch bot guild ${guildId}`);
       return response.json() as Promise<BotGuild>;
     },
   });
 }
 
-export interface BotResources {
-  cpu_cores: number;
-  memory: BotMemory;
-  startup_timestamp_unix: number;
+export interface BotHostMemory {
+  total_bytes: number;
+  available_bytes: number;
+  used_bytes: number;
 }
 
-export interface BotMemory {
-  gc_count: number;
+export interface BotProcessMemory {
+  rss_bytes: number;
+  alloc_bytes: number;
+  total_alloc: number;
+  sys: number;
   heap_alloc: number;
+  heap_inuse: number;
   heap_sys: number;
   stack_in_use: number;
-  sys: number;
-  total_alloc: number;
+  gc_count: number;
+  next_gc_bytes: number;
+}
+
+export interface BotResources {
+  cpu_cores: number;
+  startup_timestamp_unix: number;
+  host: BotHostMemory | Record<string, never>;
+  process: BotProcessMemory;
 }
 
 export function useGetBotResources() {
   return useQuery({
     queryKey: ["/bot/resources"],
     queryFn: async () => {
-      const response = await fetch(`/api/bot/resources`);
+      const response = await apiFetch("/bot/resources");
       if (!response.ok) throw new Error("Failed to fetch bot resources");
       return response.json() as Promise<BotResources>;
     },
@@ -151,11 +151,9 @@ export function useGetBotResources() {
 }
 
 export function leaveGuild(token: string, guildId: string) {
-  return fetch(`/api/bot/guilds/${guildId}`, {
+  return apiFetch(`/bot/guilds/${guildId}`, {
     method: "DELETE",
-    headers: {
-      Authorization: token,
-    },
+    token,
   });
 }
 
@@ -171,25 +169,23 @@ export function broadcastMessage(
       channel_id: selected ? "" : undefined,
     })),
   };
-  return fetch(`/api/bot/broadcast`, {
+  return apiFetch("/bot/broadcast", {
     method: "POST",
     body: JSON.stringify(body),
-    headers: {
-      Authorization: token,
-    },
+    headers: { "Content-Type": "application/json" },
+    token,
   });
 }
 
 export function updateChainDocument(
   token: string,
-  chainId: string,
+  guildId: string,
   fields: Record<string, any>,
 ) {
-  return fetch(`/api/bot/guilds/${chainId}`, {
+  return apiFetch(`/bot/guilds/${guildId}`, {
     method: "PUT",
     body: JSON.stringify(fields),
-    headers: {
-      Authorization: token,
-    },
+    headers: { "Content-Type": "application/json" },
+    token,
   });
 }
