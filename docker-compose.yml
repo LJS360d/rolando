@@ -12,9 +12,13 @@ services:
     environment:
       - DATABASE_PATH=/home/appuser/data/${COMPOSE_PROJECT_NAME}.db
       - SERVER_ADDRESS=0.0.0.0:8080
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     networks:
       - default
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
 
   frontend:
     profiles:
@@ -32,15 +36,17 @@ services:
     image: redis:7.2-alpine
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - ./data/redis:/data
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - ./redis/redis_markov.lua:/scripts/redis_markov.lua:ro
       - ./redis/docker-entrypoint-redis.sh:/docker-entrypoint-redis.sh:ro
     entrypoint: ["/bin/sh", "/docker-entrypoint-redis.sh"]
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5

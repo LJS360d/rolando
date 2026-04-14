@@ -1,6 +1,6 @@
 .PHONY: all build run dev lint clean vosk dave run-docker
 
-VERSION      := 4.1.0
+VERSION      := 4.1.1
 BUILD_DIR    := bin
 MAIN_PACKAGE := ./cmd
 BINARY_NAME  := main
@@ -99,15 +99,7 @@ run-redis:
 	@echo "[run-redis] starting redis"
 	@sudo rm -rf ./data/redis
 	@docker compose -p rolando up -d redis --force-recreate
-	@echo "[run-redis] waiting for FUNCTION LOAD (train_batch); compose returns before entrypoint finishes"
-	@n=0; \
-	until docker compose -p rolando exec -T redis redis-cli FUNCTION LIST 2>/dev/null | grep -q train_batch; do \
-		n=$$((n+1)); \
-		if [ $$n -gt 200 ]; then echo "[run-redis] timeout waiting for Lua functions"; exit 1; fi; \
-		sleep 0.15; \
-	done
-	@echo "[run-redis] running migration"
-	@go run ./cmd/migrate
+
 
 # ── DAVE ──────────────────────────────────────────────────────────────────────
 

@@ -266,6 +266,7 @@ local function generate_markov(keys, args)
         break
       end
     end
+
     if not chosen then break end
 
     table.insert(generated, chosen)
@@ -328,40 +329,90 @@ local function get_stats_markov(keys, _args)
 end
 
 -- ---------------------------------------------------------------------------
--- reconcile_bytes  KEYS[1]=guild_id
--- Performs the expensive O(n-prefixes) MEMORY USAGE walk and resets the
--- counter to the true value.  Never call on the hot path.
--- Returns the corrected byte count.
+-- reconcile_bytes_batch  KEYS[1]=guild_id
+--                        ARGV[1]=cursor ("0" to start)
+--                        ARGV[2]=batch_size (keys per call, e.g. 200)
+--
+-- Paginated replacement for the old blocking reconcile_bytes.
+-- Each call scans at most batch_size keys and returns {next_cursor, partial_total}.
+-- The caller accumulates partial totals across calls.
+-- When next_cursor == "0" the scan is complete; the caller should then SET the
+-- final total via a final call with cursor="COMMIT" and ARGV[3]=<total>.
+--
+-- Returns: {next_cursor, partial_bytes_this_batch}
 -- ---------------------------------------------------------------------------
-local function reconcile_bytes(keys, _args)
-  local guild_id    = keys[1]
-  local total_bytes = 0
+local function reconcile_bytes_batch(keys, args)
+  local guild_id   = keys[1]
+  local cursor     = args[1] or "0"
+  local batch_size = tonumber(args[2]) or 200
 
-  redis.call('DEL', legacy_prefixes_set_key(guild_id))
-
-  local function add_size(key)
-    local usage = redis.call('MEMORY', 'USAGE', key, 'SAMPLES', 0)
-    if usage then total_bytes = total_bytes + usage end
+  -- COMMIT phase: caller passes cursor="COMMIT" and ARGV[3]=<accumulated_total>
+  if cursor == "COMMIT" then
+    local total = tonumber(args[3]) or 0
+    redis.call('SET', stats_bytes_key(guild_id), total)
+    -- Also clean up legacy prefixes set if it exists
+    redis.call('DEL', legacy_prefixes_set_key(guild_id))
+    return { "0", total }
   end
 
-  local cursor = "0"
-  local matchpat = state_keys_match(guild_id)
-  repeat
-    local res = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', 100)
-    cursor = res[1]
-    for _, sk in ipairs(res[2]) do
-      add_size(sk)
-    end
-  until cursor == "0"
-  add_size(stats_prefix_key(guild_id))
-  add_size(stats_msg_key(guild_id))
-  add_size(stats_bytes_key(guild_id))
-  add_size(media_key(guild_id, "gif"))
-  add_size(media_key(guild_id, "image"))
-  add_size(media_key(guild_id, "video"))
+  local matchpat    = state_keys_match(guild_id)
+  local partial     = 0
 
-  redis.call('SET', stats_bytes_key(guild_id), total_bytes)
-  return total_bytes
+  local res    = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', batch_size)
+  local next_c = res[1]
+  for _, sk in ipairs(res[2]) do
+    local usage = redis.call('MEMORY', 'USAGE', sk, 'SAMPLES', 0)
+    if usage then partial = partial + usage end
+  end
+
+  -- On the final page (next_cursor back to "0"), also measure the stats keys
+  -- and media keys so the caller gets a complete picture without an extra round-trip.
+  if next_c == "0" then
+    local function add(k)
+      local u = redis.call('MEMORY', 'USAGE', k, 'SAMPLES', 0)
+      if u then partial = partial + u end
+    end
+    add(stats_prefix_key(guild_id))
+    add(stats_msg_key(guild_id))
+    add(stats_bytes_key(guild_id))
+    add(media_key(guild_id, "gif"))
+    add(media_key(guild_id, "image"))
+    add(media_key(guild_id, "video"))
+  end
+
+  return { next_c, partial }
+end
+
+-- ---------------------------------------------------------------------------
+-- cap_branching_batch  KEYS[1]=guild_id
+--                      ARGV[1]=max_branching
+--                      ARGV[2]=cursor ("0" to start)
+--                      ARGV[3]=batch_size (keys per call, e.g. 200)
+--
+-- Paginated replacement for the old blocking cap_branching.
+-- Returns {next_cursor, removed_this_batch}.
+-- Keep calling until next_cursor == "0".
+-- ---------------------------------------------------------------------------
+local function cap_branching_batch(keys, args)
+  local guild_id   = keys[1]
+  local max_f      = tonumber(args[1]) or 0
+  local cursor     = args[2] or "0"
+  local batch_size = tonumber(args[3]) or 200
+
+  if max_f <= 0 then return { "0", 0 } end
+
+  local removed  = 0
+  local matchpat = state_keys_match(guild_id)
+
+  local res    = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', batch_size)
+  local next_c = res[1]
+  for _, sk in ipairs(res[2]) do
+    local before = redis.call('HLEN', sk)
+    prune_transition_hash(sk, max_f)
+    removed = removed + (before - redis.call('HLEN', sk))
+  end
+
+  return { next_c, removed }
 end
 
 -- ---------------------------------------------------------------------------
@@ -443,53 +494,23 @@ local function get_media_counts(keys, _args)
   }
 end
 
--- Backwards-compat alias; prefer reconcile_bytes for new callers.
-local function get_guild_memory_usage(keys, args)
-  return reconcile_bytes(keys, args)
-end
-
--- cap_branching  KEYS[1]=guild_id  ARGV[1]=max_branching
--- Retroactively prunes every state hash to at most max_branching fields (by count).
--- Returns number of transition fields removed.
-local function cap_branching(keys, args)
-  local guild_id = keys[1]
-  local max_f    = tonumber(args[1]) or 0
-  if max_f <= 0 then return 0 end
-
-  local removed  = 0
-  local cursor   = "0"
-  local matchpat = state_keys_match(guild_id)
-  repeat
-    local res = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', 200)
-    cursor = res[1]
-    for _, sk in ipairs(res[2]) do
-      local before = redis.call('HLEN', sk)
-      prune_transition_hash(sk, max_f)
-      removed = removed + (before - redis.call('HLEN', sk))
-    end
-  until cursor == "0"
-
-  return removed
-end
-
 -- ---------------------------------------------------------------------------
 -- Registration
 -- ---------------------------------------------------------------------------
-redis.register_function('train_markov', train_markov)
-redis.register_function('train_batch', train_batch)
-redis.register_function('count_message', count_message)
-redis.register_function('find_prefix', find_prefix)
-redis.register_function('generate_markov', generate_markov)
-redis.register_function('delete_markov', delete_markov)
-redis.register_function('get_stats_markov', get_stats_markov)
-redis.register_function('reconcile_bytes', reconcile_bytes)
-redis.register_function('clear_guild', clear_guild)
-redis.register_function('set_config', set_config)
-redis.register_function('get_config', get_config)
-redis.register_function('delete_config', delete_config)
-redis.register_function('add_media', add_media)
-redis.register_function('remove_media', remove_media)
-redis.register_function('get_random_media', get_random_media)
-redis.register_function('get_media_counts', get_media_counts)
-redis.register_function('get_guild_memory_usage', get_guild_memory_usage)
-redis.register_function('cap_branching', cap_branching)
+redis.register_function('train_markov',         train_markov)
+redis.register_function('train_batch',          train_batch)
+redis.register_function('count_message',        count_message)
+redis.register_function('find_prefix',          find_prefix)
+redis.register_function('generate_markov',      generate_markov)
+redis.register_function('delete_markov',        delete_markov)
+redis.register_function('get_stats_markov',     get_stats_markov)
+redis.register_function('reconcile_bytes_batch', reconcile_bytes_batch)
+redis.register_function('cap_branching_batch',  cap_branching_batch)
+redis.register_function('clear_guild',          clear_guild)
+redis.register_function('set_config',           set_config)
+redis.register_function('get_config',           get_config)
+redis.register_function('delete_config',        delete_config)
+redis.register_function('add_media',            add_media)
+redis.register_function('remove_media',         remove_media)
+redis.register_function('get_random_media',     get_random_media)
+redis.register_function('get_media_counts',     get_media_counts)

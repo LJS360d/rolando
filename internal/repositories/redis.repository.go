@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -80,8 +81,6 @@ func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messag
 	for _, msg := range messages {
 		if strings.HasPrefix(msg, "https://") {
 			kind := classifyURL(msg)
-			// Media additions are cheap; send immediately via pipeline or
-			// accumulate into a separate mini-pipeline if needed.
 			if err := r.rdb.FCall(ctx, "add_media", []string{guildID}, kind, msg).Err(); err != nil {
 				return err
 			}
@@ -165,21 +164,66 @@ func (r *RedisRepository) GetStats(ctx context.Context, guildID string) (uniqueP
 	return res[0], res[1], uint64(res[2]), nil
 }
 
-// ReconcileBytes runs the slow MEMORY USAGE walk and resets the estimated-bytes
-// counter to the true value. Call from admin tooling or after a migration,
-// never on the hot path.
+// ReconcileBytes drives the paginated reconcile_bytes_batch Lua function in a
+// loop so no individual FCall blocks Redis for more than ~batchSize key lookups.
+// It commits the final total back to Redis atomically at the end.
 func (r *RedisRepository) ReconcileBytes(ctx context.Context, guildID string) (uint64, error) {
-	return r.rdb.FCall(ctx, "reconcile_bytes", []string{guildID}).Uint64()
+	const batchSize = 200
+
+	cursor := "0"
+	var total uint64
+
+	for {
+		raw, err := r.rdb.FCall(ctx, "reconcile_bytes_batch", []string{guildID}, cursor, batchSize).Slice()
+		if err != nil {
+			return 0, fmt.Errorf("reconcile_bytes_batch: %w", err)
+		}
+		nextCursor, partial, err := parseCursorCount(raw)
+		if err != nil {
+			return 0, fmt.Errorf("reconcile_bytes_batch: %w", err)
+		}
+		total += uint64(partial)
+		cursor = nextCursor
+		if cursor == "0" {
+			break
+		}
+	}
+
+	// Commit the accumulated total back to Redis.
+	if _, err := r.rdb.FCall(ctx, "reconcile_bytes_batch", []string{guildID}, "COMMIT", 0, total).Slice(); err != nil {
+		return 0, fmt.Errorf("reconcile_bytes_batch COMMIT: %w", err)
+	}
+
+	return total, nil
 }
 
-// CapBranching walks all state hashes for the guild and drops lowest-count
-// transitions until each hash has at most maxBranches fields. maxBranches <= 0 is a no-op.
-// Run after lowering markov_max_branches or to reclaim RAM on existing data.
+// CapBranching drives the paginated cap_branching_batch Lua function in a loop.
+// maxBranches <= 0 is a no-op.
 func (r *RedisRepository) CapBranching(ctx context.Context, guildID string, maxBranches int) (removed int64, err error) {
 	if maxBranches <= 0 {
 		return 0, nil
 	}
-	return r.rdb.FCall(ctx, "cap_branching", []string{guildID}, maxBranches).Int64()
+
+	const batchSize = 200
+	cursor := "0"
+
+	for {
+		raw, err := r.rdb.FCall(ctx, "cap_branching_batch", []string{guildID}, maxBranches, cursor, batchSize).Slice()
+		if err != nil {
+			return removed, fmt.Errorf("cap_branching_batch: %w", err)
+		}
+		nextCursor, n, err := parseCursorCount(raw)
+		if err != nil {
+			return removed, fmt.Errorf("cap_branching_batch: %w", err)
+		}
+		removed += n
+		cursor = nextCursor
+		if cursor == "0" {
+			break
+		}
+	}
+
+	return removed, nil
 }
 
 // GetGuildSize returns the current estimated byte count (cheap counter read).
@@ -281,4 +325,33 @@ func classifyURL(url string) string {
 	default:
 		return "image"
 	}
+}
+
+// parseCursorCount decodes the {cursor_string, integer_count} pair that
+// reconcile_bytes_batch and cap_branching_batch return.
+// Redis Lua returns the cursor as a bulk string and the count as a native
+// integer, so the slice elements have mixed types — string and int64.
+func parseCursorCount(raw []any) (cursor string, count int64, err error) {
+	if len(raw) < 2 {
+		return "", 0, fmt.Errorf("unexpected response len %d", len(raw))
+	}
+	switch v := raw[0].(type) {
+	case string:
+		cursor = v
+	case []byte:
+		cursor = string(v)
+	default:
+		return "", 0, fmt.Errorf("cursor: unexpected type %T", raw[0])
+	}
+	switch v := raw[1].(type) {
+	case int64:
+		count = v
+	case string:
+		if _, e := fmt.Sscanf(v, "%d", &count); e != nil {
+			return "", 0, fmt.Errorf("count: %w", e)
+		}
+	default:
+		return "", 0, fmt.Errorf("count: unexpected type %T", raw[1])
+	}
+	return cursor, count, nil
 }

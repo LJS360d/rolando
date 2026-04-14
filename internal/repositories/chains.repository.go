@@ -14,19 +14,19 @@ import (
 // ChainConfig is the canonical config record, stored durably in SQLite and
 // cached in Redis as a hash at config:<guild_id>.
 type ChainConfig struct {
-	ID           string     `gorm:"primaryKey"      json:"id"`
-	Name         string     `gorm:"not null"        json:"name"`
-	ReplyRate    int        `gorm:"default:10"      json:"reply_rate"`
-	ReactionRate int        `gorm:"default:30"      json:"reaction_rate"`
-	VcJoinRate   int        `gorm:"default:100"     json:"vc_join_rate"`
-	MaxSizeMb         int `gorm:"default:25" json:"max_size_mb"`
-	NGramSize         int `gorm:"default:2"  json:"n_gram_size"`
-	MarkovMaxBranches int `gorm:"default:0"  json:"markov_max_branches"`
-	TTSLanguage  string     `gorm:"default:'en'"    json:"tts_language"`
-	Pings        bool       `gorm:"default:true"    json:"pings"`
-	TrainedAt    *time.Time `gorm:"default:null"    json:"trained_at"`
-	UpdatedAt    time.Time  `gorm:"autoUpdateTime"  json:"updated_at"`
-	Premium      bool       `gorm:"default:false"   json:"premium"`
+	ID                string     `gorm:"primaryKey"      json:"id"`
+	Name              string     `gorm:"not null"        json:"name"`
+	ReplyRate         int        `gorm:"default:10"      json:"reply_rate"`
+	ReactionRate      int        `gorm:"default:30"      json:"reaction_rate"`
+	VcJoinRate        int        `gorm:"default:100"     json:"vc_join_rate"`
+	MaxSizeMb         int        `gorm:"default:25" json:"max_size_mb"`
+	NGramSize         int        `gorm:"default:2"  json:"n_gram_size"`
+	MarkovMaxBranches int        `gorm:"default:0"  json:"markov_max_branches"`
+	TTSLanguage       string     `gorm:"default:'en'"    json:"tts_language"`
+	Pings             bool       `gorm:"default:true"    json:"pings"`
+	TrainedAt         *time.Time `gorm:"default:null"    json:"trained_at"`
+	UpdatedAt         time.Time  `gorm:"autoUpdateTime"  json:"updated_at"`
+	Premium           bool       `gorm:"default:false"   json:"premium"`
 }
 
 // MaxSizeBytes returns the configured size limit in bytes (0 = unlimited).
@@ -86,7 +86,7 @@ func (repo *ChainsRepository) GetChainByID(id string) (*ChainConfig, error) {
 	return &chain, nil
 }
 
-// GetAll returns all chains from SQLite (admin/bulk path; not cache-critical).
+// GetAll returns all chains from DB (admin/bulk path; not cache-critical).
 func (repo *ChainsRepository) GetAll() ([]*ChainConfig, error) {
 	var chains []*ChainConfig
 	return chains, repo.DB.Find(&chains).Error

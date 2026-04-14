@@ -1,5 +1,3 @@
-// cmd/migrate/main.go
-//
 // One-shot migration: reads all guild messages from SQLite, trains the Markov
 // chains in Redis, warms the config cache for every guild, and reconciles the
 // estimated-bytes counter so size-limit enforcement is accurate from the first
@@ -10,8 +8,9 @@
 //
 /* Usage:
    go run ./cmd/migrate \
-     --db    ./data/rolando.db \
-     --redis redis://localhost:6379
+     --db      ./data/rolando.db \
+     --redis  redis://:change_me@localhost:6379 \
+     --workers 8
 */
 package main
 
@@ -21,6 +20,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"rolando/internal/config"
@@ -29,11 +30,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// sqlite3 data/rolando.db "BEGIN TRANSACTION; ALTER TABLE chains RENAME TO chain_configs; UPDATE chain_configs SET max_size_mb = max_size_mb + 25; COMMIT;"
-
 func main() {
 	dbPath := flag.String("db", config.DatabasePath, "path to SQLite messages database")
-	redisAddr := flag.String("redis", config.RedisUrl, "Redis URL")
+	redisURL := flag.String("redis", config.RedisUrl, "Redis URL")
+	workers := flag.Int("workers", 8, "number of concurrent workers")
 	flag.Parse()
 
 	// --- SQLite ---
@@ -43,17 +43,18 @@ func main() {
 	}
 
 	// --- Redis ---
-	opt, err := redis.ParseURL(*redisAddr)
+	opt, err := redis.ParseURL(*redisURL)
 	if err != nil {
 		log.Fatalf("parse redis url: %v", err)
 	}
+	// Give the pool enough connections so workers don't queue behind each other.
+	opt.PoolSize = *workers + 2
 	rdb := redis.NewClient(opt)
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		log.Fatalf("redis ping: %v", err)
 	}
 
-	// ChainsRepository now requires the Redis client for cache warming.
 	chainsRepo, err := repositories.NewChainsRepository(*dbPath, rdb)
 	if err != nil {
 		log.Fatalf("open sqlite (chains): %v", err)
@@ -61,51 +62,96 @@ func main() {
 
 	markovRepo := repositories.NewRedisRepository(rdb)
 
-	// --- Load all guilds ---
 	chains, err := chainsRepo.GetAll()
 	if err != nil {
 		log.Fatalf("list chains: %v", err)
 	}
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
-	logger.Printf("Migrating %d guilds...", len(chains))
+	logger.Printf("Migrating %d guilds with %d workers...", len(chains), *workers)
 
-	for _, chain := range chains {
-		start := time.Now()
+	// Counters for the final summary line.
+	var (
+		nOK      atomic.Int64
+		nSkipped atomic.Int64
+		nErr     atomic.Int64
+	)
 
-		var totalRows int
-		trainErr := messagesRepo.ScanGuildMessageContents(chain.ID, 2000, func(texts []string) error {
-			totalRows += len(texts)
-			return markovRepo.TrainBatch(ctx, chain.ID, texts, chain.NGramSize, 0, chain.MarkovMaxBranches)
+	// Feed guilds through a buffered channel so workers can pull at their own pace.
+	type job struct {
+		index int
+		chain *repositories.ChainConfig
+	}
+	jobs := make(chan job, len(chains))
+	for i, c := range chains {
+		jobs <- job{i + 1, c}
+	}
+	close(jobs)
+
+	var wg sync.WaitGroup
+	for range *workers {
+		wg.Go(func() {
+			for j := range jobs {
+				chain := j.chain
+
+				// Fast path: if the guild has no messages at all in SQLite,
+				// all we need to do is warm the config cache. Skip the Redis
+				// train + reconcile round-trips entirely.
+				count, err := messagesRepo.CountGuildMessages(chain.ID)
+				if err != nil {
+					logger.Printf("  [ERR]  [%d] %s: count failed: %v", j.index, chain.Name, err)
+					nErr.Add(1)
+					continue
+				}
+				if count == 0 {
+					if _, err := chainsRepo.GetChainByID(chain.ID); err != nil {
+						logger.Printf("  [WARN] [%d] %s: cache warm failed: %v", j.index, chain.Name, err)
+					}
+					logger.Printf("  [SKIP] [%d] %-30s  (0 messages)", j.index, chain.Name)
+					nSkipped.Add(1)
+					continue
+				}
+
+				start := time.Now()
+
+				// Train.
+				var totalRows int
+				trainErr := messagesRepo.ScanGuildMessageContents(chain.ID, 2000, func(texts []string) error {
+					totalRows += len(texts)
+					return markovRepo.TrainBatch(ctx, chain.ID, texts, chain.NGramSize, 0, chain.MarkovMaxBranches)
+				})
+				if trainErr != nil {
+					logger.Printf("  [ERR]  [%d] %s (%s): train failed: %v", j.index, chain.Name, chain.ID, trainErr)
+					nErr.Add(1)
+					continue
+				}
+
+				// Reconcile bytes (paginated, non-blocking per-call).
+				// Only run for guilds that actually have data — saves many
+				// round-trips for the long tail of tiny guilds.
+				trueBytes, err := markovRepo.ReconcileBytes(ctx, chain.ID)
+				if err != nil {
+					logger.Printf("  [WARN] [%d] %s (%s): reconcile_bytes failed: %v", j.index, chain.Name, chain.ID, err)
+				}
+
+				// Warm the config cache.
+				if _, err := chainsRepo.GetChainByID(chain.ID); err != nil {
+					logger.Printf("  [WARN] [%d] %s (%s): cache warm failed: %v", j.index, chain.Name, chain.ID, err)
+				}
+
+				elapsed := time.Since(start).Round(time.Millisecond)
+				logger.Printf("  [OK]   [%d] %-30s  %6d messages  n_gram=%d  ~%s  %s",
+					j.index, chain.Name, totalRows, chain.NGramSize,
+					formatBytes(trueBytes), elapsed)
+				nOK.Add(1)
+			}
 		})
-		if trainErr != nil {
-			logger.Printf("  [ERR]  %s (%s): train failed: %v", chain.Name, chain.ID, trainErr)
-			continue
-		}
-
-		// Train path: size limit intentionally bypassed during migration so we faithfully
-		// restore existing data; the limit is enforced from the first live write after migration.
-
-		// 3. Reconcile the byte counter against the true MEMORY USAGE values so
-		//    the size-limit check is accurate from day one post-migration.
-		trueBytes, err := markovRepo.ReconcileBytes(ctx, chain.ID)
-		if err != nil {
-			logger.Printf("  [WARN] %s (%s): reconcile_bytes failed: %v", chain.Name, chain.ID, err)
-		}
-
-		// 4. Warm the Redis config cache for this guild.
-		//    GetChainByID writes through to the cache internally.
-		if _, err := chainsRepo.GetChainByID(chain.ID); err != nil {
-			logger.Printf("  [WARN] %s (%s): cache warm failed: %v", chain.Name, chain.ID, err)
-		}
-
-		elapsed := time.Since(start).Round(time.Millisecond)
-		logger.Printf("  [OK]   %-30s  %6d messages  n_gram=%d  ~%s  %s",
-			chain.Name, totalRows, chain.NGramSize,
-			formatBytes(trueBytes), elapsed)
 	}
 
-	fmt.Println("Migration complete.")
+	wg.Wait()
+
+	fmt.Printf("\nMigration complete. ok=%d  skipped=%d  errors=%d\n",
+		nOK.Load(), nSkipped.Load(), nErr.Load())
 }
 
 func formatBytes(b uint64) string {

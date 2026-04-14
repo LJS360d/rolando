@@ -103,6 +103,14 @@ func (repo *MessagesRepository) AddMessagesToGuild(guildID string, messages []st
 	return nil
 }
 
+func (repo *MessagesRepository) CountGuildMessages(guildID string) (int64, error) {
+	var count int64
+	if err := repo.DB.Model(&Message{}).Where("guild_id = ?", guildID).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // GetAllGuildMessages fetches all messages for a specific guild
 func (repo *MessagesRepository) GetAllGuildMessages(guildID string) ([]Message, error) {
 	var messages []Message
