@@ -7,14 +7,20 @@ import (
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/logger"
 	"rolando/internal/repositories"
+	"rolando/internal/utils"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
 )
+
+// concurrent channels being fetched at once
+const fetchWorkers = 3
 
 type DataFetchService struct {
 	Session        *bot.Client
@@ -37,15 +43,15 @@ func NewDataFetchService(session *bot.Client, chainService *ChainsService, messa
 }
 
 // FetchAllGuildMessages fetches messages from all accessible channels in the guild.
-func (d *DataFetchService) FetchAllGuildMessages(guildID string) ([]string, error) {
+func (d *DataFetchService) FetchAllGuildMessages(guildID string) (int, error) {
 	gid, err := snowflake.Parse(guildID)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	guild, ok := d.Session.Caches.Guild(gid)
 	if !ok {
-		return nil, fmt.Errorf("guild with id '%s' not found in cache", guildID)
+		return 0, fmt.Errorf("guild with id '%s' not found in cache", guildID)
 	}
 
 	var channels []discord.GuildChannel
@@ -53,98 +59,111 @@ func (d *DataFetchService) FetchAllGuildMessages(guildID string) ([]string, erro
 		if ch.Type() == discord.ChannelTypeGuildText {
 			channels = append(channels, ch)
 		}
-		return true // continue iterating
+		return true
 	})
 
+	// frontload accessible channels
+	accessible := channels[:0]
+	for _, ch := range channels {
+		if helpers.HasGuildTextChannelAccess(d.Session, d.Session.ID(), ch) {
+			accessible = append(accessible, ch)
+		} else {
+			logger.Debugf("channel #%s is not accessible", ch.Name())
+		}
+	}
+
+	// Worker pool: fetchWorkers goroutines pull from a channel queue.
+	// Keeps concurrency bounded so disgo's gateway goroutines aren't starved.
+	queue := make(chan discord.GuildChannel, len(accessible))
+	for _, ch := range accessible {
+		queue <- ch
+	}
+	close(queue)
+
 	var (
-		wg        sync.WaitGroup
-		messageCh = make(chan []string, len(channels))
+		totalCount atomic.Int64
+		wg         sync.WaitGroup
 	)
 
-	for _, channel := range channels {
-		if !helpers.HasGuildTextChannelAccess(d.Session, d.Session.ID(), channel) {
-			logger.Debugf("channel #%s is not accessible", channel.Name())
-			continue
-		}
-		wg.Add(1)
-		go func(ch discord.Channel) {
-			defer wg.Done()
-			messages, err := d.fetchChannelMessages(ch, guildID)
-			if err != nil {
-				logger.Errorf("failed to fetch messages for channel #%s: %v", ch.Name(), err)
-				return
+	for range fetchWorkers {
+		wg.Go(func() {
+			for ch := range queue {
+				count, err := d.fetchChannelMessages(ch, guildID)
+				if err != nil {
+					logger.Errorf("failed to fetch messages for channel #%s: %v", ch.Name(), err)
+				}
+				totalCount.Add(int64(count))
 			}
-			if len(messages) > 0 {
-				messageCh <- messages
-			}
-		}(channel)
+		})
 	}
 
 	wg.Wait()
-	close(messageCh)
 
-	var allMessages []string
-	for msgs := range messageCh {
-		allMessages = append(allMessages, msgs...)
-	}
-
-	logger.Infof("fetched %d total messages in guild %s", len(allMessages), guild.Name)
-	return allMessages, nil
+	total := int(totalCount.Load())
+	logger.Infof("fetched %d total messages in guild %s", total, guild.Name)
+	return total, nil
 }
 
-func (d *DataFetchService) fetchChannelMessages(channel discord.Channel, guildID string) ([]string, error) {
+func (d *DataFetchService) fetchChannelMessages(channel discord.Channel, guildID string) (int, error) {
 	var (
-		allMessages []string
-		lastID      snowflake.ID // zero value = start from latest
-		errorCount  int
+		totalFetched int
+		lastID       snowflake.ID
+		errorCount   int
 	)
 
-	for len(allMessages) < d.MessageLimit {
-		batch, newLastID, err := d.fetchBatch(channel.ID(), lastID)
+	for totalFetched < d.MessageLimit {
+		raw, cleaned, newLastID, err := d.fetchBatch(channel.ID(), lastID)
 		if err != nil {
 			if errors.Is(err, rest.ErrNoMorePages) {
-				break // clean end of channel history, not an error
-			}
-			errorCount++
-			logger.Warnf("error fetching batch from #%s (attempt %d/%d): %v", channel.Name(), errorCount, d.MaxFetchErrors, err)
-			if errorCount >= d.MaxFetchErrors {
-				logger.Warnf("error limit reached for channel #%s, stopping", channel.Name())
 				break
 			}
+			errorCount++
+			logger.Warnf("error fetching batch from #%s (attempt %d/%d): %v",
+				channel.Name(), errorCount, d.MaxFetchErrors, err)
+			if errorCount >= d.MaxFetchErrors {
+				break
+			}
+			time.Sleep(2 * time.Second)
 			continue
 		}
 
-		if newLastID == lastID {
+		// No more pages — API returned nothing new
+		if raw == 0 || newLastID == lastID {
 			break
 		}
 
-		go d.ChainService.UpdateChainState(context.Background(), guildID, batch)
-		go d.messagesRepo.AddMessagesToGuild(guildID, batch)
+		// Only write if the filter produced anything — but always paginate
+		if len(cleaned) > 0 {
+			d.ChainService.UpdateChainState(context.Background(), guildID, cleaned)
+			d.messagesRepo.AddMessagesToGuild(guildID, cleaned)
+		}
 
-		allMessages = append(allMessages, batch...)
+		totalFetched += raw
 		lastID = newLastID
-		errorCount = 0 // reset on success
+		errorCount = 0
+
+		time.Sleep(300 * time.Millisecond)
 	}
 
-	logger.Infof("fetched %d messages from channel #%s", len(allMessages), channel.Name())
-	return allMessages, nil
+	logger.Infof("fetched %d messages from channel #%s", totalFetched, channel.Name())
+	return totalFetched, nil
 }
 
-// fetchBatch fetches one page of up to 100 messages before lastID (or from the latest if lastID is zero).
-// Returns the cleaned message strings, the ID of the last (oldest) message fetched for pagination, and any error.
-func (d *DataFetchService) fetchBatch(channelID, lastID snowflake.ID) ([]string, snowflake.ID, error) {
+// fetchBatch returns: raw message count, cleaned strings, new pagination ID, error.
+// Separating raw count from cleaned count is what fixes the false-termination bug.
+func (d *DataFetchService) fetchBatch(channelID, lastID snowflake.ID) (int, []string, snowflake.ID, error) {
 	messages, err := d.Session.Rest.GetMessages(channelID, 0, lastID, 0, 100)
 	if err != nil {
-		return nil, 0, err
+		return 0, nil, 0, err
 	}
 
 	if len(messages) == 0 {
-		return nil, lastID, nil
+		return 0, nil, lastID, nil
 	}
 
 	cleaned := d.cleanMessages(messages)
 	newLastID := messages[len(messages)-1].ID
-	return cleaned, newLastID, nil
+	return len(messages), cleaned, newLastID, nil
 }
 
 func (d *DataFetchService) cleanMessages(messages []discord.Message) []string {
@@ -154,7 +173,7 @@ func (d *DataFetchService) cleanMessages(messages []discord.Message) []string {
 		if d.SkipBots && msg.Author.Bot && !isWebhook {
 			continue
 		}
-		if len(strings.Fields(msg.Content)) > 1 || d.containsURL(msg.Content) {
+		if len(strings.Fields(msg.Content)) > 1 || utils.ReURL.MatchString(msg.Content) {
 			result = append(result, msg.Content)
 			for _, attachment := range msg.Attachments {
 				result = append(result, attachment.URL)
@@ -162,8 +181,4 @@ func (d *DataFetchService) cleanMessages(messages []discord.Message) []string {
 		}
 	}
 	return result
-}
-
-func (d *DataFetchService) containsURL(content string) bool {
-	return strings.Contains(content, "http://") || strings.Contains(content, "https://")
 }

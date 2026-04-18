@@ -2,9 +2,18 @@ package utils
 
 import (
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 )
+
+var (
+	ReURL = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+`)
+)
+
+func ExtractUrls(text string) []string {
+	return ReURL.FindAllString(text, -1)
+}
 
 func ExtractUrlInfo(inputUrl string) (domain string, extension string) {
 	parsedUrl, err := url.Parse(inputUrl)

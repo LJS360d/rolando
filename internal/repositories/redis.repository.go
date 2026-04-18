@@ -12,7 +12,6 @@ import (
 )
 
 var (
-	reURL         = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+`)
 	reDiscordPing = regexp.MustCompile(`<@\S+>`)
 	reBadChars    = regexp.MustCompile(`[\*_~|\[\]\(\)\{\}#\+\-!<>=\\` + "`" + `]`)
 	reLongNums    = regexp.MustCompile(`\b\d{6,}\b`)
@@ -31,7 +30,7 @@ func NewRedisRepository(rdb *redis.Client) *RedisRepository {
 // URLs are classified and stored in media sets instead.
 // maxSizeBytes = 0 means unlimited.
 func (r *RedisRepository) Train(ctx context.Context, guildID, message string, nGramSize, maxSizeBytes, maxBranches int) error {
-	for _, url := range reURL.FindAllString(message, -1) {
+	for _, url := range utils.ExtractUrls(message) {
 		if err := r.AddMedia(ctx, guildID, url); err != nil {
 			return err
 		}
@@ -82,7 +81,7 @@ func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messag
 	}
 
 	for _, msg := range messages {
-		for _, url := range reURL.FindAllString(msg, -1) {
+		for _, url := range utils.ExtractUrls(msg) {
 			if err := r.AddMedia(ctx, guildID, url); err != nil {
 				return err
 			}
@@ -109,7 +108,7 @@ func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messag
 
 // Delete removes a message's contribution from the chain.
 func (r *RedisRepository) Delete(ctx context.Context, guildID, message string, nGramSize int) error {
-	for _, url := range reURL.FindAllString(message, -1) {
+	for _, url := range utils.ExtractUrls(message) {
 		if err := r.RemoveMedia(ctx, guildID, classifyURL(url), url); err != nil {
 			return err
 		}
@@ -279,7 +278,7 @@ func FilterText(text string, pings bool) string {
 	if !pings {
 		text = reDiscordPing.ReplaceAllString(text, "")
 	}
-	text = reURL.ReplaceAllString(text, "")
+	text = utils.ReURL.ReplaceAllString(text, "")
 	text = reBadChars.ReplaceAllString(text, "")
 	text = strings.TrimSpace(text)
 	text = reSpaces.ReplaceAllString(text, " ")

@@ -46,30 +46,32 @@ func (h *ButtonsHandler) onConfirmTrain(s *bot.Client, i *events.ComponentIntera
 		return
 	}
 
-	startTime := time.Now()
-	messages, err := h.DataFetchService.FetchAllGuildMessages(i.GuildID().String())
-	if err != nil {
-		logger.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID, err)
-		// Revert chain status
-		chainDoc.TrainedAt = nil
-		if _, err = h.ChainsService.UpdateChainMeta(ctx, i.GuildID().String(), map[string]any{"trained_at": nil}); err != nil {
-			logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
+	// background job
+	go func(s *bot.Client, i *events.ComponentInteractionCreate) {
+		startTime := time.Now()
+		n, err := h.DataFetchService.FetchAllGuildMessages(i.GuildID().String())
+		if err != nil {
+			logger.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID, err)
+			// Revert chain status
+			chainDoc.TrainedAt = nil
+			if _, err = h.ChainsService.UpdateChainMeta(ctx, i.GuildID().String(), map[string]any{"trained_at": nil}); err != nil {
+				logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID, err)
+			}
+			return
 		}
-		return
-	}
 
-	// Send completion message
-	finalMsg := fmt.Sprintf("%s Finished Fetching messages.\nMessages fetched: `%s`\nTime elapsed: `%s`\nMessages/Second: `%s`",
-		i.User().Mention(),
-		utils.FormatNumber(float64(len(messages))),
-		time.Since(startTime).String(),
-		utils.FormatNumber(
-			float64(len(messages))/(time.Since(startTime).Seconds()),
-		),
-	)
+		// Send completion message
+		finalMsg := fmt.Sprintf("%s Finished Fetching messages.\nMessages fetched: `%s`\nTime elapsed: `%s`\nMessages/Second: `%s`",
+			i.User().Mention(),
+			utils.FormatNumber(float64(n)),
+			time.Since(startTime).String(),
+			utils.FormatNumber(
+				float64(n)/(time.Since(startTime).Seconds()),
+			),
+		)
 
-	if _, err := s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent(finalMsg)); err != nil {
-		logger.Errorf("Failed to send training finished msg: %v", err)
-	}
-
+		if _, err := s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent(finalMsg)); err != nil {
+			logger.Errorf("Failed to send training finished msg: %v", err)
+		}
+	}(s, i)
 }

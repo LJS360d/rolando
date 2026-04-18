@@ -1,6 +1,6 @@
 .PHONY: all build run dev lint clean vosk dave run-docker
 
-VERSION      := 4.1.2
+VERSION      := 4.1.3
 BUILD_DIR    := bin
 MAIN_PACKAGE := ./cmd
 BINARY_NAME  := main
