@@ -197,9 +197,9 @@ local function find_prefix(keys, args)
     end
   end
 
-  local cursor      = "0"
-  local chosen_key  = nil
-  local n           = 0
+  local cursor     = "0"
+  local chosen_key = nil
+  local n          = 0
   repeat
     local res = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', 200)
     cursor = res[1]
@@ -355,11 +355,11 @@ local function reconcile_bytes_batch(keys, args)
     return { "0", total }
   end
 
-  local matchpat    = state_keys_match(guild_id)
-  local partial     = 0
+  local matchpat = state_keys_match(guild_id)
+  local partial  = 0
 
-  local res    = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', batch_size)
-  local next_c = res[1]
+  local res      = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', batch_size)
+  local next_c   = res[1]
   for _, sk in ipairs(res[2]) do
     local usage = redis.call('MEMORY', 'USAGE', sk, 'SAMPLES', 0)
     if usage then partial = partial + usage end
@@ -378,6 +378,7 @@ local function reconcile_bytes_batch(keys, args)
     add(media_key(guild_id, "gif"))
     add(media_key(guild_id, "image"))
     add(media_key(guild_id, "video"))
+    add(media_key(guild_id, "generic"))
   end
 
   return { next_c, partial }
@@ -404,8 +405,8 @@ local function cap_branching_batch(keys, args)
   local removed  = 0
   local matchpat = state_keys_match(guild_id)
 
-  local res    = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', batch_size)
-  local next_c = res[1]
+  local res      = redis.call('SCAN', cursor, 'MATCH', matchpat, 'COUNT', batch_size)
+  local next_c   = res[1]
   for _, sk in ipairs(res[2]) do
     local before = redis.call('HLEN', sk)
     prune_transition_hash(sk, max_f)
@@ -437,6 +438,7 @@ local function clear_guild(keys, _args)
   redis.call('DEL', media_key(guild_id, "gif"))
   redis.call('DEL', media_key(guild_id, "image"))
   redis.call('DEL', media_key(guild_id, "video"))
+  redis.call('DEL', media_key(guild_id, "generic"))
   return 1
 end
 
@@ -491,26 +493,27 @@ local function get_media_counts(keys, _args)
     redis.call('SCARD', media_key(guild_id, "gif")),
     redis.call('SCARD', media_key(guild_id, "image")),
     redis.call('SCARD', media_key(guild_id, "video")),
+    redis.call('SCARD', media_key(guild_id, "generic")),
   }
 end
 
 -- ---------------------------------------------------------------------------
 -- Registration
 -- ---------------------------------------------------------------------------
-redis.register_function('train_markov',         train_markov)
-redis.register_function('train_batch',          train_batch)
-redis.register_function('count_message',        count_message)
-redis.register_function('find_prefix',          find_prefix)
-redis.register_function('generate_markov',      generate_markov)
-redis.register_function('delete_markov',        delete_markov)
-redis.register_function('get_stats_markov',     get_stats_markov)
+redis.register_function('train_markov', train_markov)
+redis.register_function('train_batch', train_batch)
+redis.register_function('count_message', count_message)
+redis.register_function('find_prefix', find_prefix)
+redis.register_function('generate_markov', generate_markov)
+redis.register_function('delete_markov', delete_markov)
+redis.register_function('get_stats_markov', get_stats_markov)
 redis.register_function('reconcile_bytes_batch', reconcile_bytes_batch)
-redis.register_function('cap_branching_batch',  cap_branching_batch)
-redis.register_function('clear_guild',          clear_guild)
-redis.register_function('set_config',           set_config)
-redis.register_function('get_config',           get_config)
-redis.register_function('delete_config',        delete_config)
-redis.register_function('add_media',            add_media)
-redis.register_function('remove_media',         remove_media)
-redis.register_function('get_random_media',     get_random_media)
-redis.register_function('get_media_counts',     get_media_counts)
+redis.register_function('cap_branching_batch', cap_branching_batch)
+redis.register_function('clear_guild', clear_guild)
+redis.register_function('set_config', set_config)
+redis.register_function('get_config', get_config)
+redis.register_function('delete_config', delete_config)
+redis.register_function('add_media', add_media)
+redis.register_function('remove_media', remove_media)
+redis.register_function('get_random_media', get_random_media)
+redis.register_function('get_media_counts', get_media_counts)

@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 
+	"rolando/internal/utils"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -29,9 +31,10 @@ func NewRedisRepository(rdb *redis.Client) *RedisRepository {
 // URLs are classified and stored in media sets instead.
 // maxSizeBytes = 0 means unlimited.
 func (r *RedisRepository) Train(ctx context.Context, guildID, message string, nGramSize, maxSizeBytes, maxBranches int) error {
-	if strings.HasPrefix(message, "https://") {
-		kind := classifyURL(message)
-		return r.rdb.FCall(ctx, "add_media", []string{guildID}, kind, message).Err()
+	for _, url := range reURL.FindAllString(message, -1) {
+		if err := r.AddMedia(ctx, guildID, url); err != nil {
+			return err
+		}
 	}
 
 	tokens := tokenize(message)
@@ -79,12 +82,10 @@ func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messag
 	}
 
 	for _, msg := range messages {
-		if strings.HasPrefix(msg, "https://") {
-			kind := classifyURL(msg)
-			if err := r.rdb.FCall(ctx, "add_media", []string{guildID}, kind, msg).Err(); err != nil {
+		for _, url := range reURL.FindAllString(msg, -1) {
+			if err := r.AddMedia(ctx, guildID, url); err != nil {
 				return err
 			}
-			continue
 		}
 
 		tokens := tokenize(msg)
@@ -108,9 +109,10 @@ func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messag
 
 // Delete removes a message's contribution from the chain.
 func (r *RedisRepository) Delete(ctx context.Context, guildID, message string, nGramSize int) error {
-	if strings.HasPrefix(message, "https://") {
-		kind := classifyURL(message)
-		return r.rdb.FCall(ctx, "remove_media", []string{guildID}, kind, message).Err()
+	for _, url := range reURL.FindAllString(message, -1) {
+		if err := r.RemoveMedia(ctx, guildID, classifyURL(url), url); err != nil {
+			return err
+		}
 	}
 
 	tokens := tokenize(message)
@@ -239,6 +241,7 @@ func (r *RedisRepository) GetGuildSize(ctx context.Context, guildID string) (uin
 // GetMediaCounts returns (gifs, images, videos) counts for a guild.
 func (r *RedisRepository) GetMediaCounts(ctx context.Context, guildID string) (gifs, images, videos int64, err error) {
 	res, err := r.rdb.FCall(ctx, "get_media_counts", []string{guildID}).Int64Slice()
+	// TODO get_media_counts actually returns a 4th value for generic links
 	if err != nil || len(res) < 3 {
 		return 0, 0, 0, err
 	}
@@ -310,21 +313,16 @@ func tokenize(text string) []string {
 }
 
 func classifyURL(url string) string {
-	lower := strings.ToLower(url)
-	switch {
-	case strings.Contains(lower, "tenor.com") ||
-		strings.Contains(lower, "giphy.com") ||
-		strings.HasSuffix(lower, ".gif"):
+	if utils.IsGif(url) {
 		return "gif"
-	case strings.HasSuffix(lower, ".mp4") ||
-		strings.HasSuffix(lower, ".webm") ||
-		strings.HasSuffix(lower, ".mov") ||
-		strings.Contains(lower, "youtube.com") ||
-		strings.Contains(lower, "youtu.be"):
-		return "video"
-	default:
+	}
+	if utils.IsImage(url) {
 		return "image"
 	}
+	if utils.IsVideo(url) {
+		return "video"
+	}
+	return "generic"
 }
 
 // parseCursorCount decodes the {cursor_string, integer_count} pair that
