@@ -12,7 +12,7 @@ services:
     environment:
       - DATABASE_PATH=/home/appuser/data/${COMPOSE_PROJECT_NAME}.db
       - SERVER_ADDRESS=0.0.0.0:8080
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379?pool_size=32&min_idle_conns=4&read_timeout=15s&write_timeout=12s&dial_timeout=5s
     networks:
       - default
     restart: unless-stopped
