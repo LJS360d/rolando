@@ -14,6 +14,7 @@ import (
 type SlashCommandsHandler struct {
 	Client        *bot.Client
 	ChainsService *services.ChainsService
+	Jackbox       *services.JackboxService
 	Commands      map[string]SlashCommandHandler
 }
 
@@ -29,10 +30,12 @@ type SlashCommand struct {
 func NewSlashCommandsHandler(
 	client *bot.Client,
 	chainsService *services.ChainsService,
+	jackbox *services.JackboxService,
 ) *SlashCommandsHandler {
 	handler := &SlashCommandsHandler{
 		Client:        client,
 		ChainsService: chainsService,
+		Jackbox:       jackbox,
 		Commands:      make(map[string]SlashCommandHandler),
 	}
 
@@ -204,6 +207,28 @@ func NewSlashCommandsHandler(
 				},
 			},
 			Handler: handler.srcCommand,
+		},
+		{
+			Command: discord.SlashCommandCreate{
+				Name:        "jackbox",
+				Description: "Join a Jackbox Games room",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionString{
+						Name:        "code",
+						Description: "Room code",
+						Required:    true,
+					},
+					discord.ApplicationCommandOptionString{
+						Name:        "password",
+						Description: "Room password (leave empty for no password)",
+						Required:    false,
+					},
+				},
+			},
+			Handler: handler.jackboxCommand,
 		},
 		{
 			Command: discord.SlashCommandCreate{

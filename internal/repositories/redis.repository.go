@@ -302,6 +302,39 @@ func (r *RedisRepository) GetMediaCounts(ctx context.Context, guildID string) (g
 	return res[0], res[1], res[2], nil
 }
 
+func jackboxGuildKey(guildID string) string {
+	return "guild:" + guildID + ":jackbox"
+}
+
+func (r *RedisRepository) SetJackboxState(ctx context.Context, guildID, appTag string) error {
+	return r.runWriteFCall(ctx, guildID, "jackbox_set", func(c context.Context) error {
+		return r.rdb.Set(c, jackboxGuildKey(guildID), appTag, 0).Err()
+	})
+}
+
+func (r *RedisRepository) ClearJackboxState(ctx context.Context, guildID string) error {
+	return r.runWriteFCall(ctx, guildID, "jackbox_del", func(c context.Context) error {
+		return r.rdb.Del(c, jackboxGuildKey(guildID)).Err()
+	})
+}
+
+func (r *RedisRepository) GetJackboxState(ctx context.Context, guildID string) (string, error) {
+	var out string
+	err := r.runWithRedisReadRetry(ctx, guildID, "jackbox_get", func(c context.Context) error {
+		s, e := r.rdb.Get(c, jackboxGuildKey(guildID)).Result()
+		if e == redis.Nil {
+			out = ""
+			return nil
+		}
+		if e != nil {
+			return e
+		}
+		out = s
+		return nil
+	})
+	return out, err
+}
+
 // GetRandomMedia returns a random URL of the given kind ("gif", "image", "video").
 func (r *RedisRepository) GetRandomMedia(ctx context.Context, guildID, kind string) (string, error) {
 	var out string

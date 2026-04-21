@@ -101,9 +101,10 @@ func main() {
 	redisRepo := repositories.NewRedisRepository(rdb)
 	chainsService := services.NewChainsService(client, chainsRepo, redisRepo, messagesRepo)
 	dataFetchService := services.NewDataFetchService(client, chainsService, messagesRepo)
+	jackboxService := services.NewJackboxService(client, redisRepo, chainsService)
 	// Handlers
 	messagesHandler := messages.NewMessageHandler(client, chainsService)
-	commandsHandler := commands.NewSlashCommandsHandler(client, chainsService)
+	commandsHandler := commands.NewSlashCommandsHandler(client, chainsService, jackboxService)
 	buttonsHandler := buttons.NewButtonsHandler(client, dataFetchService, chainsService)
 	eventsHandler := events.NewEventsHandler(client, chainsService)
 	logger.Debugln("All services initialized")

@@ -63,6 +63,17 @@ func (cs *ChainsService) GenerateFiltered(ctx context.Context, guildID string, m
 	return cs.redisRepo.GenerateFiltered(ctx, guildID, maxLength, nGramSize)
 }
 
+func (cs *ChainsService) GenerateLine(ctx context.Context, guildID string, maxWords int) (string, error) {
+	if guildID == "" {
+		return "", fmt.Errorf("empty guild id")
+	}
+	conf, err := cs.GetChainConf(ctx, guildID)
+	if err != nil {
+		return "", err
+	}
+	return cs.GenerateFiltered(ctx, guildID, maxWords, conf.NGramSize)
+}
+
 func (cs *ChainsService) GetRandomMedia(ctx context.Context, guildID, kind string) (string, error) {
 	return cs.redisRepo.GetRandomMedia(ctx, guildID, kind)
 }
