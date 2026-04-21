@@ -19,6 +19,8 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 )
 
+var errMissingChannelAccess = errors.New("missing channel access")
+
 // concurrent channels being fetched at once
 const fetchWorkers = 3
 
@@ -72,32 +74,30 @@ func (d *DataFetchService) FetchAllGuildMessages(guildID string) (int, error) {
 		}
 	}
 
-	// Worker pool: fetchWorkers goroutines pull from a channel queue.
-	// Keeps concurrency bounded so disgo's gateway goroutines aren't starved.
-	queue := make(chan discord.GuildChannel, len(accessible))
-	for _, ch := range accessible {
-		queue <- ch
-	}
-	close(queue)
+	var totalCount atomic.Int64
+	d.ChainService.RunBulkRedisTraining(func() {
+		queue := make(chan discord.GuildChannel, len(accessible))
+		for _, ch := range accessible {
+			queue <- ch
+		}
+		close(queue)
 
-	var (
-		totalCount atomic.Int64
-		wg         sync.WaitGroup
-	)
+		var wg sync.WaitGroup
 
-	for range fetchWorkers {
-		wg.Go(func() {
-			for ch := range queue {
-				count, err := d.fetchChannelMessages(ch, guildID)
-				if err != nil {
-					logger.Errorf("failed to fetch messages for channel #%s: %v", ch.Name(), err)
+		for range fetchWorkers {
+			wg.Go(func() {
+				for ch := range queue {
+					count, err := d.fetchChannelMessages(ch, guildID)
+					if err != nil {
+						logger.Errorf("failed to fetch messages for channel #%s: %v", ch.Name(), err)
+					}
+					totalCount.Add(int64(count))
 				}
-				totalCount.Add(int64(count))
-			}
-		})
-	}
+			})
+		}
 
-	wg.Wait()
+		wg.Wait()
+	})
 
 	total := int(totalCount.Load())
 	logger.Infof("fetched %d total messages in guild %s", total, guild.Name)
@@ -114,6 +114,10 @@ func (d *DataFetchService) fetchChannelMessages(channel discord.Channel, guildID
 	for totalFetched < d.MessageLimit {
 		raw, cleaned, newLastID, err := d.fetchBatch(channel.ID(), lastID)
 		if err != nil {
+			if errors.Is(err, errMissingChannelAccess) {
+				logger.Errorf("cannot read channel #%s: %v", channel.Name(), err)
+				break
+			}
 			if errors.Is(err, rest.ErrNoMorePages) {
 				break
 			}
@@ -154,6 +158,9 @@ func (d *DataFetchService) fetchChannelMessages(channel discord.Channel, guildID
 func (d *DataFetchService) fetchBatch(channelID, lastID snowflake.ID) (int, []string, snowflake.ID, error) {
 	messages, err := d.Session.Rest.GetMessages(channelID, 0, lastID, 0, 100)
 	if err != nil {
+		if rest.IsJSONErrorCode(err, rest.JSONErrorCodeMissingAccess) {
+			return 0, nil, 0, fmt.Errorf("%w: %v", errMissingChannelAccess, err)
+		}
 		return 0, nil, 0, err
 	}
 

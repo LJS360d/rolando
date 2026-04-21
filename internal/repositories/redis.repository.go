@@ -2,10 +2,14 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
+	"time"
 
+	"rolando/internal/logger"
 	"rolando/internal/utils"
 
 	"github.com/redis/go-redis/v9"
@@ -53,7 +57,9 @@ func (r *RedisRepository) Train(ctx context.Context, guildID, message string, nG
 		args = append(args, p)
 	}
 
-	return r.rdb.FCall(ctx, "train_batch", []string{guildID}, args...).Err()
+	return r.runWriteFCall(ctx, guildID, "train_batch", func(c context.Context) error {
+		return r.rdb.FCall(c, "train_batch", []string{guildID}, args...).Err()
+	})
 }
 
 // TrainBatch ingests multiple messages using a single FCall per flush window.
@@ -74,7 +80,9 @@ func (r *RedisRepository) TrainBatch(ctx context.Context, guildID string, messag
 		for _, p := range pairs {
 			args = append(args, p)
 		}
-		err := r.rdb.FCall(ctx, "train_batch", []string{guildID}, args...).Err()
+		err := r.runWriteFCall(ctx, guildID, "train_batch", func(c context.Context) error {
+			return r.rdb.FCall(c, "train_batch", []string{guildID}, args...).Err()
+		})
 		pairs = pairs[:0]
 		msgCount = 0
 		return err
@@ -125,18 +133,28 @@ func (r *RedisRepository) Delete(ctx context.Context, guildID, message string, n
 		next := tokens[i+nGramSize-1]
 		pipe.FCall(ctx, "delete_markov", []string{guildID}, prefix, next)
 	}
-	_, err := pipe.Exec(ctx)
+	err := r.runWriteFCall(ctx, guildID, "delete_markov_pipeline", func(c context.Context) error {
+		_, e := pipe.Exec(c)
+		return e
+	})
 	return err
 }
 
 // ClearGuild wipes all Markov state, media sets, and the byte counter for a guild.
 func (r *RedisRepository) ClearGuild(ctx context.Context, guildID string) error {
-	return r.rdb.FCall(ctx, "clear_guild", []string{guildID}).Err()
+	return r.runWriteFCall(ctx, guildID, "clear_guild", func(c context.Context) error {
+		return r.rdb.FCall(c, "clear_guild", []string{guildID}).Err()
+	})
 }
 
 // Generate produces text of up to maxLength tokens from a random starting prefix.
 func (r *RedisRepository) Generate(ctx context.Context, guildID string, maxLength, nGramSize int) (string, error) {
-	prefix, err := r.rdb.FCall(ctx, "find_prefix", []string{guildID}, "").Text()
+	var prefix string
+	err := r.runWithRedisReadRetry(ctx, guildID, "find_prefix", func(c context.Context) error {
+		var e error
+		prefix, e = r.rdb.FCall(c, "find_prefix", []string{guildID}, "").Text()
+		return e
+	})
 	if err != nil || prefix == "" {
 		return "", err
 	}
@@ -145,7 +163,12 @@ func (r *RedisRepository) Generate(ctx context.Context, guildID string, maxLengt
 
 // GenerateFromSeed produces text seeded by the given string.
 func (r *RedisRepository) GenerateFromSeed(ctx context.Context, guildID, seed string, maxLength, nGramSize int) (string, error) {
-	prefix, err := r.rdb.FCall(ctx, "find_prefix", []string{guildID}, seed).Text()
+	var prefix string
+	err := r.runWithRedisReadRetry(ctx, guildID, "find_prefix", func(c context.Context) error {
+		var e error
+		prefix, e = r.rdb.FCall(c, "find_prefix", []string{guildID}, seed).Text()
+		return e
+	})
 	if err != nil || prefix == "" {
 		return "", err
 	}
@@ -153,12 +176,23 @@ func (r *RedisRepository) GenerateFromSeed(ctx context.Context, guildID, seed st
 }
 
 func (r *RedisRepository) generateFrom(ctx context.Context, guildID, prefix string, maxLength, nGramSize int) (string, error) {
-	return r.rdb.FCall(ctx, "generate_markov", []string{guildID}, prefix, maxLength, nGramSize).Text()
+	var out string
+	err := r.runWithRedisReadRetry(ctx, guildID, "generate_markov", func(c context.Context) error {
+		var e error
+		out, e = r.rdb.FCall(c, "generate_markov", []string{guildID}, prefix, maxLength, nGramSize).Text()
+		return e
+	})
+	return out, err
 }
 
 // GetStats returns (uniquePrefixes, messageCount, estimatedBytes) for a guild.
 func (r *RedisRepository) GetStats(ctx context.Context, guildID string) (uniquePrefixes, messageCount int64, estimatedBytes uint64, err error) {
-	res, err := r.rdb.FCall(ctx, "get_stats_markov", []string{guildID}).Int64Slice()
+	var res []int64
+	err = r.runWithRedisReadRetry(ctx, guildID, "get_stats_markov", func(c context.Context) error {
+		var e error
+		res, e = r.rdb.FCall(c, "get_stats_markov", []string{guildID}).Int64Slice()
+		return e
+	})
 	if err != nil || len(res) < 3 {
 		return 0, 0, 0, err
 	}
@@ -175,7 +209,12 @@ func (r *RedisRepository) ReconcileBytes(ctx context.Context, guildID string) (u
 	var total uint64
 
 	for {
-		raw, err := r.rdb.FCall(ctx, "reconcile_bytes_batch", []string{guildID}, cursor, batchSize).Slice()
+		var raw []any
+		err := r.runWriteFCall(ctx, guildID, "reconcile_bytes_batch", func(c context.Context) error {
+			var e error
+			raw, e = r.rdb.FCall(c, "reconcile_bytes_batch", []string{guildID}, cursor, batchSize).Slice()
+			return e
+		})
 		if err != nil {
 			return 0, fmt.Errorf("reconcile_bytes_batch: %w", err)
 		}
@@ -190,8 +229,10 @@ func (r *RedisRepository) ReconcileBytes(ctx context.Context, guildID string) (u
 		}
 	}
 
-	// Commit the accumulated total back to Redis.
-	if _, err := r.rdb.FCall(ctx, "reconcile_bytes_batch", []string{guildID}, "COMMIT", 0, total).Slice(); err != nil {
+	if err := r.runWriteFCall(ctx, guildID, "reconcile_bytes_batch_commit", func(c context.Context) error {
+		_, e := r.rdb.FCall(c, "reconcile_bytes_batch", []string{guildID}, "COMMIT", 0, total).Slice()
+		return e
+	}); err != nil {
 		return 0, fmt.Errorf("reconcile_bytes_batch COMMIT: %w", err)
 	}
 
@@ -209,7 +250,12 @@ func (r *RedisRepository) CapBranching(ctx context.Context, guildID string, maxB
 	cursor := "0"
 
 	for {
-		raw, err := r.rdb.FCall(ctx, "cap_branching_batch", []string{guildID}, maxBranches, cursor, batchSize).Slice()
+		var raw []any
+		err := r.runWriteFCall(ctx, guildID, "cap_branching_batch", func(c context.Context) error {
+			var e error
+			raw, e = r.rdb.FCall(c, "cap_branching_batch", []string{guildID}, maxBranches, cursor, batchSize).Slice()
+			return e
+		})
 		if err != nil {
 			return removed, fmt.Errorf("cap_branching_batch: %w", err)
 		}
@@ -230,7 +276,12 @@ func (r *RedisRepository) CapBranching(ctx context.Context, guildID string, maxB
 // GetGuildSize returns the current estimated byte count (cheap counter read).
 // For an exact figure use ReconcileBytes.
 func (r *RedisRepository) GetGuildSize(ctx context.Context, guildID string) (uint64, error) {
-	res, err := r.rdb.FCall(ctx, "get_stats_markov", []string{guildID}).Int64Slice()
+	var res []int64
+	err := r.runWithRedisReadRetry(ctx, guildID, "get_stats_markov", func(c context.Context) error {
+		var e error
+		res, e = r.rdb.FCall(c, "get_stats_markov", []string{guildID}).Int64Slice()
+		return e
+	})
 	if err != nil || len(res) < 3 {
 		return 0, err
 	}
@@ -239,8 +290,12 @@ func (r *RedisRepository) GetGuildSize(ctx context.Context, guildID string) (uin
 
 // GetMediaCounts returns (gifs, images, videos) counts for a guild.
 func (r *RedisRepository) GetMediaCounts(ctx context.Context, guildID string) (gifs, images, videos int64, err error) {
-	res, err := r.rdb.FCall(ctx, "get_media_counts", []string{guildID}).Int64Slice()
-	// TODO get_media_counts actually returns a 4th value for generic links
+	var res []int64
+	err = r.runWithRedisReadRetry(ctx, guildID, "get_media_counts", func(c context.Context) error {
+		var e error
+		res, e = r.rdb.FCall(c, "get_media_counts", []string{guildID}).Int64Slice()
+		return e
+	})
 	if err != nil || len(res) < 3 {
 		return 0, 0, 0, err
 	}
@@ -249,18 +304,28 @@ func (r *RedisRepository) GetMediaCounts(ctx context.Context, guildID string) (g
 
 // GetRandomMedia returns a random URL of the given kind ("gif", "image", "video").
 func (r *RedisRepository) GetRandomMedia(ctx context.Context, guildID, kind string) (string, error) {
-	return r.rdb.FCall(ctx, "get_random_media", []string{guildID}, kind).Text()
+	var out string
+	err := r.runWithRedisReadRetry(ctx, guildID, "get_random_media", func(c context.Context) error {
+		var e error
+		out, e = r.rdb.FCall(c, "get_random_media", []string{guildID}, kind).Text()
+		return e
+	})
+	return out, err
 }
 
 // RemoveMedia removes a specific URL from a media set.
 func (r *RedisRepository) RemoveMedia(ctx context.Context, guildID, kind, url string) error {
-	return r.rdb.FCall(ctx, "remove_media", []string{guildID}, kind, url).Err()
+	return r.runWriteFCall(ctx, guildID, "remove_media", func(c context.Context) error {
+		return r.rdb.FCall(c, "remove_media", []string{guildID}, kind, url).Err()
+	})
 }
 
 // AddMedia adds a URL to a media set.
 func (r *RedisRepository) AddMedia(ctx context.Context, guildID, url string) error {
 	kind := classifyURL(url)
-	return r.rdb.FCall(ctx, "add_media", []string{guildID}, kind, url).Err()
+	return r.runWriteFCall(ctx, guildID, "add_media", func(c context.Context) error {
+		return r.rdb.FCall(c, "add_media", []string{guildID}, kind, url).Err()
+	})
 }
 
 // GenerateFiltered generates text and strips URLs, pings, and noisy characters.
@@ -284,6 +349,70 @@ func FilterText(text string, pings bool) string {
 	text = reSpaces.ReplaceAllString(text, " ")
 	text = reLongNums.ReplaceAllStringFunc(text, func(m string) string { return m[:5] })
 	return text
+}
+
+func (r *RedisRepository) runWriteFCall(ctx context.Context, guildID, opName string, fn func(context.Context) error) error {
+	start := time.Now()
+	err := fn(ctx)
+	d := time.Since(start)
+	if err != nil || d > 200*time.Millisecond {
+		logger.Debugf("redis %s guild=%s dur=%s err=%v", opName, guildID, d, err)
+	}
+	return err
+}
+
+func (r *RedisRepository) runWithRedisReadRetry(ctx context.Context, guildID, opName string, fn func(context.Context) error) error {
+	const maxAttempts = 5
+	var lastErr error
+	for attempt := range maxAttempts {
+		start := time.Now()
+		lastErr = fn(ctx)
+		d := time.Since(start)
+		if lastErr != nil || d > 200*time.Millisecond {
+			logger.Debugf("redis %s guild=%s dur=%s attempt=%d err=%v", opName, guildID, d, attempt+1, lastErr)
+		}
+		if lastErr == nil || !isRedisReadRetryable(lastErr) {
+			return lastErr
+		}
+		if err := sleepCtx(ctx, redisReadBackoff(attempt)); err != nil {
+			return err
+		}
+	}
+	return lastErr
+}
+
+func isRedisReadRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	s := err.Error()
+	return strings.Contains(s, "BUSY") || strings.Contains(s, "LOADING") || strings.Contains(s, "i/o timeout")
+}
+
+func redisReadBackoff(attempt int) time.Duration {
+	d := (25 * time.Millisecond) << attempt
+	if d > 750*time.Millisecond {
+		return 750 * time.Millisecond
+	}
+	return d
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // ---------- helpers ----------

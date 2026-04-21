@@ -22,6 +22,11 @@ type ChainsService struct {
 
 	// rebuildMu prevents concurrent rebuilds of the same guild.
 	rebuildMu sync.Map // map[string]*sync.Mutex
+
+	// bulkTrainingMu ensures at most one bulk Redis train (history import or
+	// n-gram rebuild) runs at a time so long train_batch scripts do not stack
+	// against live per-message TrainBatch traffic from other guilds.
+	bulkTrainingMu sync.Mutex
 }
 
 func NewChainsService(
@@ -95,6 +100,15 @@ func (cs *ChainsService) CreateChain(_ context.Context, id, name string) (*repos
 
 // UpdateChainState ingests a batch of raw messages into Redis.
 // The guild's configured size limit is enforced inside the Lua function.
+// RunBulkRedisTraining runs fn while holding a process-wide lock for heavy
+// Redis ingestion (full history fetch or chain rebuild). Live UpdateChainState
+// calls from message events do not use this lock.
+func (cs *ChainsService) RunBulkRedisTraining(fn func()) {
+	cs.bulkTrainingMu.Lock()
+	defer cs.bulkTrainingMu.Unlock()
+	fn()
+}
+
 func (cs *ChainsService) UpdateChainState(ctx context.Context, id string, texts []string) error {
 	chain, err := cs.GetChainConf(ctx, id)
 	if err != nil {
@@ -217,28 +231,29 @@ func (cs *ChainsService) rebuildChain(id string, newNGramSize int) {
 	}
 	logger.Infof("Rebuilding chain %s with n_gram_size=%d", doc.Name, newNGramSize)
 
-	if err := cs.redisRepo.ClearGuild(ctx, id); err != nil {
-		logger.Errorf("rebuildChain: ClearGuild failed for %s: %v", id, err)
-		return
-	}
+	cs.RunBulkRedisTraining(func() {
+		if err := cs.redisRepo.ClearGuild(ctx, id); err != nil {
+			logger.Errorf("rebuildChain: ClearGuild failed for %s: %v", id, err)
+			return
+		}
 
-	messages, err := cs.GetChainMessages(id)
-	if err != nil {
-		logger.Errorf("rebuildChain: GetChainMessages failed for %s: %v", id, err)
-		return
-	}
+		messages, err := cs.GetChainMessages(id)
+		if err != nil {
+			logger.Errorf("rebuildChain: GetChainMessages failed for %s: %v", id, err)
+			return
+		}
 
-	if err := cs.redisRepo.TrainBatch(ctx, id, messages, newNGramSize, doc.MaxSizeBytes(), doc.MarkovMaxBranches); err != nil {
-		logger.Errorf("rebuildChain: TrainBatch failed for %s: %v", id, err)
-		return
-	}
+		if err := cs.redisRepo.TrainBatch(ctx, id, messages, newNGramSize, doc.MaxSizeBytes(), doc.MarkovMaxBranches); err != nil {
+			logger.Errorf("rebuildChain: TrainBatch failed for %s: %v", id, err)
+			return
+		}
 
-	// Reconcile the byte counter after a full rebuild.
-	if _, err := cs.redisRepo.ReconcileBytes(ctx, id); err != nil {
-		logger.Warnf("rebuildChain: ReconcileBytes failed for %s: %v", id, err)
-	}
+		if _, err := cs.redisRepo.ReconcileBytes(ctx, id); err != nil {
+			logger.Warnf("rebuildChain: ReconcileBytes failed for %s: %v", id, err)
+		}
 
-	logger.Infof("Rebuild complete for %s", doc.Name)
+		logger.Infof("Rebuild complete for %s", doc.Name)
+	})
 }
 
 // ---------- helpers ----------

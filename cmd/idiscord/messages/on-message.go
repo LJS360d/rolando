@@ -2,6 +2,7 @@ package messages
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/data"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/disgo/rest"
+	"github.com/disgoorg/snowflake/v2"
 )
 
 // OnMessageCreate handles new message events.
@@ -104,9 +107,7 @@ func (h *MessageHandler) handleReply(m discord.Message, chain *repositories.Chai
 			GuildID:   m.GuildID,
 		},
 	}
-	if _, err = h.Client.Rest.CreateMessage(m.ChannelID, sendData); err != nil {
-		logger.Errorf("Failed to send mention reply in '%s': %v", m.GuildID, err)
-	}
+	h.sendMessageCreate(m.ChannelID, guildIDStr(m), sendData, "Failed to send mention reply in '%s': %v")
 }
 
 // handleRandomMessage sends a non-reply/quiet-reply message.
@@ -138,9 +139,7 @@ func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string
 				RepliedUser: false,
 			},
 		}
-		if _, err = h.Client.Rest.CreateMessage(m.ChannelID, sendData); err != nil {
-			logger.Errorf("Failed to send mention reply in '%s': %v", m.GuildID, err)
-		}
+		h.sendMessageCreate(m.ChannelID, guildIDStr(m), sendData, "Failed to send random reply in '%s': %v")
 		return
 	}
 	if _, err = h.Client.Rest.CreateMessage(m.ChannelID, discord.MessageCreate{
@@ -168,6 +167,27 @@ func (h *MessageHandler) handleReaction(m discord.Message, guildName string) {
 }
 
 // --------------------- Helpers ---------------------------
+
+func guildIDStr(m discord.Message) string {
+	if m.GuildID == nil {
+		return ""
+	}
+	return m.GuildID.String()
+}
+
+func (h *MessageHandler) sendMessageCreate(channelID snowflake.ID, guildLabel string, msg discord.MessageCreate, errTemplate string) {
+	_, err := h.Client.Rest.CreateMessage(channelID, msg)
+	if err != nil {
+		var re *rest.Error
+		if errors.As(err, &re) && re.Code == rest.JSONErrorCodeInvalidFormBody && msg.MessageReference != nil {
+			plain := discord.MessageCreate{Content: msg.Content}
+			_, err = h.Client.Rest.CreateMessage(channelID, plain)
+		}
+		if err != nil {
+			logger.Errorf(errTemplate, guildLabel, err)
+		}
+	}
+}
 
 // Helper method to determine if bot should send a commit a rate weighted action
 func ratedChoice(rate int) bool {
