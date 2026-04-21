@@ -4,13 +4,11 @@ import (
 	"rolando/cmd/idiscord/services"
 	"rolando/internal/config"
 	"rolando/internal/logger"
-	"slices"
 	"time"
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/disgoorg/snowflake/v2"
 )
 
 type SlashCommandsHandler struct {
@@ -295,72 +293,72 @@ func NewSlashCommandsHandler(
 	return handler
 }
 
-// registerCommands registers only new or modified slash commands
+func commandCreates(cmds []SlashCommand) []discord.ApplicationCommandCreate {
+	out := make([]discord.ApplicationCommandCreate, len(cmds))
+	for i := range cmds {
+		out[i] = cmds[i].Command
+	}
+	return out
+}
+
 func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
-	// Fetch currently registered commands from Discord
-	registeredCommands, err := h.Client.Rest.GetGlobalCommands(h.Client.ApplicationID, false)
-	if err != nil {
-		logger.Errorf("Failed to fetch registered commands: %v", err)
-		registeredCommands = []discord.ApplicationCommand{}
+	for i := range commands {
+		h.Commands[commands[i].Command.CommandName()] = commands[i].Handler
 	}
 
-	forceRefresh := config.ForceCommandRefresh
-	// Create a map of registered commands for fast lookup
-	registeredCommandsMap := make(map[string]discord.ApplicationCommand)
-	for _, cmd := range registeredCommands {
-		registeredCommandsMap[cmd.Name()] = cmd
-		isOutdated := !slices.ContainsFunc(commands, func(c SlashCommand) bool {
-			return shouldRefreshCommand(cmd, c.Command)
-		})
-		if isOutdated {
-			logger.Warnf("Removing outdated slash command: %s", cmd.Name())
-			h.Client.Rest.DeleteGlobalCommand(h.Client.ApplicationID, cmd.ID())
+	var global []SlashCommand
+	guildSeen := make(map[string]struct{})
+	for i := range commands {
+		if len(commands[i].GuildIds) == 0 {
+			global = append(global, commands[i])
+			continue
+		}
+		for _, gid := range commands[i].GuildIds {
+			guildSeen[gid] = struct{}{}
 		}
 	}
 
-	// Iterate through new commands and check if they are already registered
-	for _, cmd := range commands {
-		if existingCmd, exists := registeredCommandsMap[cmd.Command.CommandName()]; exists {
-			// Compare if the new command differs in some way (e.g., updated description or options)
-			if forceRefresh || shouldRefreshCommand(existingCmd, cmd.Command) {
-				logger.Infof("Updating slash command: %s", cmd.Command.CommandName())
-				for _, guildId := range cmd.GuildIds {
-					guildSnowflake := snowflake.MustParse(guildId)
-					h.Client.Rest.DeleteGuildCommand(h.Client.ApplicationID, guildSnowflake, existingCmd.ID())
-					_, err := h.Client.Rest.CreateGuildCommand(h.Client.ApplicationID, guildSnowflake, cmd.Command)
-					if err != nil {
-						logger.Errorf("Failed to register slash command: %v", err)
-					}
-				}
-				// If no guild IDs, create globally
-				if len(cmd.GuildIds) == 0 {
-					h.Client.Rest.DeleteGlobalCommand(h.Client.ApplicationID, existingCmd.ID())
-					_, err := h.Client.Rest.CreateGlobalCommand(h.Client.ApplicationID, cmd.Command)
-					if err != nil {
-						logger.Errorf("Failed to register slash command: %v", err)
-					}
-				}
-			}
+	if len(global) <= 0 {
+		logger.Infof("No global slash commands to sync.")
+		return
+	}
+
+	refresh := config.ForceCommandRefresh
+	if refresh {
+		logger.Infof("Syncing global slash command interactions...")
+		_, err := h.Client.Rest.SetGlobalCommands(h.Client.ApplicationID, commandCreates(global))
+		if err != nil {
+			logger.Errorf("Failed to sync global slash commands: %v", err)
 		} else {
-			// Register the new command
-			logger.Infof("Registering slash command: %s", cmd.Command.CommandName())
-			for _, guildId := range cmd.GuildIds {
-				guildSnowflake := snowflake.MustParse(guildId)
-				_, err := h.Client.Rest.CreateGuildCommand(h.Client.ApplicationID, guildSnowflake, cmd.Command)
-				if err != nil {
-					logger.Errorf("Failed to register slash command: %v", err)
-				}
-			}
-			// If no guild IDs, create globally
-			if len(cmd.GuildIds) == 0 {
-				_, err := h.Client.Rest.CreateGlobalCommand(h.Client.ApplicationID, cmd.Command)
-				if err != nil {
-					logger.Errorf("Failed to register slash command: %v", err)
-				}
-			}
+			logger.Infof("Global slash commands synced successfully.")
 		}
-		h.Commands[cmd.Command.CommandName()] = cmd.Handler
 	}
+
+	// for gid := range guildSeen {
+	// 	var guildCmds []SlashCommand
+	// 	for i := range commands {
+	// 		if slices.Contains(commands[i].GuildIds, gid) {
+	// 			guildCmds = append(guildCmds, commands[i])
+	// 		}
+	// 	}
+	// 	guildID := snowflake.MustParse(gid)
+	// 	remote, err := h.Client.Rest.GetGuildCommands(h.Client.ApplicationID, guildID, false)
+	// 	if err != nil {
+	// 		logger.Errorf("Could not verify guild %s slash commands: %v", gid, err)
+	// 		continue
+	// 	}
+	// 	if force || needsResync(remote, guildCmds) {
+	// 		logger.Infof("Syncing guild %s slash command interactions...", gid)
+	// 		_, err := h.Client.Rest.SetGuildCommands(h.Client.ApplicationID, guildID, commandCreates(guildCmds))
+	// 		if err != nil {
+	// 			logger.Errorf("Failed to sync guild %s slash commands: %v", gid, err)
+	// 		} else {
+	// 			logger.Infof("Guild %s slash commands synced successfully.", gid)
+	// 		}
+	// 	} else {
+	// 		logger.Infof("Guild %s slash commands are up to date. Skipping sync.", gid)
+	// 	}
+	// }
 }
 
 // Entry point for handling slash command interactions
@@ -387,35 +385,4 @@ func (h *SlashCommandsHandler) OnSlashCommandInteraction(event *events.Applicati
 		handler(h.Client, event) // Call the function bound to this command
 	}
 	logger.Infof("/%s handler from '%s' in '%s' done in %s", commandName, who, where, time.Since(startTime).String())
-}
-
-// compares two commands to check if they are identical in the significant fields
-func shouldRefreshCommand(cached discord.ApplicationCommand, loaded discord.ApplicationCommandCreate) bool {
-	if cached.Type() != loaded.Type() || cached.Name() != loaded.CommandName() {
-		return true
-	}
-	// switch cachedCmd := cached.(type) {
-	// case discord.SlashCommand:
-	// 	loadedCmd, ok := loaded.(discord.SlashCommandCreate)
-	// 	if !ok {
-	// 		return true
-	// 	}
-
-	// 	if cachedCmd.Description != loadedCmd.Description {
-	// 		return true
-	// 	}
-
-	// 	if !reflect.DeepEqual(cachedCmd.Options, loadedCmd.Options) {
-	// 		return true
-	// 	}
-
-	// 	// TODO
-	// 	// Check Permissions (Discord returns null or a value)
-	// 	// Note: Check if you care about DMPermissions vs Contexts here too
-
-	// case discord.UserCommand, discord.MessageCommand:
-	// 	// TODO
-	// }
-
-	return false
 }

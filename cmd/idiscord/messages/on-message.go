@@ -68,9 +68,15 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 		// Must use the fetched chain/chainDoc from *this* goroutine
 		botMember, _ := h.Client.Caches.Member(guild.ID, h.Client.ID())
 		if helpers.MentionsUser(m, botMember) {
+			if err := h.Client.Rest.SendTyping(m.ChannelID); err != nil {
+				logger.Errorf("Failed to send typing in '%s': %v", guild.Name, err)
+			}
 			h.handleReply(m, chainConf)
 		}
 		if ratedChoice(chainConf.ReplyRate) {
+			if err := h.Client.Rest.SendTyping(m.ChannelID); err != nil {
+				logger.Errorf("Failed to send typing in '%s': %v", guild.Name, err)
+			}
 			h.handleRandomMessage(m, guild.Name, chainConf)
 		}
 		if ratedChoice(chainConf.ReactionRate) && helpers.HasGuildAddReactionsPermissions(h.Client, h.Client.ID(), channel) {
