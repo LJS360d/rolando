@@ -19,6 +19,7 @@ local function stats_msg_key(guild_id) return "stats:" .. guild_id .. ":message_
 local function stats_bytes_key(guild_id) return "stats:" .. guild_id .. ":estimated_bytes" end
 local function media_key(guild_id, kind) return "media:" .. guild_id .. ":" .. kind end
 local function config_key(guild_id) return "config:" .. guild_id end
+local function fetching_key(guild_id) return "fetching:" .. guild_id end
 
 -- Keep at most max_f distinct next-token fields per state hash (by highest counts).
 -- Drops lowest-count edges first. max_f <= 0 disables pruning.
@@ -498,6 +499,26 @@ local function get_media_counts(keys, _args)
 end
 
 -- ---------------------------------------------------------------------------
+-- Fetching flag
+-- ---------------------------------------------------------------------------
+
+local function set_fetching(keys, args)
+  local guild_id = keys[1]
+  local value = args[1] or "1"
+  redis.call('SET', fetching_key(guild_id), value)
+  return 1
+end
+
+local function clear_fetching(keys, _args)
+  redis.call('DEL', fetching_key(keys[1]))
+  return 1
+end
+
+local function is_fetching(keys, _args)
+  return redis.call('GET', fetching_key(keys[1])) or "0"
+end
+
+-- ---------------------------------------------------------------------------
 -- Registration
 -- ---------------------------------------------------------------------------
 redis.register_function('train_markov', train_markov)
@@ -517,3 +538,6 @@ redis.register_function('add_media', add_media)
 redis.register_function('remove_media', remove_media)
 redis.register_function('get_random_media', get_random_media)
 redis.register_function('get_media_counts', get_media_counts)
+redis.register_function('set_fetching', set_fetching)
+redis.register_function('clear_fetching', clear_fetching)
+redis.register_function('is_fetching', is_fetching)

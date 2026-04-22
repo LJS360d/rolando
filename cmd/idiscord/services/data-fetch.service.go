@@ -46,6 +46,30 @@ func NewDataFetchService(session *bot.Client, chainService *ChainsService, messa
 
 // FetchAllGuildMessages fetches messages from all accessible channels in the guild.
 func (d *DataFetchService) FetchAllGuildMessages(guildID string) (int, error) {
+	ctx := context.Background()
+
+	// Check if already fetching
+	isFetching, err := d.ChainService.redisRepo.IsFetching(ctx, guildID)
+	if err != nil {
+		logger.Errorf("Failed to check fetching flag for guild %s: %v", guildID, err)
+		return 0, err
+	}
+	if isFetching {
+		return 0, fmt.Errorf("guild %s is already fetching messages", guildID)
+	}
+
+	// Set fetching flag
+	if err := d.ChainService.redisRepo.SetFetching(ctx, guildID); err != nil {
+		logger.Errorf("Failed to set fetching flag for guild %s: %v", guildID, err)
+		return 0, err
+	}
+	// Clear fetching flag when done
+	defer func() {
+		if err := d.ChainService.redisRepo.ClearFetching(ctx, guildID); err != nil {
+			logger.Errorf("Failed to clear fetching flag for guild %s: %v", guildID, err)
+		}
+	}()
+
 	gid, err := snowflake.Parse(guildID)
 	if err != nil {
 		return 0, err

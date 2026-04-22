@@ -147,6 +147,25 @@ func (r *RedisRepository) ClearGuild(ctx context.Context, guildID string) error 
 	})
 }
 
+// SetFetching sets a flag indicating that the guild is currently fetching messages.
+func (r *RedisRepository) SetFetching(ctx context.Context, guildID string) error {
+	return r.rdb.FCall(ctx, "set_fetching", []string{guildID}).Err()
+}
+
+// ClearFetching removes the fetching flag for the guild.
+func (r *RedisRepository) ClearFetching(ctx context.Context, guildID string) error {
+	return r.rdb.FCall(ctx, "clear_fetching", []string{guildID}).Err()
+}
+
+// IsFetching returns whether the guild is currently fetching messages.
+func (r *RedisRepository) IsFetching(ctx context.Context, guildID string) (bool, error) {
+	res, err := r.rdb.FCall(ctx, "is_fetching", []string{guildID}).Text()
+	if err != nil {
+		return false, err
+	}
+	return res == "1", nil
+}
+
 // Generate produces text of up to maxLength tokens from a random starting prefix.
 func (r *RedisRepository) Generate(ctx context.Context, guildID string, maxLength, nGramSize int) (string, error) {
 	var prefix string

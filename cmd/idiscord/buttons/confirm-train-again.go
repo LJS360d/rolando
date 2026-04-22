@@ -38,25 +38,13 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *bot.Client, i *events.ComponentI
 		Flags:   new(discord.MessageFlagEphemeral),
 	})
 
-	// recreate the chain
+	// reset the chain (clear data but keep config)
 	id := chainDoc.ID
-	name := chainDoc.Name
-	err = h.ChainsService.DeleteChain(ctx, id)
+	err = h.ChainsService.ResetChain(ctx, id)
 	if err != nil {
-		logger.Errorf("Failed to delete chain for guild %s: %v", i.GuildID, err)
+		logger.Errorf("Failed to reset chain for guild %s: %v", i.GuildID, err)
 		// Send error message
-		errMsg := "Failed to delete chain data for this server. Please try again later."
-		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token(), discord.MessageUpdate{
-			Content: &errMsg,
-			Flags:   new(discord.MessageFlagEphemeral),
-		})
-		return
-	}
-	_, err = h.ChainsService.CreateChain(ctx, id, name)
-	if err != nil {
-		logger.Errorf("Failed to create chain for guild %s: %v", i.GuildID, err)
-		// Send error message
-		errMsg := "Failed to recreate a new chain for this server. Please try again later."
+		errMsg := "Failed to reset chain data for this server. Please try again later."
 		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token(), discord.MessageUpdate{
 			Content: &errMsg,
 			Flags:   new(discord.MessageFlagEphemeral),
