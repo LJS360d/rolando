@@ -140,6 +140,7 @@ func (s *JackboxService) Start(ctx context.Context, guildID string, roomCode str
 	g := &guildJackbox{cancel: cancel}
 	g.setConn(sess.Conn)
 	s.sessions.Store(guildID, g)
+	logger.Infof("jackbox joined guild_id=%s room=%s app_tag=%s", guildID, strings.ToUpper(strings.TrimSpace(roomCode)), room.AppTag)
 
 	if err := s.redis.SetJackboxState(ctx, guildID, room.AppTag); err != nil {
 		cancel()
@@ -151,6 +152,7 @@ func (s *JackboxService) Start(ctx context.Context, guildID string, roomCode str
 	go func(bg *guildJackbox, conn *websocket.Conn, mod jackbox.GameModule) {
 		defer bg.shutdownConn()
 		defer func() {
+			logger.Infof("jackbox left guild_id=%s room=%s", guildID, strings.ToUpper(strings.TrimSpace(roomCode)))
 			if s.sessions.CompareAndDelete(guildID, bg) {
 				if err := s.redis.ClearJackboxState(context.Background(), guildID); err != nil {
 					logger.Errorf("jackbox redis clear %s: %v", guildID, err)
