@@ -7,6 +7,7 @@ import (
 	"net"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"rolando/internal/logger"
@@ -24,6 +25,11 @@ var (
 
 type RedisRepository struct {
 	rdb *redis.Client
+
+	// scriptWriteMu serializes FCALL-based writes in this process. Redis already
+	// runs commands one at a time on its event loop; this only bounds how many
+	// long-running train_batch (etc.) calls we overlap from concurrent goroutines.
+	scriptWriteMu sync.Mutex
 }
 
 func NewRedisRepository(rdb *redis.Client) *RedisRepository {
@@ -149,12 +155,16 @@ func (r *RedisRepository) ClearGuild(ctx context.Context, guildID string) error 
 
 // SetFetching sets a flag indicating that the guild is currently fetching messages.
 func (r *RedisRepository) SetFetching(ctx context.Context, guildID string) error {
-	return r.rdb.FCall(ctx, "set_fetching", []string{guildID}).Err()
+	return r.runWriteFCall(ctx, guildID, "set_fetching", func(c context.Context) error {
+		return r.rdb.FCall(c, "set_fetching", []string{guildID}).Err()
+	})
 }
 
 // ClearFetching removes the fetching flag for the guild.
 func (r *RedisRepository) ClearFetching(ctx context.Context, guildID string) error {
-	return r.rdb.FCall(ctx, "clear_fetching", []string{guildID}).Err()
+	return r.runWriteFCall(ctx, guildID, "clear_fetching", func(c context.Context) error {
+		return r.rdb.FCall(c, "clear_fetching", []string{guildID}).Err()
+	})
 }
 
 // IsFetching returns whether the guild is currently fetching messages.
@@ -404,6 +414,14 @@ func FilterText(text string, pings bool) string {
 }
 
 func (r *RedisRepository) runWriteFCall(ctx context.Context, guildID, opName string, fn func(context.Context) error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	r.scriptWriteMu.Lock()
+	defer r.scriptWriteMu.Unlock()
 	start := time.Now()
 	err := fn(ctx)
 	d := time.Since(start)
