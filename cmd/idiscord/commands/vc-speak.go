@@ -74,7 +74,7 @@ func (h *SlashCommandsHandler) vcSpeakCommand(client *bot.Client, event *events.
 			return
 		}
 
-		content, err := h.ChainsService.GenerateFiltered(vcCtx, guildID.String(), 100, chainDoc.NGramSize)
+		content, err := h.ChainsService.GenerateFiltered(vcCtx, guildID.String(), 100)
 		if err != nil {
 			logger.Errorf("Failed to generate text: %v", err)
 			return

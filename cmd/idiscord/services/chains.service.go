@@ -51,27 +51,23 @@ func (cs *ChainsService) Train(ctx context.Context, guildID, message string, nGr
 	return cs.redisRepo.Train(ctx, guildID, message, nGramSize, maxSizeBytes, maxBranches)
 }
 
-func (cs *ChainsService) Generate(ctx context.Context, guildID string, maxLength, nGramSize int) (string, error) {
-	return cs.redisRepo.Generate(ctx, guildID, maxLength, nGramSize)
+func (cs *ChainsService) Generate(ctx context.Context, guildID string, maxLength int) (string, error) {
+	return cs.redisRepo.Generate(ctx, guildID, maxLength)
 }
 
-func (cs *ChainsService) GenerateFromSeed(ctx context.Context, guildID, seed string, maxLength, nGramSize int) (string, error) {
-	return cs.redisRepo.GenerateFromSeed(ctx, guildID, seed, maxLength, nGramSize)
+func (cs *ChainsService) GenerateFromSeed(ctx context.Context, guildID, seed string, maxLength int) (string, error) {
+	return cs.redisRepo.GenerateFromSeed(ctx, guildID, seed, maxLength)
 }
 
-func (cs *ChainsService) GenerateFiltered(ctx context.Context, guildID string, maxLength, nGramSize int) (string, error) {
-	return cs.redisRepo.GenerateFiltered(ctx, guildID, maxLength, nGramSize)
+func (cs *ChainsService) GenerateFiltered(ctx context.Context, guildID string, maxLength int) (string, error) {
+	return cs.redisRepo.GenerateFiltered(ctx, guildID, maxLength)
 }
 
 func (cs *ChainsService) GenerateLine(ctx context.Context, guildID string, maxWords int) (string, error) {
 	if guildID == "" {
 		return "", fmt.Errorf("empty guild id")
 	}
-	conf, err := cs.GetChainConf(ctx, guildID)
-	if err != nil {
-		return "", err
-	}
-	return cs.GenerateFiltered(ctx, guildID, maxWords, conf.NGramSize)
+	return cs.GenerateFiltered(ctx, guildID, maxWords)
 }
 
 func (cs *ChainsService) GetRandomMedia(ctx context.Context, guildID, kind string) (string, error) {

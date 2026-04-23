@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -177,34 +178,34 @@ func (r *RedisRepository) IsFetching(ctx context.Context, guildID string) (bool,
 }
 
 // Generate produces text of up to maxLength tokens from a random starting prefix.
-func (r *RedisRepository) Generate(ctx context.Context, guildID string, maxLength, nGramSize int) (string, error) {
-	var prefix string
-	err := r.runWithRedisReadRetry(ctx, guildID, "find_prefix", func(c context.Context) error {
-		var e error
-		prefix, e = r.rdb.FCall(c, "find_prefix", []string{guildID}, "").Text()
-		return e
-	})
-	if err != nil || prefix == "" {
-		return "", err
-	}
-	return r.generateFrom(ctx, guildID, prefix, maxLength, nGramSize)
+func (r *RedisRepository) Generate(ctx context.Context, guildID string, maxLength int) (string, error) {
+	return r.generateWithSeed(ctx, guildID, "", maxLength)
 }
 
 // GenerateFromSeed produces text seeded by the given string.
-func (r *RedisRepository) GenerateFromSeed(ctx context.Context, guildID, seed string, maxLength, nGramSize int) (string, error) {
+func (r *RedisRepository) GenerateFromSeed(ctx context.Context, guildID, seed string, maxLength int) (string, error) {
+	return r.generateWithSeed(ctx, guildID, seed, maxLength)
+}
+
+func (r *RedisRepository) generateWithSeed(ctx context.Context, guildID, seed string, maxLength int) (string, error) {
+	prefix, err := r.findPrefix(ctx, guildID, seed)
+	if err != nil || prefix == "" {
+		return "", err
+	}
+	return r.generateFrom(ctx, guildID, prefix, maxLength)
+}
+
+func (r *RedisRepository) findPrefix(ctx context.Context, guildID, seed string) (string, error) {
 	var prefix string
 	err := r.runWithRedisReadRetry(ctx, guildID, "find_prefix", func(c context.Context) error {
 		var e error
 		prefix, e = r.rdb.FCall(c, "find_prefix", []string{guildID}, seed).Text()
 		return e
 	})
-	if err != nil || prefix == "" {
-		return "", err
-	}
-	return r.generateFrom(ctx, guildID, prefix, maxLength, nGramSize)
+	return prefix, err
 }
 
-func (r *RedisRepository) generateFrom(ctx context.Context, guildID, prefix string, maxLength, nGramSize int) (string, error) {
+func (r *RedisRepository) runGenerateMarkov(ctx context.Context, guildID, prefix string, maxLength, nGramSize int) (string, error) {
 	var out string
 	err := r.runWithRedisReadRetry(ctx, guildID, "generate_markov", func(c context.Context) error {
 		var e error
@@ -212,6 +213,56 @@ func (r *RedisRepository) generateFrom(ctx context.Context, guildID, prefix stri
 		return e
 	})
 	return out, err
+}
+
+func (r *RedisRepository) generateFrom(ctx context.Context, guildID, prefix string, maxLength int) (string, error) {
+	preserve, nGram, err := r.guildMarkovTextSettings(ctx, guildID)
+	if err != nil {
+		return "", err
+	}
+	raw, err := r.runGenerateMarkov(ctx, guildID, prefix, maxLength, nGram)
+	if err != nil {
+		return "", err
+	}
+	return filterDiscordMentions(raw, preserve), nil
+}
+
+func (r *RedisRepository) guildMarkovTextSettings(ctx context.Context, guildID string) (preservePings bool, nGramSize int, err error) {
+	vals, err := r.rdb.HMGet(ctx, chainConfigRedisKey(guildID), "pings", "n_gram_size").Result()
+	if err != nil {
+		return false, 0, err
+	}
+	return parseGuildMarkovTextSettings(vals)
+}
+
+func parseGuildMarkovTextSettings(vals []any) (preservePings bool, nGramSize int, err error) {
+	preservePings = true
+	nGramSize = 2
+	if len(vals) < 2 {
+		return preservePings, nGramSize, nil
+	}
+	if vals[0] != nil {
+		if s, _ := vals[0].(string); s == "0" {
+			preservePings = false
+		}
+	}
+	if vals[1] != nil {
+		s, ok := vals[1].(string)
+		if ok && s != "" {
+			n, e := strconv.Atoi(s)
+			if e != nil {
+				return false, 0, fmt.Errorf("n_gram_size: %w", e)
+			}
+			if n > 0 {
+				nGramSize = n
+			}
+		}
+	}
+	return preservePings, nGramSize, nil
+}
+
+func chainConfigRedisKey(guildID string) string {
+	return "config:" + guildID
 }
 
 // GetStats returns (uniquePrefixes, messageCount, estimatedBytes) for a guild.
@@ -391,20 +442,33 @@ func (r *RedisRepository) AddMedia(ctx context.Context, guildID, url string) err
 }
 
 // GenerateFiltered generates text and strips URLs, pings, and noisy characters.
-func (r *RedisRepository) GenerateFiltered(ctx context.Context, guildID string, maxLength, nGramSize int) (string, error) {
-	unfiltered, err := r.Generate(ctx, guildID, maxLength, nGramSize)
+func (r *RedisRepository) GenerateFiltered(ctx context.Context, guildID string, maxLength int) (string, error) {
+	preserve, nGram, err := r.guildMarkovTextSettings(ctx, guildID)
 	if err != nil {
 		return "", err
 	}
-	return FilterText(unfiltered, false), nil
+	prefix, err := r.findPrefix(ctx, guildID, "")
+	if err != nil || prefix == "" {
+		return "", err
+	}
+	raw, err := r.runGenerateMarkov(ctx, guildID, prefix, maxLength, nGram)
+	if err != nil {
+		return "", err
+	}
+	return FilterText(raw, preserve), nil
+}
+
+func filterDiscordMentions(text string, preservePings bool) string {
+	if preservePings {
+		return text
+	}
+	return reDiscordPing.ReplaceAllString(text, "")
 }
 
 // FilterText strips URLs, special chars, and normalises spacing.
 // Set pings=true to preserve Discord mention strings.
 func FilterText(text string, pings bool) string {
-	if !pings {
-		text = reDiscordPing.ReplaceAllString(text, "")
-	}
+	text = filterDiscordMentions(text, pings)
 	text = utils.ReURL.ReplaceAllString(text, "")
 	text = reBadChars.ReplaceAllString(text, "")
 	text = strings.TrimSpace(text)

@@ -242,7 +242,7 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 						return
 					}
 
-					msg, err := h.ChainsService.GenerateFiltered(vcCtx, guildID.String(), 10, chainConf.NGramSize)
+					msg, err := h.ChainsService.GenerateFiltered(vcCtx, guildID.String(), 10)
 					if err != nil {
 						logger.Errorf("Failed to generate random text in '%s' in '%s': %v", channelName, chainConf.Name, err)
 						return

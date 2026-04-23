@@ -31,19 +31,7 @@ func (h *SlashCommandsHandler) opinionCommand(s *bot.Client, i *events.Applicati
 		return
 	}
 
-	chain, err := h.ChainsService.GetChainConf(context.Background(), i.GuildID().String())
-	if err != nil {
-		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
-			Type: discord.InteractionResponseTypeCreateMessage,
-			Data: discord.MessageCreate{
-				Content: "Failed to retrieve chain data.",
-				Flags:   discord.MessageFlagEphemeral,
-			},
-		})
-		return
-	}
-
-	msg, err := h.ChainsService.GenerateFromSeed(context.Background(), i.GuildID().String(), about, utils.GetRandom(8, 40), chain.NGramSize)
+	msg, err := h.ChainsService.GenerateFromSeed(context.Background(), i.GuildID().String(), about, utils.GetRandom(8, 40))
 	if err != nil {
 		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeCreateMessage,

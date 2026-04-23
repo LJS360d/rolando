@@ -90,7 +90,7 @@ func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
 			return
 		}
 
-		content, err := h.ChainsService.GenerateFiltered(vcCtx, guildID, 100, chainDoc.NGramSize)
+		content, err := h.ChainsService.GenerateFiltered(vcCtx, guildID, 100)
 		if err != nil {
 			logger.Errorf("Failed to generate text: %v", err)
 			return

@@ -7,7 +7,6 @@ import (
 	"rolando/cmd/idiscord/helpers"
 	"rolando/internal/data"
 	"rolando/internal/logger"
-	"rolando/internal/repositories"
 	"rolando/internal/utils"
 	"slices"
 
@@ -74,13 +73,13 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 			if err := h.Client.Rest.SendTyping(m.ChannelID); err != nil {
 				logger.Errorf("Failed to send typing in '%s': %v", guild.Name, err)
 			}
-			h.handleReply(m, chainConf)
+			h.handleReply(m, chainConf.ID)
 		}
 		if ratedChoice(chainConf.ReplyRate) {
 			if err := h.Client.Rest.SendTyping(m.ChannelID); err != nil {
 				logger.Errorf("Failed to send typing in '%s': %v", guild.Name, err)
 			}
-			h.handleRandomMessage(m, guild.Name, chainConf)
+			h.handleRandomMessage(m, guild.Name, chainConf.ID)
 		}
 		if ratedChoice(chainConf.ReactionRate) && helpers.HasGuildAddReactionsPermissions(h.Client, h.Client.ID(), channel) {
 			h.handleReaction(m, guild.Name)
@@ -89,8 +88,8 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 }
 
 // handleReply sends a message in reply to a mention.
-func (h *MessageHandler) handleReply(m discord.Message, chain *repositories.ChainConfig) {
-	message, err := h.getMessage(chain)
+func (h *MessageHandler) handleReply(m discord.Message, chainId string) {
+	message, err := h.getMessage(chainId)
 	if err != nil {
 		logger.Errorf("Failed to generate text for mention reply in '%s': %v", m.GuildID, err)
 		return
@@ -111,8 +110,8 @@ func (h *MessageHandler) handleReply(m discord.Message, chain *repositories.Chai
 }
 
 // handleRandomMessage sends a non-reply/quiet-reply message.
-func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string, chain *repositories.ChainConfig) {
-	message, err := h.getMessage(chain)
+func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string, chainId string) {
+	message, err := h.getMessage(chainId)
 	if err != nil {
 		logger.Errorf("Failed to generate text for random message in '%s': %v", guildName, err)
 		return
@@ -195,7 +194,7 @@ func ratedChoice(rate int) bool {
 }
 
 // Generate a message based on chain probabilities
-func (h *MessageHandler) getMessage(chain *repositories.ChainConfig) (string, error) {
+func (h *MessageHandler) getMessage(chainId string) (string, error) {
 	// Generate a random number between 4 and 25 (inclusive).
 	random := utils.GetRandom(4, 25)
 
@@ -203,7 +202,7 @@ func (h *MessageHandler) getMessage(chain *repositories.ChainConfig) (string, er
 	// (21/22 or approx. 95.5%) to just talk.
 	case random <= 21:
 		{
-			msg, err := h.ChainsService.Generate(context.Background(), chain.ID, random, chain.NGramSize)
+			msg, err := h.ChainsService.Generate(context.Background(), chainId, random)
 			if err != nil {
 				return "", err
 			}
@@ -212,23 +211,23 @@ func (h *MessageHandler) getMessage(chain *repositories.ChainConfig) (string, er
 
 	// (2/22 or approx. 9.1%) for a GIF
 	case random <= 23:
-		return h.tryGetMediaOrTalk(chain, "gif", random)
+		return h.tryGetMediaOrTalk(chainId, "gif", random)
 
 	// (1/22 or approx. 4.5%) for an Image
 	case random <= 24:
-		return h.tryGetMediaOrTalk(chain, "image", random)
+		return h.tryGetMediaOrTalk(chainId, "image", random)
 
 	// (1/22 or approx. 4.5%) for a Video
 	default:
-		return h.tryGetMediaOrTalk(chain, "video", random)
+		return h.tryGetMediaOrTalk(chainId, "video", random)
 	}
 }
 
 // tryGetMediaOrTalk attempts to retrieve a specific type of media;
 // if unavailable, it falls back to generating a text message.
-func (h *MessageHandler) tryGetMediaOrTalk(chain *repositories.ChainConfig, mediaType string, random int) (string, error) {
+func (h *MessageHandler) tryGetMediaOrTalk(chainId string, mediaType string, random int) (string, error) {
 	ctx := context.Background()
-	media, err := h.ChainsService.GetRandomMedia(ctx, chain.ID, mediaType)
+	media, err := h.ChainsService.GetRandomMedia(ctx, chainId, mediaType)
 	if err != nil {
 		return "", err
 	}
@@ -237,7 +236,7 @@ func (h *MessageHandler) tryGetMediaOrTalk(chain *repositories.ChainConfig, medi
 	}
 
 	// Fallback to text generation if media is not available.
-	msg, err := h.ChainsService.Generate(ctx, chain.ID, random, chain.NGramSize)
+	msg, err := h.ChainsService.Generate(ctx, chainId, random)
 	if err != nil {
 		return "", err
 	}
