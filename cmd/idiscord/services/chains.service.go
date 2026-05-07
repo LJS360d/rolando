@@ -17,13 +17,13 @@ import (
 type ChainsService struct {
 	session      *bot.Client
 	chainsRepo   *repositories.ChainsRepository
-	redisRepo    *repositories.RedisRepository
+	cacheRepo    *repositories.CacheRepository
 	messagesRepo *repositories.MessagesRepository
 
 	// rebuildMu prevents concurrent rebuilds of the same guild.
 	rebuildMu sync.Map // map[string]*sync.Mutex
 
-	// bulkTrainingMu ensures at most one bulk Redis train (history import or
+	// bulkTrainingMu ensures at most one bulk cache train (history import or
 	// n-gram rebuild) runs at a time so long train_batch scripts do not stack
 	// against live per-message TrainBatch traffic from other guilds.
 	bulkTrainingMu sync.Mutex
@@ -32,35 +32,35 @@ type ChainsService struct {
 func NewChainsService(
 	client *bot.Client,
 	chainsRepo *repositories.ChainsRepository,
-	redisRepo *repositories.RedisRepository,
+	cacheRepo *repositories.CacheRepository,
 	messagesRepo *repositories.MessagesRepository,
 ) *ChainsService {
 	return &ChainsService{
 		session:      client,
 		chainsRepo:   chainsRepo,
-		redisRepo:    redisRepo,
+		cacheRepo:    cacheRepo,
 		messagesRepo: messagesRepo,
 	}
 }
 
 func (cs *ChainsService) NewMarkovAnalyzer(chain *repositories.ChainConfig) *analytics.MarkovChainAnalyzer {
-	return analytics.NewMarkovChainAnalyzer(chain, cs.redisRepo)
+	return analytics.NewMarkovChainAnalyzer(chain, cs.cacheRepo)
 }
 
 func (cs *ChainsService) Train(ctx context.Context, guildID, message string, nGramSize, maxSizeBytes, maxBranches int) error {
-	return cs.redisRepo.Train(ctx, guildID, message, nGramSize, maxSizeBytes, maxBranches)
+	return cs.cacheRepo.Train(ctx, guildID, message, nGramSize, maxSizeBytes, maxBranches)
 }
 
 func (cs *ChainsService) Generate(ctx context.Context, guildID string, maxLength int) (string, error) {
-	return cs.redisRepo.Generate(ctx, guildID, maxLength)
+	return cs.cacheRepo.Generate(ctx, guildID, maxLength)
 }
 
 func (cs *ChainsService) GenerateFromSeed(ctx context.Context, guildID, seed string, maxLength int) (string, error) {
-	return cs.redisRepo.GenerateFromSeed(ctx, guildID, seed, maxLength)
+	return cs.cacheRepo.GenerateFromSeed(ctx, guildID, seed, maxLength)
 }
 
 func (cs *ChainsService) GenerateFiltered(ctx context.Context, guildID string, maxLength int) (string, error) {
-	return cs.redisRepo.GenerateFiltered(ctx, guildID, maxLength)
+	return cs.cacheRepo.GenerateFiltered(ctx, guildID, maxLength)
 }
 
 func (cs *ChainsService) GenerateLine(ctx context.Context, guildID string, maxWords int) (string, error) {
@@ -71,11 +71,11 @@ func (cs *ChainsService) GenerateLine(ctx context.Context, guildID string, maxWo
 }
 
 func (cs *ChainsService) GetRandomMedia(ctx context.Context, guildID, kind string) (string, error) {
-	return cs.redisRepo.GetRandomMedia(ctx, guildID, kind)
+	return cs.cacheRepo.GetRandomMedia(ctx, guildID, kind)
 }
 
 // GetChainConf returns the config for a guild, creating it if unknown.
-// Reads from the Redis cache first; SQLite is only hit on a true miss.
+// Reads from the cache first; SQLite is only hit on a true miss.
 func (cs *ChainsService) GetChainConf(ctx context.Context, id string) (*repositories.ChainConfig, error) {
 	doc, err := cs.chainsRepo.GetChainByID(id)
 	if err != nil {
@@ -105,12 +105,12 @@ func (cs *ChainsService) CreateChain(_ context.Context, id, name string) (*repos
 	return cs.chainsRepo.CreateChain(id, name)
 }
 
-// UpdateChainState ingests a batch of raw messages into Redis.
+// UpdateChainState ingests a batch of raw messages into the cache service.
 // The guild's configured size limit is enforced inside the Lua function.
-// RunBulkRedisTraining runs fn while holding a process-wide lock for heavy
-// Redis ingestion (full history fetch or chain rebuild). Live UpdateChainState
+// RunBulkCacheTraining runs fn while holding a process-wide lock for heavy
+// cache ingestion (full history fetch or chain rebuild). Live UpdateChainState
 // calls from message events do not use this lock.
-func (cs *ChainsService) RunBulkRedisTraining(fn func()) {
+func (cs *ChainsService) RunBulkCacheTraining(fn func()) {
 	cs.bulkTrainingMu.Lock()
 	defer cs.bulkTrainingMu.Unlock()
 	fn()
@@ -121,26 +121,26 @@ func (cs *ChainsService) UpdateChainState(ctx context.Context, id string, texts 
 	if err != nil {
 		return err
 	}
-	if err := cs.redisRepo.TrainBatch(ctx, id, texts, chain.NGramSize, chain.MaxSizeBytes(), chain.MarkovMaxBranches); err != nil {
+	if err := cs.cacheRepo.TrainBatch(ctx, id, texts, chain.NGramSize, chain.MaxSizeBytes(), chain.MarkovMaxBranches); err != nil {
 		logger.Errorf("UpdateChainState train error for %s: %v", id, err)
 	}
 	return nil
 }
 
-// DeleteTextData removes a message from both Redis and the SQLite message store.
+// DeleteTextData removes a message from both cache state and the SQLite message store.
 func (cs *ChainsService) DeleteTextData(ctx context.Context, id, data string) error {
 	chain, err := cs.GetChainConf(ctx, id)
 	if err != nil {
 		return err
 	}
-	if err := cs.redisRepo.Delete(ctx, id, data, chain.NGramSize); err != nil {
-		logger.Errorf("DeleteTextData redis error for %s: %v", id, err)
+	if err := cs.cacheRepo.Delete(ctx, id, data, chain.NGramSize); err != nil {
+		logger.Errorf("DeleteTextData cache error for %s: %v", id, err)
 	}
 	return cs.messagesRepo.DeleteGuildMessage(id, data)
 }
 
 // UpdateChainMeta applies field-level updates to SQLite and refreshes the
-// Redis config cache.  If n_gram_size changes, a rebuild is triggered in the
+// cache-backed config store. If n_gram_size changes, a rebuild is triggered in the
 // background.
 func (cs *ChainsService) UpdateChainMeta(ctx context.Context, id string, fields map[string]any) (*repositories.ChainConfig, error) {
 	if _, ok := fields["id"]; ok {
@@ -165,7 +165,7 @@ func (cs *ChainsService) UpdateChainMeta(ctx context.Context, id string, fields 
 	if _, touched := fields["markov_max_branches"]; touched && updated.MarkovMaxBranches > 0 &&
 		updated.MarkovMaxBranches != oldChain.MarkovMaxBranches {
 		go func(guildID string, cap int) {
-			n, err := cs.redisRepo.CapBranching(context.Background(), guildID, cap)
+			n, err := cs.cacheRepo.CapBranching(context.Background(), guildID, cap)
 			if err != nil {
 				logger.Errorf("CapBranching for %s: %v", guildID, err)
 				return
@@ -179,7 +179,7 @@ func (cs *ChainsService) UpdateChainMeta(ctx context.Context, id string, fields 
 	return updated, nil
 }
 
-// DeleteChain removes all data for a guild: Redis state, SQLite config, and
+// DeleteChain removes all data for a guild: cache state, SQLite config, and
 // stored messages.
 func (cs *ChainsService) DeleteChain(ctx context.Context, id string) error {
 	doc, err := cs.chainsRepo.GetChainByID(id)
@@ -188,7 +188,7 @@ func (cs *ChainsService) DeleteChain(ctx context.Context, id string) error {
 	}
 	logger.Warnf("Deleting chain: %s", id)
 
-	if err := cs.redisRepo.ClearGuild(ctx, id); err != nil {
+	if err := cs.cacheRepo.ClearGuild(ctx, id); err != nil {
 		logger.Errorf("DeleteChain: ClearGuild failed for %s: %v", id, err)
 	}
 	if err := cs.chainsRepo.DeleteChain(doc.ID); err != nil {
@@ -206,7 +206,7 @@ func (cs *ChainsService) DeleteChain(ctx context.Context, id string) error {
 func (cs *ChainsService) ResetChain(ctx context.Context, id string) error {
 	logger.Warnf("Resetting chain: %s", id)
 
-	if err := cs.redisRepo.ClearGuild(ctx, id); err != nil {
+	if err := cs.cacheRepo.ClearGuild(ctx, id); err != nil {
 		logger.Errorf("ResetChain: ClearGuild failed for %s: %v", id, err)
 		return err
 	}
@@ -262,8 +262,8 @@ func (cs *ChainsService) rebuildChain(id string, newNGramSize int) {
 	}
 	logger.Infof("Rebuilding chain %s with n_gram_size=%d", doc.Name, newNGramSize)
 
-	cs.RunBulkRedisTraining(func() {
-		if err := cs.redisRepo.ClearGuild(ctx, id); err != nil {
+	cs.RunBulkCacheTraining(func() {
+		if err := cs.cacheRepo.ClearGuild(ctx, id); err != nil {
 			logger.Errorf("rebuildChain: ClearGuild failed for %s: %v", id, err)
 			return
 		}
@@ -274,12 +274,12 @@ func (cs *ChainsService) rebuildChain(id string, newNGramSize int) {
 			return
 		}
 
-		if err := cs.redisRepo.TrainBatch(ctx, id, messages, newNGramSize, doc.MaxSizeBytes(), doc.MarkovMaxBranches); err != nil {
+		if err := cs.cacheRepo.TrainBatch(ctx, id, messages, newNGramSize, doc.MaxSizeBytes(), doc.MarkovMaxBranches); err != nil {
 			logger.Errorf("rebuildChain: TrainBatch failed for %s: %v", id, err)
 			return
 		}
 
-		if _, err := cs.redisRepo.ReconcileBytes(ctx, id); err != nil {
+		if _, err := cs.cacheRepo.ReconcileBytes(ctx, id); err != nil {
 			logger.Warnf("rebuildChain: ReconcileBytes failed for %s: %v", id, err)
 		}
 

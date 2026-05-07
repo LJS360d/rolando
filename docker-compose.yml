@@ -12,12 +12,12 @@ services:
     environment:
       - DATABASE_PATH=/home/appuser/data/${COMPOSE_PROJECT_NAME}.db
       - SERVER_ADDRESS=0.0.0.0:8080
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379?pool_size=32&min_idle_conns=4&read_timeout=15s&write_timeout=12s&dial_timeout=5s
+      - CACHE_URL=valkey://:${CACHE_PASSWORD}@cache:6379
     networks:
       - default
     restart: unless-stopped
     depends_on:
-      redis:
+      cache:
         condition: service_healthy
 
   frontend:
@@ -32,21 +32,21 @@ services:
       - default
     restart: unless-stopped
 
-  redis:
-    image: redis:7.2-alpine
+  cache:
+    image: valkey/valkey:9.0.4-alpine
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${CACHE_PORT:-6379}:6379"
     volumes:
-      - ./data/redis:/data
-      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
-      - ./redis/redis_markov.lua:/scripts/redis_markov.lua:ro
-      - ./redis/docker-entrypoint-redis.sh:/docker-entrypoint-redis.sh:ro
-    entrypoint: ["/bin/sh", "/docker-entrypoint-redis.sh"]
+      - ./data/cache:/data
+      - ./cache/cache.conf:/usr/local/etc/cache/cache.conf:ro
+      - ./cache/cache_markov.lua:/scripts/cache_markov.lua:ro
+      - ./cache/docker-entrypoint-cache.sh:/docker-entrypoint-cache.sh:ro
+    entrypoint: ["/bin/sh", "/docker-entrypoint-cache.sh"]
     environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CACHE_PASSWORD=${CACHE_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$${CACHE_PASSWORD}\" ping >/dev/null"]
       interval: 5s
       timeout: 3s
       retries: 5

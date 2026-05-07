@@ -42,7 +42,7 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *bot.Client, i *events.ComponentI
 	id := chainDoc.ID
 	err = h.ChainsService.ResetChain(ctx, id)
 	if err != nil {
-		logger.Errorf("Failed to reset chain for guild %s: %v", i.GuildID, err)
+		logger.Errorf("Failed to reset chain for guild %s: %v", i.GuildID(), err)
 		// Send error message
 		errMsg := "Failed to reset chain data for this server. Please try again later."
 		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token(), discord.MessageUpdate{

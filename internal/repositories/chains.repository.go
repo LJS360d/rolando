@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/redis/go-redis/v9"
+	"github.com/valkey-io/valkey-go"
 	"gorm.io/gorm"
 )
 
 // ChainConfig is the canonical config record, stored durably in SQLite and
-// cached in Redis as a hash at config:<guild_id>.
+// cached in the cache service as a hash at config:<guild_id>.
 type ChainConfig struct {
 	ID                string     `gorm:"primaryKey"      json:"id"`
 	Name              string     `gorm:"not null"        json:"name"`
@@ -21,7 +21,7 @@ type ChainConfig struct {
 	VcJoinRate        int        `gorm:"default:100"     json:"vc_join_rate"`
 	MaxSizeMb         int        `gorm:"default:25" json:"max_size_mb"`
 	NGramSize         int        `gorm:"default:2"  json:"n_gram_size"`
-	MarkovMaxBranches int        `gorm:"default:0"  json:"markov_max_branches"`
+	MarkovMaxBranches int        `gorm:"default:256"  json:"markov_max_branches"`
 	TTSLanguage       string     `gorm:"default:'en'"    json:"tts_language"`
 	Pings             bool       `gorm:"default:true"    json:"pings"`
 	TrainedAt         *time.Time `gorm:"default:null"    json:"trained_at"`
@@ -34,14 +34,14 @@ func (c *ChainConfig) MaxSizeBytes() int {
 	return c.MaxSizeMb * 1024 * 1024
 }
 
-// ChainsRepository persists ChainConfig in SQLite and caches it in Redis.
-// Redis is always tried first; SQLite is the source of truth for durability.
+// ChainsRepository persists ChainConfig in SQLite and caches it in the cache service.
+// Cache is always tried first; SQLite is the source of truth for durability.
 type ChainsRepository struct {
 	DB  *gorm.DB
-	rdb *redis.Client
+	rdb valkey.Client
 }
 
-func NewChainsRepository(dbPath string, rdb *redis.Client) (*ChainsRepository, error) {
+func NewChainsRepository(dbPath string, rdb valkey.Client) (*ChainsRepository, error) {
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func NewChainsRepository(dbPath string, rdb *redis.Client) (*ChainsRepository, e
 
 // ---------- public API ----------
 
-// CreateChain inserts a new chain into SQLite and warms the Redis cache.
+// CreateChain inserts a new chain into SQLite and warms the cache.
 func (repo *ChainsRepository) CreateChain(id, name string) (*ChainConfig, error) {
 	chain := &ChainConfig{
 		ID:          id,
@@ -72,7 +72,7 @@ func (repo *ChainsRepository) CreateChain(id, name string) (*ChainConfig, error)
 	return chain, nil
 }
 
-// GetChainByID fetches from Redis first, falling back to SQLite on a cache miss.
+// GetChainByID fetches from cache first, falling back to SQLite on a cache miss.
 func (repo *ChainsRepository) GetChainByID(id string) (*ChainConfig, error) {
 	if chain, err := repo.getFromCache(context.Background(), id); err == nil {
 		return chain, nil
@@ -107,7 +107,7 @@ func (repo *ChainsRepository) GetChainsPage(limit, offset int) ([]*ChainConfig, 
 	return elements, total, nil
 }
 
-// UpdateChain applies field-level updates to SQLite and refreshes the Redis cache.
+// UpdateChain applies field-level updates to SQLite and refreshes the cache.
 func (repo *ChainsRepository) UpdateChain(id string, fields map[string]any) (*ChainConfig, error) {
 	var chain ChainConfig
 	if err := repo.DB.First(&chain, "id = ?", id).Error; err != nil {
@@ -124,7 +124,7 @@ func (repo *ChainsRepository) UpdateChain(id string, fields map[string]any) (*Ch
 	return &chain, nil
 }
 
-// DeleteChain removes the chain from SQLite and evicts the Redis cache entry.
+// DeleteChain removes the chain from SQLite and evicts the cache entry.
 func (repo *ChainsRepository) DeleteChain(id string) error {
 	if err := repo.DB.Delete(&ChainConfig{}, "id = ?", id).Error; err != nil {
 		return err
@@ -133,7 +133,7 @@ func (repo *ChainsRepository) DeleteChain(id string) error {
 	return nil
 }
 
-// WarmCacheForAll pre-loads all chains into Redis at startup / after migration.
+// WarmCacheForAll pre-loads all chains into cache at startup / after migration.
 func (repo *ChainsRepository) WarmCacheForAll(ctx context.Context) error {
 	chains, err := repo.GetAll()
 	if err != nil {
@@ -160,17 +160,23 @@ func (repo *ChainsRepository) warmCache(ctx context.Context, c *ChainConfig) {
 	if len(args) == 0 {
 		return
 	}
-	// HSET config:<id> field value [field value ...]
+	sargs := make([]string, len(args))
+	for i, v := range args {
+		sargs[i] = fmt.Sprint(v)
+	}
 	key := "config:" + c.ID
-	_ = repo.rdb.HSet(ctx, key, args...).Err()
+	cmd := repo.rdb.B().Arbitrary("HSET").Keys(key).Args(sargs...).Build()
+	_ = repo.rdb.Do(ctx, cmd).Error()
 }
 
 func (repo *ChainsRepository) evictCache(ctx context.Context, id string) {
-	_ = repo.rdb.Del(ctx, "config:"+id).Err()
+	cmd := repo.rdb.B().Del().Key("config:" + id).Build()
+	_ = repo.rdb.Do(ctx, cmd).Error()
 }
 
 func (repo *ChainsRepository) getFromCache(ctx context.Context, id string) (*ChainConfig, error) {
-	vals, err := repo.rdb.HGetAll(ctx, "config:"+id).Result()
+	cmd := repo.rdb.B().Hgetall().Key("config:" + id).Build()
+	vals, err := repo.rdb.Do(ctx, cmd).AsStrMap()
 	if err != nil || len(vals) == 0 {
 		return nil, fmt.Errorf("cache miss")
 	}
@@ -180,7 +186,7 @@ func (repo *ChainsRepository) getFromCache(ctx context.Context, id string) (*Cha
 // ---------- serialisation helpers ----------
 
 // chainConfigToArgs returns a flat []any{field, value, ...} slice suitable
-// for redis.HSet.
+// for HSet.
 func chainConfigToArgs(c *ChainConfig) []any {
 	trainedAt := ""
 	if c.TrainedAt != nil {

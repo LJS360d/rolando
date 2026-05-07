@@ -10,7 +10,6 @@ export interface ChainAnalytics {
   id: string;
   images: number;
   max_size_mb: number;
-  /** 0 = unlimited distinct next-tokens per prefix (Redis RAM can grow large on hub prefixes). */
   markov_max_branches?: number;
   messages: number;
   name: string;

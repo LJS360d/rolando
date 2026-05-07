@@ -217,20 +217,22 @@ end
 
 -- ---------------------------------------------------------------------------
 -- generate_markov  KEYS[1]=guild_id
---                  ARGV[1]=start_prefix  ARGV[2]=max_length  ARGV[3]=n_gram_size
+--                  ARGV[1]=start_prefix  ARGV[2]=max_length
 -- ---------------------------------------------------------------------------
 local function generate_markov(keys, args)
   local guild_id     = keys[1]
   local start_prefix = args[1] or ""
   local max_length   = tonumber(args[2]) or 20
-  local n_gram_size  = tonumber(args[3]) or 2
-  local window       = n_gram_size - 1
 
   if start_prefix == "" then return "" end
 
   math.randomseed(tonumber(redis.call('TIME')[1]) + tonumber(redis.call('TIME')[2]))
 
   local generated      = split_tokens(start_prefix)
+  local configured_n   = tonumber(redis.call('HGET', config_key(guild_id), 'n_gram_size') or "0") or 0
+  local inferred_n     = #generated + 1
+  local n_gram_size    = configured_n > 0 and configured_n or inferred_n
+  local window         = math.max(1, n_gram_size - 1)
   local current_prefix = start_prefix
 
   for _ = 1, max_length do

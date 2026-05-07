@@ -1,6 +1,6 @@
 .PHONY: all build run dev lint clean vosk dave run-docker
 
-VERSION      := 4.2.4
+VERSION      := 4.3.0
 BUILD_DIR    := bin
 MAIN_PACKAGE := ./cmd
 BINARY_NAME  := main
@@ -95,10 +95,10 @@ else
 endif
 
 # Only for development
-run-redis:
-	@echo "[run-redis] starting redis"
-	@sudo rm -rf ./data/redis
-	@docker compose -p rolando up -d redis --force-recreate
+run-cache:
+	@echo "[run-cache] starting cache service"
+	@sudo rm -rf ./data/cache
+	@docker compose -p rolando up -d cache --force-recreate
 
 
 # ── DAVE ──────────────────────────────────────────────────────────────────────

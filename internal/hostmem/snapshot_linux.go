@@ -69,10 +69,7 @@ func meminfoTotalAvailable() (totalBytes, availableBytes uint64, err error) {
 	if memAvailable > 0 {
 		availableBytes = memAvailable * 1024
 	} else {
-		availKB := memFree + buffers + cached + sReclaimable
-		if availKB > memTotal {
-			availKB = memTotal
-		}
+		availKB := min(memFree+buffers+cached+sReclaimable, memTotal)
 		availableBytes = availKB * 1024
 	}
 	return totalBytes, availableBytes, nil

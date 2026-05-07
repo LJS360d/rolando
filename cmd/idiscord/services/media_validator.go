@@ -14,13 +14,13 @@ const (
 )
 
 type MediaValidator struct {
-	markovRepo   *repositories.RedisRepository
+	markovRepo   *repositories.CacheRepository
 	messagesRepo *repositories.MessagesRepository
 	sem          chan struct{}
 	httpClient   *http.Client
 }
 
-func NewMediaValidator(markovRepo *repositories.RedisRepository, messagesRepo *repositories.MessagesRepository) *MediaValidator {
+func NewMediaValidator(markovRepo *repositories.CacheRepository, messagesRepo *repositories.MessagesRepository) *MediaValidator {
 	return &MediaValidator{
 		markovRepo:   markovRepo,
 		messagesRepo: messagesRepo,
@@ -46,7 +46,7 @@ func (mv *MediaValidator) GetValidMedia(ctx context.Context, guildID, kind strin
 	return ""
 }
 
-// purgeAsync removes the URL from Redis and SQLite without blocking the caller.
+// purgeAsync removes the URL from cache and SQLite without blocking the caller.
 // Respects the concurrency semaphore so we never flood with goroutines.
 func (mv *MediaValidator) purgeAsync(ctx context.Context, guildID, kind, url string) {
 	select {
@@ -58,7 +58,7 @@ func (mv *MediaValidator) purgeAsync(ctx context.Context, guildID, kind, url str
 	go func() {
 		defer func() { <-mv.sem }()
 		if err := mv.markovRepo.RemoveMedia(ctx, guildID, kind, url); err != nil {
-			logger.Errorf("purgeAsync: redis remove failed for %s: %v", url, err)
+			logger.Errorf("purgeAsync: cache remove failed for %s: %v", url, err)
 		}
 		if err := mv.messagesRepo.DeleteGuildMessage(guildID, url); err != nil {
 			logger.Errorf("purgeAsync: db remove failed for %s: %v", url, err)

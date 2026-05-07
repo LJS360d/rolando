@@ -49,7 +49,7 @@ func (d *DataFetchService) FetchAllGuildMessages(guildID string) (int, error) {
 	ctx := context.Background()
 
 	// Check if already fetching
-	isFetching, err := d.ChainService.redisRepo.IsFetching(ctx, guildID)
+	isFetching, err := d.ChainService.cacheRepo.IsFetching(ctx, guildID)
 	if err != nil {
 		logger.Errorf("Failed to check fetching flag for guild %s: %v", guildID, err)
 		return 0, err
@@ -59,13 +59,13 @@ func (d *DataFetchService) FetchAllGuildMessages(guildID string) (int, error) {
 	}
 
 	// Set fetching flag
-	if err := d.ChainService.redisRepo.SetFetching(ctx, guildID); err != nil {
+	if err := d.ChainService.cacheRepo.SetFetching(ctx, guildID); err != nil {
 		logger.Errorf("Failed to set fetching flag for guild %s: %v", guildID, err)
 		return 0, err
 	}
 	// Clear fetching flag when done
 	defer func() {
-		if err := d.ChainService.redisRepo.ClearFetching(ctx, guildID); err != nil {
+		if err := d.ChainService.cacheRepo.ClearFetching(ctx, guildID); err != nil {
 			logger.Errorf("Failed to clear fetching flag for guild %s: %v", guildID, err)
 		}
 	}()
@@ -99,7 +99,7 @@ func (d *DataFetchService) FetchAllGuildMessages(guildID string) (int, error) {
 	}
 
 	var totalCount atomic.Int64
-	d.ChainService.RunBulkRedisTraining(func() {
+	d.ChainService.RunBulkCacheTraining(func() {
 		queue := make(chan discord.GuildChannel, len(accessible))
 		for _, ch := range accessible {
 			queue <- ch

@@ -25,7 +25,7 @@ import (
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/voice"
 	"github.com/disgoorg/godave/golibdave"
-	"github.com/redis/go-redis/v9"
+	"github.com/valkey-io/valkey-go"
 )
 
 // LDFLAGS
@@ -39,16 +39,20 @@ func main() {
 	logger.Debugf("Env: %s", config.Env)
 	ctx := context.Background()
 
-	logger.Debugln("Connecting to Redis at", config.RedisUrl)
-	opt, err := redis.ParseURL(config.RedisUrl)
+	logger.Debugln("Connecting to cache service at", config.CacheURL)
+	opt, err := valkey.ParseURL(config.CacheURL)
 	if err != nil {
-		logger.Fatalf("failed to parse redis url: %v", err)
+		logger.Fatalf("failed to parse cache url: %v", err)
 	}
-	rdb := redis.NewClient(opt)
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		logger.Fatalf("failed to ping redis: %v", err)
+	config.ApplyValkeyClientTuning(&opt)
+	rdb, err := valkey.NewClient(opt)
+	if err != nil {
+		logger.Fatalf("failed to create cache client: %v", err)
 	}
-	logger.Debugln("Connected to Redis")
+	if err := rdb.Do(ctx, rdb.B().Ping().Build()).Error(); err != nil {
+		logger.Fatalf("failed to ping cache service: %v", err)
+	}
+	logger.Debugln("Connected to cache service")
 
 	logger.Debugln("Creating discord client...")
 	client, err := disgo.New(config.Token,
@@ -98,10 +102,10 @@ func main() {
 	if err != nil {
 		logger.Fatalf("error creating chains repository: %v", err)
 	}
-	redisRepo := repositories.NewRedisRepository(rdb)
-	chainsService := services.NewChainsService(client, chainsRepo, redisRepo, messagesRepo)
+	cacheRepo := repositories.NewCacheRepository(rdb)
+	chainsService := services.NewChainsService(client, chainsRepo, cacheRepo, messagesRepo)
 	dataFetchService := services.NewDataFetchService(client, chainsService, messagesRepo)
-	jackboxService := services.NewJackboxService(client, redisRepo, chainsService)
+	jackboxService := services.NewJackboxService(client, cacheRepo, chainsService)
 	// Handlers
 	messagesHandler := messages.NewMessageHandler(client, chainsService)
 	commandsHandler := commands.NewSlashCommandsHandler(client, chainsService, jackboxService)

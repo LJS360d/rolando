@@ -145,7 +145,7 @@ func NewSlashCommandsHandler(
 				Options: []discord.ApplicationCommandOption{
 					discord.ApplicationCommandOptionInt{
 						MinValue:    new(2),
-						MaxValue:    new(255),
+						MaxValue:    new(8),
 						Name:        "value",
 						Description: "the value to set, must be at least 2 (leave empty to view)",
 						Required:    false,

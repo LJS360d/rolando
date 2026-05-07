@@ -43,7 +43,7 @@ func (g *guildJackbox) shutdownConn() {
 
 type JackboxService struct {
 	client   *bot.Client
-	redis    *repositories.RedisRepository
+	cache    *repositories.CacheRepository
 	chains   *ChainsService
 	http     *http.Client
 	sessions sync.Map
@@ -55,10 +55,10 @@ var jackboxRateWindow = time.Minute
 
 const jackboxMaxFails = 6
 
-func NewJackboxService(client *bot.Client, redis *repositories.RedisRepository, chains *ChainsService) *JackboxService {
+func NewJackboxService(client *bot.Client, cache *repositories.CacheRepository, chains *ChainsService) *JackboxService {
 	return &JackboxService{
 		client:   client,
-		redis:    redis,
+		cache:    cache,
 		chains:   chains,
 		http:     jackbox.DefaultHTTPClient(),
 		rateFail: make(map[string][]time.Time),
@@ -100,8 +100,8 @@ func (s *JackboxService) Stop(guildID string) {
 		g.cancel()
 		g.shutdownConn()
 	}
-	if err := s.redis.ClearJackboxState(context.Background(), guildID); err != nil {
-		logger.Errorf("jackbox redis clear %s: %v", guildID, err)
+	if err := s.cache.ClearJackboxState(context.Background(), guildID); err != nil {
+		logger.Errorf("jackbox cache clear %s: %v", guildID, err)
 	}
 }
 
@@ -142,7 +142,7 @@ func (s *JackboxService) Start(ctx context.Context, guildID string, roomCode str
 	s.sessions.Store(guildID, g)
 	logger.Infof("jackbox joined guild_id=%s room=%s app_tag=%s", guildID, strings.ToUpper(strings.TrimSpace(roomCode)), room.AppTag)
 
-	if err := s.redis.SetJackboxState(ctx, guildID, room.AppTag); err != nil {
+	if err := s.cache.SetJackboxState(ctx, guildID, room.AppTag); err != nil {
 		cancel()
 		g.shutdownConn()
 		s.sessions.CompareAndDelete(guildID, g)
@@ -154,8 +154,8 @@ func (s *JackboxService) Start(ctx context.Context, guildID string, roomCode str
 		defer func() {
 			logger.Infof("jackbox left guild_id=%s room=%s", guildID, strings.ToUpper(strings.TrimSpace(roomCode)))
 			if s.sessions.CompareAndDelete(guildID, bg) {
-				if err := s.redis.ClearJackboxState(context.Background(), guildID); err != nil {
-					logger.Errorf("jackbox redis clear %s: %v", guildID, err)
+				if err := s.cache.ClearJackboxState(context.Background(), guildID); err != nil {
+					logger.Errorf("jackbox cache clear %s: %v", guildID, err)
 				}
 			}
 		}()

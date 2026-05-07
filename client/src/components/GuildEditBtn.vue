@@ -63,7 +63,7 @@
             v-model="fields.markov_max_branches"
             type="number"
             label="Max transitions per prefix (0 = unlimited)"
-            hint="Caps distinct next-words per state; use 64–256 on very large servers to save Redis RAM."
+            hint="Caps distinct next-words per state; use 64–256 on very large servers to save Cache RAM."
             persistent-hint
             outlined
             dense

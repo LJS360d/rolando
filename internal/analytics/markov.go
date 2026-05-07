@@ -33,11 +33,11 @@ type NumericChainAnalytics struct {
 
 type MarkovChainAnalyzer struct {
 	chain     *repositories.ChainConfig
-	redisRepo *repositories.RedisRepository
+	cacheRepo *repositories.CacheRepository
 }
 
-func NewMarkovChainAnalyzer(chain *repositories.ChainConfig, redisRepo *repositories.RedisRepository) *MarkovChainAnalyzer {
-	return &MarkovChainAnalyzer{chain: chain, redisRepo: redisRepo}
+func NewMarkovChainAnalyzer(chain *repositories.ChainConfig, cacheRepo *repositories.CacheRepository) *MarkovChainAnalyzer {
+	return &MarkovChainAnalyzer{chain: chain, cacheRepo: cacheRepo}
 }
 
 func complexityScore(prefixes, messages int64) int {
@@ -71,11 +71,11 @@ func (mca *MarkovChainAnalyzer) GetRawAnalytics(ctx context.Context) (NumericCha
 }
 
 func (mca *MarkovChainAnalyzer) getRaw(ctx context.Context) (NumericChainAnalytics, error) {
-	prefixes, messages, size, err := mca.redisRepo.GetStats(ctx, mca.chain.ID)
+	prefixes, messages, size, err := mca.cacheRepo.GetStats(ctx, mca.chain.ID)
 	if err != nil {
 		return NumericChainAnalytics{}, err
 	}
-	gifs, images, videos, err := mca.redisRepo.GetMediaCounts(ctx, mca.chain.ID)
+	gifs, images, videos, err := mca.cacheRepo.GetMediaCounts(ctx, mca.chain.ID)
 	if err != nil {
 		return NumericChainAnalytics{}, err
 	}
