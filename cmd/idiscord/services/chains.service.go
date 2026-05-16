@@ -59,6 +59,13 @@ func (cs *ChainsService) GenerateFromSeed(ctx context.Context, guildID, seed str
 	return cs.cacheRepo.GenerateFromSeed(ctx, guildID, seed, maxLength)
 }
 
+func (cs *ChainsService) GenerateRhyme(ctx context.Context, guildID, rhymeWord string, maxLength int) (string, error) {
+	return cs.cacheRepo.GenerateRhyme(ctx, guildID, rhymeWord, maxLength)
+}
+
+func (cs *ChainsService) GenerateRhymeFiltered(ctx context.Context, guildID, rhymeWord string, maxLength int) (string, error) {
+	return cs.cacheRepo.GenerateRhymeFiltered(ctx, guildID, rhymeWord, maxLength)
+}
 func (cs *ChainsService) GenerateFiltered(ctx context.Context, guildID string, maxLength int) (string, error) {
 	return cs.cacheRepo.GenerateFiltered(ctx, guildID, maxLength)
 }

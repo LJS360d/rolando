@@ -216,17 +216,12 @@ local function find_prefix(keys, args)
 end
 
 -- ---------------------------------------------------------------------------
--- generate_markov  KEYS[1]=guild_id
---                  ARGV[1]=start_prefix  ARGV[2]=max_length
+-- do_generate_tokens (internal helper, shared by generate_markov + generate_rhyme)
+-- Returns (tokens_table, window) where window = n_gram_size - 1.
+-- Caller is responsible for seeding math.random.
 -- ---------------------------------------------------------------------------
-local function generate_markov(keys, args)
-  local guild_id     = keys[1]
-  local start_prefix = args[1] or ""
-  local max_length   = tonumber(args[2]) or 20
-
-  if start_prefix == "" then return "" end
-
-  math.randomseed(tonumber(redis.call('TIME')[1]) + tonumber(redis.call('TIME')[2]))
+local function do_generate_tokens(guild_id, start_prefix, max_length)
+  if start_prefix == "" then return {}, 1 end
 
   local generated      = split_tokens(start_prefix)
   local configured_n   = tonumber(redis.call('HGET', config_key(guild_id), 'n_gram_size') or "0") or 0
@@ -282,7 +277,102 @@ local function generate_markov(keys, args)
     current_prefix = table.concat(new_prefix, " ")
   end
 
+  return generated, window
+end
+
+-- ---------------------------------------------------------------------------
+-- generate_markov  KEYS[1]=guild_id
+--                  ARGV[1]=start_prefix  ARGV[2]=max_length
+-- ---------------------------------------------------------------------------
+local function generate_markov(keys, args)
+  local guild_id     = keys[1]
+  local start_prefix = args[1] or ""
+  local max_length   = tonumber(args[2]) or 20
+
+  if start_prefix == "" then return "" end
+
+  math.randomseed(tonumber(redis.call('TIME')[1]) + tonumber(redis.call('TIME')[2]))
+
+  local generated = do_generate_tokens(guild_id, start_prefix, max_length)
   return table.concat(generated, " ")
+end
+
+-- ---------------------------------------------------------------------------
+-- generate_rhyme  KEYS[1]=guild_id
+--                 ARGV[1]=start_prefix  ARGV[2]=max_length
+--                 ARGV[3]=suffix        ARGV[4]=max_attempts
+--
+-- Rejection-sampling rhyme generator: runs generate_markov up to max_attempts
+-- times until the last token of the result ends with `suffix` (case-insensitive
+-- byte suffix match). On miss, attempts a single tail swap against the
+-- producing-prefix's transition hash, picking any candidate that ends with the
+-- target suffix. Falls back to the last attempt's result if nothing matched.
+-- ---------------------------------------------------------------------------
+local function generate_rhyme(keys, args)
+  local guild_id     = keys[1]
+  local start_prefix = args[1] or ""
+  local max_length   = tonumber(args[2]) or 20
+  local suffix       = args[3] or ""
+  local max_attempts = tonumber(args[4]) or 8
+
+  if start_prefix == "" or suffix == "" then return "" end
+
+  math.randomseed(tonumber(redis.call('TIME')[1]) + tonumber(redis.call('TIME')[2]))
+
+  local suf     = string.lower(suffix)
+  local suf_len = #suf
+  local function ends_with(tok)
+    if #tok < suf_len then return false end
+    return string.lower(string.sub(tok, -suf_len)) == suf
+  end
+
+  local last_result = ""
+  for _ = 1, max_attempts do
+    local toks, window = do_generate_tokens(guild_id, start_prefix, max_length)
+    if #toks > 0 then
+      last_result = table.concat(toks, " ")
+      if ends_with(toks[#toks]) then
+        return last_result
+      end
+
+      -- Tail swap: re-query the prefix that produced the last token and
+      -- pick any rhyming next_word, weighted by its count.
+      if #toks > window then
+        local pre_parts = {}
+        for k = #toks - window, #toks - 1 do
+          table.insert(pre_parts, toks[k])
+        end
+        local pre  = table.concat(pre_parts, " ")
+        local flat = redis.call('HGETALL', state_key(guild_id, pre))
+
+        local candidates = {}
+        local total_w    = 0
+        for j = 1, #flat, 2 do
+          if ends_with(flat[j]) then
+            local w = tonumber(flat[j + 1]) or 0
+            if w > 0 then
+              table.insert(candidates, { flat[j], w })
+              total_w = total_w + w
+            end
+          end
+        end
+
+        if #candidates > 0 and total_w > 0 then
+          local target = math.random(1, total_w)
+          local cum    = 0
+          for _, c in ipairs(candidates) do
+            cum = cum + c[2]
+            if target <= cum then
+              toks[#toks] = c[1]
+              return table.concat(toks, " ")
+            end
+          end
+        end
+      end
+    end
+  end
+
+  return last_result
 end
 
 -- ---------------------------------------------------------------------------
@@ -528,6 +618,7 @@ redis.register_function('train_batch', train_batch)
 redis.register_function('count_message', count_message)
 redis.register_function('find_prefix', find_prefix)
 redis.register_function('generate_markov', generate_markov)
+redis.register_function('generate_rhyme', generate_rhyme)
 redis.register_function('delete_markov', delete_markov)
 redis.register_function('get_stats_markov', get_stats_markov)
 redis.register_function('reconcile_bytes_batch', reconcile_bytes_batch)

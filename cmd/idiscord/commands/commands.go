@@ -173,6 +173,23 @@ func NewSlashCommandsHandler(
 		},
 		{
 			Command: discord.SlashCommandCreate{
+				Name:        "rhyme",
+				Description: "Generates text that rhymes with the last word of the given input",
+				Contexts: []discord.InteractionContextType{
+					discord.InteractionContextTypeGuild,
+				},
+				Options: []discord.ApplicationCommandOption{
+					discord.ApplicationCommandOptionString{
+						Name:        "with",
+						Description: "Text whose last word is used as the rhyme target",
+						Required:    true,
+					},
+				},
+			},
+			Handler: handler.rhymeCommand,
+		},
+		{
+			Command: discord.SlashCommandCreate{
 				Name:        "wipe",
 				Description: "Deletes the given argument `data` from the training data",
 				Contexts: []discord.InteractionContextType{

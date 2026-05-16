@@ -209,6 +209,56 @@ func (r *CacheRepository) generateFrom(ctx context.Context, guildID, prefix stri
 	return out, err
 }
 
+// GenerateRhyme produces text seeded by `seed` whose last token rhymes with
+// `rhymeWord` (matched by case-insensitive trailing-byte suffix of up to 3 runes).
+// Uses rejection sampling on the existing forward chain — no schema change, no SCAN.
+// Falls back to the last attempt's text if no rhyming variant could be produced.
+func (r *CacheRepository) GenerateRhyme(ctx context.Context, guildID, rhymeWord string, maxLength int) (string, error) {
+	suffix := extractRhymeSuffix(rhymeWord)
+
+	var prefix string
+	err := r.runWithCacheReadRetry(ctx, guildID, "find_prefix", func(c context.Context) error {
+		var e error
+		prefix, e = r.fcallString(c, "find_prefix", []string{guildID}, "")
+		return e
+	})
+	if err != nil || prefix == "" {
+		return "", err
+	}
+
+	if suffix == "" {
+		return r.generateFrom(ctx, guildID, prefix, maxLength)
+	}
+
+	const maxAttempts = 8
+	var out string
+	err = r.runWithCacheReadRetry(ctx, guildID, "generate_rhyme", func(c context.Context) error {
+		var e error
+		out, e = r.fcallString(c, "generate_rhyme", []string{guildID}, prefix, maxLength, suffix, maxAttempts)
+		return e
+	})
+	return out, err
+}
+
+// GenerateRhymeFiltered is the filtered counterpart of GenerateRhyme.
+func (r *CacheRepository) GenerateRhymeFiltered(ctx context.Context, guildID, rhymeWord string, maxLength int) (string, error) {
+	raw, err := r.GenerateRhyme(ctx, guildID, rhymeWord, maxLength)
+	if err != nil {
+		return "", err
+	}
+	return FilterText(raw, false), nil
+}
+
+func extractRhymeSuffix(word string) string {
+	w := strings.ToLower(strings.TrimSpace(word))
+	if w == "" {
+		return ""
+	}
+	runes := []rune(w)
+	n := min(len(runes), 3)
+	return string(runes[len(runes)-n:])
+}
+
 // GetStats returns (uniquePrefixes, messageCount, estimatedBytes) for a guild.
 func (r *CacheRepository) GetStats(ctx context.Context, guildID string) (uniquePrefixes, messageCount int64, estimatedBytes uint64, err error) {
 	var res []int64
