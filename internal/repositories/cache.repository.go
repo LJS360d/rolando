@@ -209,10 +209,10 @@ func (r *CacheRepository) generateFrom(ctx context.Context, guildID, prefix stri
 	return out, err
 }
 
-// GenerateRhyme produces text seeded by `seed` whose last token rhymes with
-// `rhymeWord` (matched by case-insensitive trailing-byte suffix of up to 3 runes).
-// Uses rejection sampling on the existing forward chain — no schema change, no SCAN.
-// Falls back to the last attempt's text if no rhyming variant could be produced.
+// GenerateRhyme generates text whose last token rhymes with rhymeWord.
+// The retry loop runs in Go so each FCALL is one short generation attempt,
+// never a long blocking script. Falls back to the last attempt's text if no
+// rhyming result is found within maxAttempts calls.
 func (r *CacheRepository) GenerateRhyme(ctx context.Context, guildID, rhymeWord string, maxLength int) (string, error) {
 	suffix := extractRhymeSuffix(rhymeWord)
 
@@ -230,14 +230,26 @@ func (r *CacheRepository) GenerateRhyme(ctx context.Context, guildID, rhymeWord 
 		return r.generateFrom(ctx, guildID, prefix, maxLength)
 	}
 
-	const maxAttempts = 8
-	var out string
-	err = r.runWithCacheReadRetry(ctx, guildID, "generate_rhyme", func(c context.Context) error {
-		var e error
-		out, e = r.fcallString(c, "generate_rhyme", []string{guildID}, prefix, maxLength, suffix, maxAttempts)
-		return e
-	})
-	return out, err
+	const maxAttempts = 10
+	var last string
+	for range maxAttempts {
+		var out string
+		callErr := r.runWithCacheReadRetry(ctx, guildID, "generate_rhyme", func(c context.Context) error {
+			var e error
+			out, e = r.fcallString(c, "generate_rhyme", []string{guildID}, prefix, maxLength, suffix)
+			return e
+		})
+		if callErr != nil {
+			break
+		}
+		if out != "" {
+			last = out
+		}
+		if hasRhymeSuffix(out, suffix) {
+			return out, nil
+		}
+	}
+	return last, nil
 }
 
 // GenerateRhymeFiltered is the filtered counterpart of GenerateRhyme.
@@ -247,6 +259,14 @@ func (r *CacheRepository) GenerateRhymeFiltered(ctx context.Context, guildID, rh
 		return "", err
 	}
 	return FilterText(raw, false), nil
+}
+
+func hasRhymeSuffix(text, suffix string) bool {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(words[len(words)-1]), suffix)
 }
 
 func extractRhymeSuffix(word string) string {

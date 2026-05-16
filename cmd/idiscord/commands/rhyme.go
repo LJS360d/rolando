@@ -32,25 +32,20 @@ func (h *SlashCommandsHandler) rhymeCommand(s *bot.Client, i *events.Application
 		return
 	}
 
+	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeDeferredCreateMessage,
+	})
+
 	fields := strings.Fields(text)
 	rhymeWord := fields[len(fields)-1]
 
 	msg, err := h.ChainsService.GenerateRhyme(context.Background(), i.GuildID().String(), rhymeWord, utils.GetRandom(4, 14))
 	if err != nil || msg == "" {
-		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
-			Type: discord.InteractionResponseTypeCreateMessage,
-			Data: discord.MessageCreate{
-				Content: "Failed to generate a rhyme.",
-				Flags:   discord.MessageFlagEphemeral,
-			},
-		})
+		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.NewMessageUpdate().
+			WithContent("Failed to generate a rhyme."))
 		return
 	}
 
-	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
-		Type: discord.InteractionResponseTypeCreateMessage,
-		Data: discord.MessageCreate{
-			Content: msg,
-		},
-	})
+	s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.NewMessageUpdate().
+		WithContent(msg))
 }

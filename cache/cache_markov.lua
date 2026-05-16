@@ -299,25 +299,27 @@ end
 
 -- ---------------------------------------------------------------------------
 -- generate_rhyme  KEYS[1]=guild_id
---                 ARGV[1]=start_prefix  ARGV[2]=max_length
---                 ARGV[3]=suffix        ARGV[4]=max_attempts
+--                 ARGV[1]=start_prefix  ARGV[2]=max_length  ARGV[3]=suffix
 --
--- Rejection-sampling rhyme generator: runs generate_markov up to max_attempts
--- times until the last token of the result ends with `suffix` (case-insensitive
--- byte suffix match). On miss, attempts a single tail swap against the
--- producing-prefix's transition hash, picking any candidate that ends with the
--- target suffix. Falls back to the last attempt's result if nothing matched.
+-- Single-attempt rhyme generator: one forward generation followed by one tail
+-- swap against the producing-prefix's transition hash. The retry loop lives in
+-- Go so each FCALL stays short and never blocks the server long.
+-- Returns the generated text (may or may not end with suffix — Go checks).
 -- ---------------------------------------------------------------------------
 local function generate_rhyme(keys, args)
   local guild_id     = keys[1]
   local start_prefix = args[1] or ""
   local max_length   = tonumber(args[2]) or 20
   local suffix       = args[3] or ""
-  local max_attempts = tonumber(args[4]) or 8
 
-  if start_prefix == "" or suffix == "" then return "" end
+  if start_prefix == "" then return "" end
 
   math.randomseed(tonumber(redis.call('TIME')[1]) + tonumber(redis.call('TIME')[2]))
+
+  local toks, window = do_generate_tokens(guild_id, start_prefix, max_length)
+  if #toks == 0 then return "" end
+
+  if suffix == "" then return table.concat(toks, " ") end
 
   local suf     = string.lower(suffix)
   local suf_len = #suf
@@ -326,53 +328,46 @@ local function generate_rhyme(keys, args)
     return string.lower(string.sub(tok, -suf_len)) == suf
   end
 
-  local last_result = ""
-  for _ = 1, max_attempts do
-    local toks, window = do_generate_tokens(guild_id, start_prefix, max_length)
-    if #toks > 0 then
-      last_result = table.concat(toks, " ")
-      if ends_with(toks[#toks]) then
-        return last_result
+  if ends_with(toks[#toks]) then
+    return table.concat(toks, " ")
+  end
+
+  -- Tail swap: re-query the prefix that produced the last token and pick any
+  -- rhyming next_word, weighted by its count.
+  if #toks > window then
+    local pre_parts = {}
+    for k = #toks - window, #toks - 1 do
+      table.insert(pre_parts, toks[k])
+    end
+    local pre  = table.concat(pre_parts, " ")
+    local flat = redis.call('HGETALL', state_key(guild_id, pre))
+
+    local candidates = {}
+    local total_w    = 0
+    for j = 1, #flat, 2 do
+      if ends_with(flat[j]) then
+        local w = tonumber(flat[j + 1]) or 0
+        if w > 0 then
+          table.insert(candidates, { flat[j], w })
+          total_w = total_w + w
+        end
       end
+    end
 
-      -- Tail swap: re-query the prefix that produced the last token and
-      -- pick any rhyming next_word, weighted by its count.
-      if #toks > window then
-        local pre_parts = {}
-        for k = #toks - window, #toks - 1 do
-          table.insert(pre_parts, toks[k])
-        end
-        local pre  = table.concat(pre_parts, " ")
-        local flat = redis.call('HGETALL', state_key(guild_id, pre))
-
-        local candidates = {}
-        local total_w    = 0
-        for j = 1, #flat, 2 do
-          if ends_with(flat[j]) then
-            local w = tonumber(flat[j + 1]) or 0
-            if w > 0 then
-              table.insert(candidates, { flat[j], w })
-              total_w = total_w + w
-            end
-          end
-        end
-
-        if #candidates > 0 and total_w > 0 then
-          local target = math.random(1, total_w)
-          local cum    = 0
-          for _, c in ipairs(candidates) do
-            cum = cum + c[2]
-            if target <= cum then
-              toks[#toks] = c[1]
-              return table.concat(toks, " ")
-            end
-          end
+    if #candidates > 0 and total_w > 0 then
+      local target = math.random(1, total_w)
+      local cum    = 0
+      for _, c in ipairs(candidates) do
+        cum = cum + c[2]
+        if target <= cum then
+          toks[#toks] = c[1]
+          return table.concat(toks, " ")
         end
       end
     end
   end
 
-  return last_result
+  return table.concat(toks, " ")
 end
 
 -- ---------------------------------------------------------------------------
