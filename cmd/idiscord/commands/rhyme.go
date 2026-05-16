@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"rolando/internal/logger"
 	"rolando/internal/utils"
 
 	"github.com/disgoorg/disgo/bot"
@@ -40,9 +41,16 @@ func (h *SlashCommandsHandler) rhymeCommand(s *bot.Client, i *events.Application
 	rhymeWord := fields[len(fields)-1]
 
 	msg, err := h.ChainsService.GenerateRhyme(context.Background(), i.GuildID().String(), rhymeWord, utils.GetRandom(4, 14))
-	if err != nil || msg == "" {
+	if err != nil {
+		logger.Errorf("Failed to generate a rhyme: %v", err)
 		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.NewMessageUpdate().
-			WithContent("Failed to generate a rhyme."))
+			WithContent("Failed to generate a rhyme").WithFlags(discord.MessageFlagEphemeral))
+		return
+	}
+	if msg == "" {
+		logger.Warnf("Generated empty rhyme msg")
+		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.NewMessageUpdate().
+			WithContent("Failed to generate a rhyme").WithFlags(discord.MessageFlagEphemeral))
 		return
 	}
 

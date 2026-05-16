@@ -240,7 +240,8 @@ func (r *CacheRepository) GenerateRhyme(ctx context.Context, guildID, rhymeWord 
 			return e
 		})
 		if callErr != nil {
-			break
+			logger.Debugf("generate_rhyme guild=%s suffix=%s err=%v", guildID, suffix, callErr)
+			return last, callErr
 		}
 		if out != "" {
 			last = out
