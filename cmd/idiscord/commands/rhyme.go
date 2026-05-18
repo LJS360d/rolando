@@ -40,7 +40,7 @@ func (h *SlashCommandsHandler) rhymeCommand(s *bot.Client, i *events.Application
 	fields := strings.Fields(text)
 	rhymeWord := fields[len(fields)-1]
 
-	msg, err := h.ChainsService.GenerateRhyme(context.Background(), i.GuildID().String(), rhymeWord, utils.GetRandom(4, 14))
+	msg, err := h.ChainsService.GenerateRhyme(context.Background(), i.GuildID().String(), rhymeWord, utils.GetRandom(4, 9))
 	if err != nil {
 		logger.Errorf("Failed to generate a rhyme: %v", err)
 		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.NewMessageUpdate().
