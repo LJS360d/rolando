@@ -33,7 +33,7 @@ func NewMediaValidator(markovRepo *repositories.CacheRepository, messagesRepo *r
 // If the returned URL is dead it is purged and the next one is tried.
 // At most maxRetries attempts are made before giving up.
 func (mv *MediaValidator) GetValidMedia(ctx context.Context, guildID, kind string, maxRetries int) string {
-	for i := 0; i < maxRetries; i++ {
+	for range maxRetries {
 		url, err := mv.markovRepo.GetRandomMedia(ctx, guildID, kind)
 		if err != nil || url == "" {
 			return ""

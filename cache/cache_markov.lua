@@ -301,10 +301,11 @@ end
 -- generate_rhyme  KEYS[1]=guild_id
 --                 ARGV[1]=start_prefix  ARGV[2]=max_length  ARGV[3]=suffix
 --
--- Single-attempt rhyme generator: one forward generation followed by one tail
--- swap against the producing-prefix's transition hash. The retry loop lives in
--- Go so each FCALL stays short and never blocks the server long.
--- Returns the generated text (may or may not end with suffix — Go checks).
+-- Single-pass rhyme generator. Forward-generates exactly once, tracking
+-- per-step rhyming successors observed in each HGETALL. At the end, walks
+-- recorded positions backward from the tail and accepts the latest position
+-- at or above max_length/2, swapping in a weighted rhyming pick and truncating.
+-- Falls back to the plain generated text if no rhyme is reachable.
 -- ---------------------------------------------------------------------------
 local function generate_rhyme(keys, args)
   local guild_id     = keys[1]
@@ -316,58 +317,123 @@ local function generate_rhyme(keys, args)
 
   math.randomseed(tonumber(redis.call('TIME')[1]) + tonumber(redis.call('TIME')[2]))
 
-  local toks, window = do_generate_tokens(guild_id, start_prefix, max_length)
-  if #toks == 0 then return "" end
-
-  if suffix == "" then return table.concat(toks, " ") end
-
-  local suf     = string.lower(suffix)
-  local suf_len = #suf
-  local function ends_with(tok)
-    if #tok < suf_len then return false end
-    return string.lower(string.sub(tok, -suf_len)) == suf
-  end
-
-  if ends_with(toks[#toks]) then
+  if suffix == "" then
+    local toks = do_generate_tokens(guild_id, start_prefix, max_length)
     return table.concat(toks, " ")
   end
 
-  -- Tail swap: re-query the prefix that produced the last token and pick any
-  -- rhyming next_word, weighted by its count.
-  if #toks > window then
-    local pre_parts = {}
-    for k = #toks - window, #toks - 1 do
-      table.insert(pre_parts, toks[k])
-    end
-    local pre  = table.concat(pre_parts, " ")
-    local flat = redis.call('HGETALL', state_key(guild_id, pre))
+  local suf_len = #suffix
+  local function ends_with(tok)
+    if #tok < suf_len then return false end
+    return string.lower(string.sub(tok, -suf_len)) == suffix
+  end
 
-    local candidates = {}
-    local total_w    = 0
-    for j = 1, #flat, 2 do
-      if ends_with(flat[j]) then
-        local w = tonumber(flat[j + 1]) or 0
+  local generated      = split_tokens(start_prefix)
+  local configured_n   = tonumber(redis.call('HGET', config_key(guild_id), 'n_gram_size') or "0") or 0
+  local inferred_n     = #generated + 1
+  local n_gram_size    = configured_n > 0 and configured_n or inferred_n
+  local window         = math.max(1, n_gram_size - 1)
+  local current_prefix = start_prefix
+
+  -- candidates[pos] = list of {word, weight} rhyming successors observed
+  -- in the HGETALL that produced generated[pos].
+  local candidates = {}
+
+  for _ = 1, max_length do
+    local backoff    = split_tokens(current_prefix)
+    local next_words = {}
+    local found      = false
+
+    while #backoff > 0 do
+      local bk     = table.concat(backoff, " ")
+      local result = redis.call('HGETALL', state_key(guild_id, bk))
+      if #result > 0 then
+        next_words = result
+        found      = true
+        break
+      end
+      table.remove(backoff, 1)
+    end
+
+    if not found then break end
+
+    local total_weight = 0
+    for j = 2, #next_words, 2 do
+      total_weight = total_weight + tonumber(next_words[j])
+    end
+    if total_weight == 0 then break end
+
+    local target     = math.random(1, total_weight)
+    local cumulative = 0
+    local chosen     = nil
+    for j = 1, #next_words, 2 do
+      cumulative = cumulative + tonumber(next_words[j + 1])
+      if target <= cumulative then
+        chosen = next_words[j]
+        break
+      end
+    end
+    if not chosen then break end
+
+    table.insert(generated, chosen)
+    local pos = #generated
+
+    local rhyming = nil
+    for j = 1, #next_words, 2 do
+      if ends_with(next_words[j]) then
+        local w = tonumber(next_words[j + 1]) or 0
         if w > 0 then
-          table.insert(candidates, { flat[j], w })
-          total_w = total_w + w
+          rhyming = rhyming or {}
+          table.insert(rhyming, { next_words[j], w })
         end
       end
     end
+    if rhyming then candidates[pos] = rhyming end
 
-    if #candidates > 0 and total_w > 0 then
-      local target = math.random(1, total_w)
-      local cum    = 0
-      for _, c in ipairs(candidates) do
-        cum = cum + c[2]
-        if target <= cum then
-          toks[#toks] = c[1]
-          return table.concat(toks, " ")
+    local new_prefix = {}
+    local start_idx  = math.max(1, #generated - window + 1)
+    for k = start_idx, #generated do
+      table.insert(new_prefix, generated[k])
+    end
+    current_prefix = table.concat(new_prefix, " ")
+  end
+
+  local min_swap_pos = math.max(1, math.floor(max_length / 2))
+  for swap_pos = #generated, min_swap_pos, -1 do
+    local rhyming_options = candidates[swap_pos]
+    if rhyming_options then
+      local weight_sum = 0
+      for _, option in ipairs(rhyming_options) do
+        weight_sum = weight_sum + option[2]
+      end
+      if weight_sum > 0 then
+        local pick_target = math.random(1, weight_sum)
+        local pick_cum    = 0
+        for _, option in ipairs(rhyming_options) do
+          pick_cum = pick_cum + option[2]
+          if pick_target <= pick_cum then
+            local rhyme_word = option[1]
+            if ends_with(rhyme_word) then
+              generated[swap_pos] = rhyme_word
+              local truncated = {}
+              for i = 1, swap_pos do
+                table.insert(truncated, generated[i])
+              end
+              return table.concat(truncated, " ")
+            end
+            break
+          end
         end
       end
     end
   end
 
-  return table.concat(toks, " ")
+  -- Fallback: no rhyming successor found anywhere. Stitch the suffix directly
+  -- onto the last token so the output at least ends with the rhyme syllable.
+  if #generated > 0 and not ends_with(generated[#generated]) then
+    generated[#generated] = generated[#generated] .. suffix
+  end
+  return table.concat(generated, " ")
 end
 
 -- ---------------------------------------------------------------------------
