@@ -27,7 +27,7 @@ services:
       context: ./client
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "3005:80"
     networks:
       - default
     restart: unless-stopped
