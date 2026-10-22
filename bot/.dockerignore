@@ -1,0 +1,8 @@
+.env
+.env.*
+bin
+data
+migrate
+*.log
+vosk
+dave

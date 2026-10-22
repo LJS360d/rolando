@@ -1,57 +1,50 @@
+# Dev / example only: builds from source. In production write your own compose
+# pulling ghcr.io/<owner>/rolando and ghcr.io/<owner>/rolando/web,
+# with env vars set inline (see bot/.env.example).
+# Scale out: raise NODE_COUNT, add rolando-1..N-1 with their NODE_INDEX and own data dir.
 name: rolando
 
+x-node: &node
+  build: ./bot
+  image: rolando
+  env_file: bot/.env
+  restart: unless-stopped
+
+x-node-env: &node-env
+  DATA_DIR: /data
+  SERVER_ADDRESS: 0.0.0.0:8080
+  NODE_API_ADDRESS: 0.0.0.0:9000
+  NODE_ADDR: http://rolando-%d:9000
+  SHARD_COUNT: 16
+  NODE_COUNT: 1
+
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  web:
+    build: ./web
+    image: rolando-web
+    ports:
+      - "${WEB_PORT:-80}:80"
+    environment:
+      API_URL: http://rolando-0:8080
+      SITE_URL: ${SITE_URL:-http://localhost}
+    restart: unless-stopped
+
+  rolando-0:
+    <<: *node
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/home/appuser/data
+      - ./bot/data:/data
     environment:
-      - DATABASE_PATH=/home/appuser/data/${COMPOSE_PROJECT_NAME}.db
-      - SERVER_ADDRESS=0.0.0.0:8080
-      - CACHE_URL=valkey://:${CACHE_PASSWORD}@cache:6379
-    networks:
-      - default
-    restart: unless-stopped
-    depends_on:
-      cache:
-        condition: service_healthy
+      <<: *node-env
+      NODE_INDEX: 0
 
-  frontend:
-    profiles:
-      - prod
-    build:
-      context: ./client
-      dockerfile: Dockerfile
-    ports:
-      - "3005:80"
-    networks:
-      - default
-    restart: unless-stopped
-
-  cache:
-    image: valkey/valkey:9.0.4-alpine
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:${CACHE_PORT:-6379}:6379"
-    volumes:
-      - ./data/cache:/data
-      - ./cache/cache.conf:/usr/local/etc/cache/cache.conf:ro
-      - ./cache/cache_markov.lua:/scripts/cache_markov.lua:ro
-      - ./cache/docker-entrypoint-cache.sh:/docker-entrypoint-cache.sh:ro
-    entrypoint: ["/bin/sh", "/docker-entrypoint-cache.sh"]
-    environment:
-      - CACHE_PASSWORD=${CACHE_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "valkey-cli -a \"$${CACHE_PASSWORD}\" ping >/dev/null"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    networks:
-      - default
-
-volumes:
-  data:
+  # rolando-1:
+  #   <<: *node
+  #   ports:
+  #     - "8081:8080"
+  #   volumes:
+  #     - ./bot/data-1:/data
+  #   environment:
+  #     <<: *node-env
+  #     NODE_INDEX: 1

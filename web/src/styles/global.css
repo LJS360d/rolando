@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@plugin "@iconify/tailwind4";
+
+@layer base {
+  html { color-scheme: dark; }
+  a { @apply cursor-pointer text-indigo-400 hover:underline; }
+  body { @apply bg-neutral-950 text-neutral-200; }
+  h1 { @apply mb-2 text-2xl font-bold; }
+  h2 { @apply mb-2 text-xl font-semibold; }
+  h3 { @apply mt-4 font-semibold; }
+  th, td { @apply border-b border-neutral-500 px-2 py-1.5 text-left; }
+}
+
+@layer components {
+  .card { @apply mb-4 rounded-sm bg-neutral-900 p-4; }
+  .muted { @apply text-neutral-400; }
+  .banner { @apply mb-4 rounded bg-amber-900/60 px-4 py-2; }
+  .btn { @apply inline-block cursor-pointer rounded bg-indigo-500 px-3 py-1.5 text-white hover:bg-indigo-400 hover:no-underline; }
+  .btn-danger { @apply bg-red-600 hover:bg-red-500; }
+  .link { @apply cursor-pointer text-indigo-400 hover:underline; }
+  .input { @apply rounded border border-neutral-700 bg-neutral-800 p-1.5; }
+}

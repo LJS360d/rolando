@@ -1,5 +1,0 @@
-{
-  "makefile.configureOnOpen": false,
-  "go.buildTags": "js,wasm",
-  "cSpell.words": ["discord"],
-}

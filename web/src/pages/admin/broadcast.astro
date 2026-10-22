@@ -1,0 +1,9 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Broadcast from "../../components/Broadcast";
+---
+
+<Layout title="Broadcast">
+  <h1 class="mb-4">Broadcast</h1>
+  <Broadcast client:only="preact" />
+</Layout>

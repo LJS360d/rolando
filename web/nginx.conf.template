@@ -1,0 +1,43 @@
+# Behind a Cloudflare tunnel every request arrives from cloudflared; the real
+# client IP is in CF-Connecting-IP. Only trusted from private ranges, so a
+# client reaching nginx directly from the internet can't spoof it.
+set_real_ip_from 10.0.0.0/8;
+set_real_ip_from 172.16.0.0/12;
+set_real_ip_from 192.168.0.0/16;
+set_real_ip_from 127.0.0.0/8;
+real_ip_header CF-Connecting-IP;
+
+limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=graph:10m rate=2r/s;
+limit_req_status 429;
+
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+
+    location / {
+        try_files $uri $uri.html $uri/ =404;
+    }
+
+    location /_astro/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location /api/ {
+        limit_req zone=api burst=30 nodelay;
+        proxy_pass ${API_URL};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Graph loads chains and scans them on every call.
+    location ~ ^/api/guilds/[0-9]+/graph$ {
+        limit_req zone=api burst=30 nodelay;
+        limit_req zone=graph burst=10 nodelay;
+        proxy_pass ${API_URL};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    error_page 404 /404.html;
+}

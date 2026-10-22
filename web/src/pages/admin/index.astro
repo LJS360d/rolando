@@ -1,0 +1,10 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import AdminStats from "../../components/AdminStats";
+import AdminTable from "../../components/AdminTable";
+---
+
+<Layout title="Admin">
+  <AdminStats client:only="preact" />
+  <AdminTable client:only="preact" />
+</Layout>

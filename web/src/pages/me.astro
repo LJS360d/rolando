@@ -1,0 +1,9 @@
+---
+import Layout from "../layouts/Layout.astro";
+import GuildLinks from "../components/GuildLinks";
+---
+
+<Layout title="My servers">
+  <h1 class="mb-4">My servers</h1>
+  <GuildLinks client:only="preact" />
+</Layout>

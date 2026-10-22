@@ -1,0 +1,24 @@
+---
+import "../styles/global.css";
+import Header from "../components/Header";
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title ? `${title} · Rolando` : "Rolando"}</title>
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <Header client:load />
+    <main class="mx-auto w-full max-w-7xl flex-1 p-4 lg:p-6"><slot /></main>
+    <footer class="muted flex justify-center gap-6 border-t border-neutral-900 p-4 text-sm">
+      <a href="/premium">Premium</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms-of-service">Terms of Service</a>
+    </footer>
+  </body>
+</html>

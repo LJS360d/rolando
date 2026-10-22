@@ -1,6 +1,6 @@
 # Rolando#7135
 
-![Status](https://img.shields.io/website?url=https%3A%2F%2Fzlejon-middev.de%3A)
+![Status](https://img.shields.io/website?url=https%3A%2F%2Frolando.stables-tech.com%3A)
 ![Discord](https://img.shields.io/discord/1122938014637756486)
 
 Discord Bot implementation of a MarkovChain to learn how to type like a user of the guild.<br>
@@ -17,29 +17,17 @@ The concept is inspired by [`Fioriktos`](https://github.com/FiorixF1/fioriktos-b
 
 ### Locally
 - Prerequisites:
-  - Go 1.23.0+
-  - Make 4.4.1+
+  - Go 1.26+, Make, pnpm (versions in `bot/mise.toml`, `web/mise.toml`)
 - Step by Step guide:
-  - Starting up the Backend
-  1. Copy the `.env.example` file to `.env` and follow the instructions written on it for the value of each needed environment variable
-  2. Run `go mod download` to download dependencies
-  3. Run `make run` to start the application in production mode or `make dev` to start the application in development mode
-      - Optionally you can also run `air` to start a the application in dev mode with Hot reloading (you may need to edit the `air.toml` file depending on the OS you are using)
-  - Starting up the Frontend (optional)
-  1. Run `cd client` to enter the client directory
-  2. Run `npm install` to install the required dependencies
-  3. Run `npm run dev` to start the development server
-  4. Open your browser and navigate to `http://localhost:3000`
+  1. `cd bot`, copy `.env.example` to `.env` and follow the instructions written on it for the value of each needed environment variable
+  2. Run `make dev` (development) or `make build run` (production); `make run` loads `.env` into the environment
+  3. Web UI: `cd web && pnpm install && pnpm dev`
+  4. Upgrading from the old single `rolando.db`: run `./bin/rolando migrate split-db path/to/rolando.db` once
 
 ### Production
 
-- Prerequisites:
-  - Make
-  - Docker w/ Docker Compose
-- Step by Step guide:
-  1. Copy the `.env.example` file to `.env` and follow the instructions written on it for the value of each needed environment variable
-      - Optionally you can add a `client/.env` file to set the environment variables for the frontend, refer to the `client/.env.development` file for more information
-  2. Run `make run-docker` to build the docker compose file and start the application (both backend and frontend) in production mode
+Prebuilt docker images: `ghcr.io/ljs360d/rolando` (bot + API) and `ghcr.io/ljs360d/rolando/web` (web UI). Write your own compose with the env vars from `bot/.env.example`. 
+The repo's `docker-compose.yml` builds from source (`docker compose up --build`, reads `bot/.env`) and is meant for development.
 
 ### Troubleshooting:
 

@@ -1,0 +1,28 @@
+{
+  "name": "rolando-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/preact": "^6.1.1",
+    "@astrojs/sitemap": "^3.7.4",
+    "@formkit/auto-animate": "^0.10.0",
+    "@preact/signals": "^2.11.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.4.2",
+    "preact": "^11.0.1",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@iconify-json/fa6-brands": "^1.2.6",
+    "@iconify-json/fa6-solid": "^1.2.4",
+    "@iconify/tailwind4": "^1.2.3",
+    "typescript": "^6.0.3"
+  },
+  "packageManager": "pnpm@12.14.0"
+}

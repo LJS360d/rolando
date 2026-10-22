@@ -1,0 +1,20 @@
+---
+import Layout from "../layouts/Layout.astro";
+import GuildHeader from "../components/GuildHeader";
+import ChainGraph from "../components/ChainGraph";
+import ConfigForm from "../components/ConfigForm";
+import Messages from "../components/Messages";
+---
+
+<Layout title="Server">
+  <GuildHeader client:only="preact" />
+  <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:has-[aside>astro-island:empty]:grid-cols-1">
+    <div class="min-w-0">
+      <ChainGraph client:only="preact" />
+      <Messages client:only="preact" />
+    </div>
+    <aside class="lg:sticky lg:top-20">
+      <ConfigForm client:only="preact" />
+    </aside>
+  </div>
+</Layout>

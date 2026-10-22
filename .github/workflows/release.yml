@@ -1,0 +1,38 @@
+# Tag vX.Y.Z → push ghcr.io/<owner>/<repo>:{X.Y.Z,latest} and .../<repo>/web.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - context: bot
+            suffix: ''
+          - context: web
+            suffix: /web
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        shell: bash
+        run: |
+          img="ghcr.io/${GITHUB_REPOSITORY,,}${{ matrix.suffix }}"
+          echo "tags=$img:${GITHUB_REF_NAME#v},$img:latest" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: VERSION=${{ github.ref_name }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          push: true

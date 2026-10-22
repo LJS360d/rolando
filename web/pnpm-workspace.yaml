@@ -1,0 +1,8 @@
+minimumReleaseAgeExclude:
+  - '@astrojs/check@0.9.12'
+  - '@astrojs/language-server@2.17.3'
+  - '@astrojs/markdown-satteri@0.4.5'
+  - '@astrojs/preact@6.1.1'
+  - '@astrojs/prism@4.1.1'
+  - '@astrojs/telemetry@3.4.1'
+  - astro@7.4.2
