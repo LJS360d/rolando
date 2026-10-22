@@ -1,7 +1,7 @@
 # Production, single node: prebuilt images, no source needed.
 # Copy this file to the server next to a .env holding
-# the bot vars from bot/.env.example (TOKEN, PUBLIC_URL, OAUTH_CLIENT_SECRET,
-# SESSION_SECRET, ...) plus SITE_URL. `chown 1000:1000 data` before first run.
+# the bot vars from bot/.env.example (TOKEN, SITE_URL, OAUTH_CLIENT_SECRET,
+# SESSION_SECRET, ...). `chown 1000:1000 data` before first run.
 # Only the web UI is published; it proxies /api to the bot.
 
 name: rolando

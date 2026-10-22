@@ -61,7 +61,7 @@ func setSession(w http.ResponseWriter, s *Session) {
 	b, _ := json.Marshal(s)
 	payload := base64.RawURLEncoding.EncodeToString(b)
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: payload + "." + sign(payload), Path: "/",
-		HttpOnly: true, Secure: strings.HasPrefix(config.PublicURL, "https"), SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: strings.HasPrefix(config.SiteURL, "https"), SameSite: http.SameSiteLaxMode,
 		MaxAge: int(sessionTTL.Seconds())})
 }
 
@@ -82,7 +82,7 @@ func getSession(r *http.Request) *Session {
 	return &s
 }
 
-func (s *Server) redirectURI() string { return config.PublicURL + "/api/auth/callback" }
+func (s *Server) redirectURI() string { return config.SiteURL + "/api/auth/callback" }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	b := make([]byte, 16)

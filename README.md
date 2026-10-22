@@ -26,7 +26,7 @@ The concept is inspired by [`Fioriktos`](https://github.com/FiorixF1/fioriktos-b
 
 ### Production
 
-Prebuilt docker images: `ghcr.io/ljs360d/rolando` (bot + API) and `ghcr.io/ljs360d/rolando/web` (web UI). Single node: copy `docker-compose.prod.yml` to the server next to a `.env` (vars from `bot/.env.example` plus `SITE_URL`), `chown 1000:1000 data`, `docker compose -f docker-compose.prod.yml up -d`.
+Prebuilt docker images: `ghcr.io/ljs360d/rolando` (bot + API) and `ghcr.io/ljs360d/rolando/web` (web UI). Single node: copy `docker-compose.prod.yml` to the server next to a `.env` (vars from `bot/.env.example`), `chown 1000:1000 data`, `docker compose -f docker-compose.prod.yml up -d`.
 The repo's `docker-compose.yml` builds from source (`docker compose up --build`, reads `bot/.env`) and is meant for development.
 
 ### Troubleshooting:

@@ -28,7 +28,7 @@ var (
 	NodeSecret           string
 	SessionSecret        string
 	OAuthClientSecret    string
-	PublicURL            string
+	SiteURL              string
 	ChainIdleTTL         time.Duration
 	SnapshotInterval     time.Duration
 	ServerAddress        string
@@ -73,7 +73,7 @@ func init() {
 	}
 	SessionSecret = os.Getenv("SESSION_SECRET")
 	OAuthClientSecret = os.Getenv("OAUTH_CLIENT_SECRET")
-	PublicURL = strings.TrimSuffix(envOr("PUBLIC_URL", "http://localhost:4321"), "/")
+	SiteURL = strings.TrimSuffix(envOr("SITE_URL", "http://localhost:4321"), "/")
 	ChainIdleTTL = envDuration("CHAIN_IDLE_TTL", 30*time.Minute)
 	SnapshotInterval = envDuration("SNAPSHOT_INTERVAL", 10*time.Minute)
 	ServerAddress = os.Getenv("SERVER_ADDRESS")
