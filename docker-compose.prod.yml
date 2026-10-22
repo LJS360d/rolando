@@ -1,0 +1,26 @@
+# Production, single node: prebuilt images, no source needed.
+# Copy this file to the server next to a .env holding
+# the bot vars from bot/.env.example (TOKEN, PUBLIC_URL, OAUTH_CLIENT_SECRET,
+# SESSION_SECRET, ...) plus SITE_URL. `chown 1000:1000 data` before first run.
+# Only the web UI is published; it proxies /api to the bot.
+
+name: rolando
+
+services:
+  web:
+    image: ghcr.io/ljs360d/rolando/web:${ROLANDO_VERSION:-latest}
+    ports:
+      - "${WEB_PORT:-80}:80"
+    environment:
+      API_URL: http://rolando-0:8080
+      SITE_URL: ${SITE_URL:?set SITE_URL in .env}
+    depends_on:
+      - rolando-0
+    restart: unless-stopped
+
+  rolando-0:
+    image: ghcr.io/ljs360d/rolando:${ROLANDO_VERSION:-latest}
+    env_file: .env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
