@@ -50,7 +50,7 @@ export type AdminPage = {
   loaded: number;
 };
 
-export type MessagesPage = { messages: string[]; page: number; pages: number };
+export type MessagesPage = { messages: string[]; mentions?: Record<string, string>; page: number; pages: number };
 
 export const browser = typeof window !== "undefined";
 export const login = () => location.assign("/api/auth/login");

@@ -359,7 +359,7 @@ type Neighborhood struct {
 
 // Neighbors returns the most frequent tokens that follow (out) and precede
 // (in) word, summed over every prefix. An empty word picks a random one.
-// ponytail: scans every prefix per call; index prefixes by last token if that gets slow.
+// scans every prefix per call; TODO maybe can index prefixes by last token to speed up
 func (c *Chain) Neighbors(word string, limit int) Neighborhood {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

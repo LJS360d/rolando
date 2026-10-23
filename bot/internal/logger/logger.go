@@ -87,7 +87,6 @@ func (h *handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &c
 }
 
-// ponytail: groups are flattened, nothing here logs with groups
 func (h *handler) WithGroup(string) slog.Handler { return h }
 
 func writeAttr(b *strings.Builder, a slog.Attr) {

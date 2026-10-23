@@ -105,13 +105,18 @@ func TestBenchmarkLargestGuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rows.Close()
 	var msgs []string
 	for rows.Next() {
 		var s string
-		rows.Scan(&s)
+		if err := rows.Scan(&s); err != nil {
+			t.Fatal(err)
+		}
 		msgs = append(msgs, s)
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 
 	var before, after runtime.MemStats
 	runtime.GC()

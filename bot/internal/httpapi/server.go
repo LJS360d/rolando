@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -424,7 +425,53 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	for i, m := range msgs {
 		contents[i] = m.Content
 	}
-	writeJSON(w, map[string]any{"messages": contents, "page": pg, "pages": (int(total) + messagesPageSize - 1) / messagesPageSize})
+	writeJSON(w, map[string]any{
+		"messages": contents,
+		"mentions": s.mentions(r.PathValue("id"), contents),
+		"page":     pg,
+		"pages":    (int(total) + messagesPageSize - 1) / messagesPageSize,
+	})
+}
+
+var mentionRe = regexp.MustCompile(`<(@!?|@&|#)(\d+)>`)
+
+// mentions maps each raw mention token (e.g. "<@123>") to its display text.
+func (s *Server) mentions(guild string, contents []string) map[string]string {
+	gid, err := snowflake.Parse(guild)
+	if err != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, c := range contents {
+		for _, m := range mentionRe.FindAllStringSubmatch(c, -1) {
+			if _, ok := out[m[0]]; ok {
+				continue
+			}
+			id, _ := snowflake.Parse(m[2])
+			switch m[1] {
+			case "#":
+				if ch, ok := s.client.Caches.Channel(id); ok {
+					out[m[0]] = "#" + ch.Name()
+				}
+			case "@&":
+				if role, ok := s.client.Caches.Role(gid, id); ok {
+					out[m[0]] = "@" + role.Name
+				}
+			default:
+				mem, ok := s.client.Caches.Member(gid, id)
+				if !ok {
+					if p, err := s.client.Rest.GetMember(gid, id); err == nil {
+						mem, ok = *p, true
+						s.client.Caches.AddMember(mem)
+					}
+				}
+				if ok {
+					out[m[0]] = "@" + mem.EffectiveName()
+				}
+			}
+		}
+	}
+	return out
 }
 
 var configRanges = map[string][2]int{
