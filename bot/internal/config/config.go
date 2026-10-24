@@ -38,6 +38,7 @@ var (
 	PaywallsEnabled      bool
 	VoiceChatFeaturesSKU snowflake.ID
 	PremiumsPageLink     string
+	DBLToken             string
 )
 
 func init() {
@@ -95,6 +96,7 @@ func init() {
 	}
 
 	PremiumsPageLink = os.Getenv("PREMIUMS_PAGE_LINK")
+	DBLToken = os.Getenv("DBL_TOKEN")
 	// only what a listener handles: guild join/leave/update, voice states,
 	// guild messages (with content), emoji updates (reaction pool).
 	// Interactions need no intent.

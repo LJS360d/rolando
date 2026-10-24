@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"rolando/internal/cluster"
+	"rolando/internal/dbl"
 	"rolando/internal/discord/buttons"
 	"rolando/internal/discord/commands"
 	"rolando/internal/discord/events"
@@ -145,6 +146,7 @@ func main() {
 			}
 		}
 	}()
+	go dbl.Run(ctx, client, commandsHandler.Global)
 	logger.Infof("All shards connected in %s", time.Since(config.StartupTime).Round(time.Millisecond))
 
 	<-ctx.Done()

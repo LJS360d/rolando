@@ -16,6 +16,7 @@ type SlashCommandsHandler struct {
 	ChainsService *services.ChainsService
 	Jackbox       *services.JackboxService
 	Commands      map[string]SlashCommandHandler
+	Global        []discord.ApplicationCommandCreate
 }
 
 type SlashCommandHandler func(client *bot.Client, event *events.ApplicationCommandInteractionCreate)
@@ -360,6 +361,7 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 		}
 	}
 
+	h.Global = commandCreates(global)
 	if len(global) <= 0 {
 		logger.Infof("No global slash commands to sync.")
 		return
@@ -368,7 +370,7 @@ func (h *SlashCommandsHandler) registerCommands(commands []SlashCommand) {
 	refresh := config.ForceCommandRefresh && config.NodeIndex == 0
 	if refresh {
 		logger.Infof("Syncing global slash command interactions...")
-		_, err := h.Client.Rest.SetGlobalCommands(h.Client.ApplicationID, commandCreates(global))
+		_, err := h.Client.Rest.SetGlobalCommands(h.Client.ApplicationID, h.Global)
 		if err != nil {
 			logger.Errorf("Failed to sync global slash commands: %v", err)
 		} else {
