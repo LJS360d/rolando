@@ -2,10 +2,12 @@ package tts
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"os/exec"
+	"time"
 
 	"github.com/disgoorg/disgo/voice"
 	"layeh.com/gopus"
@@ -14,7 +16,9 @@ import (
 // AudioToDCA converts raw audio data (MP3, WAV, etc.) to DCA format (length-prefixed Opus frames).
 // It uses ffmpeg to decode the audio to PCM via stdin/stdout pipes, then gopus to encode to Opus.
 func AudioToDCA(audioData []byte) ([]byte, error) {
-	cmd := exec.Command("ffmpeg",
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", "pipe:0",
 		"-f", "s16le",
 		"-ar", "48000",
@@ -63,26 +67,24 @@ func PCMToDCA(pcmData []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create opus encoder: %w", err)
 	}
 
-	var dcaBuf bytes.Buffer
 	const (
 		frameSamples = 960
 		sampleBytes  = 2
 	)
 	pcmFrameSize := frameSamples * sampleBytes // 1920 bytes for mono
 
+	var dcaBuf bytes.Buffer
+	// opus at voip bitrate is far below 1/8 of the PCM size
+	dcaBuf.Grow(len(pcmData) / 8)
+	samples := make([]int16, frameSamples)
+	var prefix [4]byte
 	for i := 0; i < len(pcmData); i += pcmFrameSize {
-		end := min(i+pcmFrameSize, len(pcmData))
-		chunk := pcmData[i:end]
-
-		// Ensure frame is exactly 1920 bytes by padding with silence if needed
+		chunk := pcmData[i:min(i+pcmFrameSize, len(pcmData))]
 		if len(chunk) < pcmFrameSize {
-			padded := make([]byte, pcmFrameSize)
-			copy(padded, chunk)
-			chunk = padded
+			// pad the last frame with silence
+			clear(samples)
 		}
-
-		samples := make([]int16, frameSamples)
-		for j := range frameSamples {
+		for j := range len(chunk) / 2 {
 			samples[j] = int16(chunk[j*2]) | int16(chunk[j*2+1])<<8
 		}
 
@@ -92,7 +94,8 @@ func PCMToDCA(pcmData []byte) ([]byte, error) {
 		}
 
 		// DCA format: 4-byte little-endian length prefix + Opus payload
-		binary.Write(&dcaBuf, binary.LittleEndian, uint32(len(opusData)))
+		binary.LittleEndian.PutUint32(prefix[:], uint32(len(opusData)))
+		dcaBuf.Write(prefix[:])
 		dcaBuf.Write(opusData)
 	}
 

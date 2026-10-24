@@ -27,7 +27,11 @@ func init() {
 	app = slog.New(h)
 }
 
-func Debugf(format string, args ...any) { app.Debug(fmt.Sprintf(format, args...)) }
+func Debugf(format string, args ...any) {
+	if app.Enabled(context.Background(), slog.LevelDebug) {
+		app.Debug(fmt.Sprintf(format, args...))
+	}
+}
 func Infof(format string, args ...any)  { app.Info(fmt.Sprintf(format, args...)) }
 func Warnf(format string, args ...any)  { app.Warn(fmt.Sprintf(format, args...)) }
 func Errorf(format string, args ...any) { app.Error(fmt.Sprintf(format, args...)) }

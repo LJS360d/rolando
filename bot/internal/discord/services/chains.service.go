@@ -21,6 +21,8 @@ type ChainsService struct {
 	session  *bot.Client
 	Guilds   *guilds.Manager
 	fetching sync.Map
+	// guilds with a post-delete snapshot queued
+	snapping sync.Map
 }
 
 func NewChainsService(client *bot.Client, manager *guilds.Manager) *ChainsService {
@@ -55,7 +57,7 @@ func (cs *ChainsService) CreateChain(ctx context.Context, id, _ string) (*guilds
 	return cs.GetChainConf(ctx, id)
 }
 
-func (cs *ChainsService) withChain(id string, fn func(*chain.Chain)) error {
+func (cs *ChainsService) WithChain(id string, fn func(*chain.Chain)) error {
 	return cs.Guilds.Use(id, func(g *guilds.Guild) error {
 		c, err := g.Chain()
 		if err == nil {
@@ -89,13 +91,19 @@ func (cs *ChainsService) UpdateChainState(_ context.Context, id string, texts []
 }
 
 // DeleteTextData removes a message from storage and the chain, then
-// snapshots in the background so the delete survives a crash.
+// snapshots in the background so the delete survives a crash. A burst of
+// deletes shares one snapshot.
 func (cs *ChainsService) DeleteTextData(_ context.Context, id, data string) error {
 	if err := cs.Guilds.Use(id, func(g *guilds.Guild) error { return g.DeleteMessage(data) }); err != nil {
 		return err
 	}
+	if _, queued := cs.snapping.LoadOrStore(id, struct{}{}); queued {
+		return nil
+	}
 	go func() {
-		if err := cs.Guilds.Use(id, func(g *guilds.Guild) error { return g.Snapshot() }); err != nil {
+		// deletes landing after this point queue the next snapshot
+		cs.snapping.Delete(id)
+		if err := cs.Guilds.Use(id, (*guilds.Guild).Snapshot); err != nil {
 			logger.Errorf("snapshot after delete %s: %v", id, err)
 		}
 	}()
@@ -103,17 +111,17 @@ func (cs *ChainsService) DeleteTextData(_ context.Context, id, data string) erro
 }
 
 func (cs *ChainsService) Generate(_ context.Context, id string, maxLength int) (out string, err error) {
-	err = cs.withChain(id, func(c *chain.Chain) { out = c.Generate(maxLength) })
+	err = cs.WithChain(id, func(c *chain.Chain) { out = c.Generate(maxLength) })
 	return
 }
 
 func (cs *ChainsService) GenerateFromSeed(_ context.Context, id, seed string, maxLength int) (out string, err error) {
-	err = cs.withChain(id, func(c *chain.Chain) { out = c.GenerateFromSeed(seed, maxLength) })
+	err = cs.WithChain(id, func(c *chain.Chain) { out = c.GenerateFromSeed(seed, maxLength) })
 	return
 }
 
 func (cs *ChainsService) GenerateRhyme(_ context.Context, id, word string, maxLength int) (out string, err error) {
-	err = cs.withChain(id, func(c *chain.Chain) { out = c.GenerateRhyme(word, maxLength) })
+	err = cs.WithChain(id, func(c *chain.Chain) { out = c.GenerateRhyme(word, maxLength) })
 	return
 }
 
@@ -152,11 +160,6 @@ func (cs *ChainsService) Summary(id string) (s guilds.Summary, err error) {
 }
 
 // Neighbors loads the chain if needed. See chain.Neighbors.
-func (cs *ChainsService) Neighbors(id, word string, limit int) (n chain.Neighborhood, err error) {
-	err = cs.withChain(id, func(c *chain.Chain) { n = c.Neighbors(word, limit) })
-	return
-}
-
 func (cs *ChainsService) MessagesPage(id string, limit, offset int) (rows []guilds.Message, total int64, err error) {
 	err = cs.Guilds.Use(id, func(g *guilds.Guild) error {
 		rows, total, err = g.MessagesPage(limit, offset)

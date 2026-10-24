@@ -12,7 +12,6 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/disgoorg/disgo/voice"
 )
 
 // implementation of /vc speak command
@@ -45,27 +44,21 @@ func (h *SlashCommandsHandler) vcSpeakCommand(client *bot.Client, event *events.
 		vcCtx, vcCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer vcCancel()
 
-		var conn voice.Conn
-		existingConn := h.Client.VoiceManager.GetConn(guildID)
-		if existingConn == nil {
+		// speak in the session already there, else join just for this
+		sess := helpers.Current(guildID)
+		if sess == nil {
 			_, err := client.Rest.UpdateInteractionResponse(appID, token, discord.NewMessageUpdate().WithContent("Joining Voice Channel..."))
 			if err != nil {
 				logger.Errorf("Failed to update interaction response: %v", err)
 			}
 
-			conn = h.Client.VoiceManager.CreateConn(guildID)
-			err = conn.Open(vcCtx, channelID, false, false)
+			sess, err = helpers.Join(vcCtx, h.Client.VoiceManager, guildID, channelID)
 			if err != nil {
 				content := "Failed to join the voice channel: " + err.Error()
 				client.Rest.UpdateInteractionResponse(appID, token, discord.NewMessageUpdate().WithContent(content))
 				return
 			}
-
-			if conn.Gateway().Status() != voice.StatusReady {
-				logger.Warnf("Connection status is %v, attempting to proceed anyway...", conn.Gateway().Status())
-			}
-		} else {
-			conn = existingConn
+			defer sess.Leave()
 		}
 
 		chainDoc, err := h.ChainsService.GetChainConf(vcCtx, guildID.String())
@@ -90,12 +83,10 @@ func (h *SlashCommandsHandler) vcSpeakCommand(client *bot.Client, event *events.
 			return
 		}
 
-		// This will now block correctly without racing the internal reader
-		if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
+		if err := sess.Play(vcCtx, provider); err != nil {
 			if !errors.Is(err, io.EOF) {
 				logger.Errorf("Failed to stream audio: %v", err)
 			}
 		}
-		conn.Close(vcCtx)
 	}()
 }

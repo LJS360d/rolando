@@ -84,28 +84,43 @@ func Do(ctx context.Context, node int, method, path string, body io.Reader) (*ht
 	}
 	resp, err := peerClient.Do(req)
 	if err == nil && resp.StatusCode >= 300 {
-		resp.Body.Close()
+		CloseBody(resp)
 		return nil, fmt.Errorf("node %d: %s %s: %s", node, method, path, resp.Status)
 	}
 	return resp, err
 }
 
+// CloseBody drains what's left of a peer response (a JSON decoder stops
+// before EOF) so the keep-alive connection can be reused.
+func CloseBody(resp *http.Response) {
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	resp.Body.Close()
+}
+
 // GetJSON fetches path from every other node in parallel and decodes each
 // response into a fresh T. Unreachable nodes are reported in errs.
 func GetJSON[T any](ctx context.Context, path string) (results map[int]T, errs map[int]error) {
+	paths := map[int]string{}
+	for node := range config.NodeCount {
+		if node != config.NodeIndex {
+			paths[node] = path
+		}
+	}
+	return GetJSONEach[T](ctx, paths)
+}
+
+// GetJSONEach is GetJSON with a path per node, querying only those nodes.
+func GetJSONEach[T any](ctx context.Context, paths map[int]string) (results map[int]T, errs map[int]error) {
 	results, errs = map[int]T{}, map[int]error{}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for node := range config.NodeCount {
-		if node == config.NodeIndex {
-			continue
-		}
+	for node, path := range paths {
 		wg.Go(func() {
 			var out T
 			resp, err := Do(ctx, node, http.MethodGet, path, nil)
 			if err == nil {
 				err = json.NewDecoder(resp.Body).Decode(&out)
-				resp.Body.Close()
+				CloseBody(resp)
 			}
 			mu.Lock()
 			defer mu.Unlock()

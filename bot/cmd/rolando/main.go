@@ -8,7 +8,10 @@ import (
 	"path/filepath"
 	"rolando/internal/config"
 	"rolando/internal/logger"
+	"runtime/debug"
 	"runtime/pprof"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +19,7 @@ import (
 	"rolando/internal/discord/buttons"
 	"rolando/internal/discord/commands"
 	"rolando/internal/discord/events"
+	"rolando/internal/discord/helpers"
 	"rolando/internal/discord/messages"
 	"rolando/internal/discord/services"
 	"rolando/internal/guilds"
@@ -24,6 +28,7 @@ import (
 	"github.com/disgoorg/disgo"
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/cache"
+	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/sharding"
 	"github.com/disgoorg/disgo/voice"
@@ -46,10 +51,12 @@ func main() {
 		logger.Fatalf("TOKEN not set in the environment")
 	}
 	logger.Debugf("Env: %s", config.Env)
+	setMemoryLimit()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	logger.Infof("Node %d/%d, shards %v of %d", config.NodeIndex, config.NodeCount, cluster.LocalShards(), config.ShardCount)
+	var client *bot.Client
 	client, err := disgo.New(config.Token,
 		bot.WithShardManagerConfigOpts(
 			sharding.WithShardIDs(cluster.LocalShards()...),
@@ -65,6 +72,7 @@ func main() {
 			// supress all logs
 			voice.WithDaveSessionLogger(slog.New(slog.DiscardHandler)),
 			voice.WithConnConfigOpts(
+				voice.WithConnAudioSenderCreateFunc(helpers.NewAudioSender),
 				voice.WithConnDaveSessionLogger(slog.New(slog.DiscardHandler)),
 				voice.WithConnLogger(slog.New(slog.DiscardHandler)),
 			),
@@ -76,7 +84,18 @@ func main() {
 				cache.FlagRoles,
 				cache.FlagMembers,
 				cache.FlagVoiceStates,
+				cache.FlagEmojis,
 			),
+			// only self member is cache read; other user come with every message and are used stateless
+			cache.WithMemberCachePolicy(func(m discord.Member) bool { return m.User.ID == client.ID() }),
+			cache.WithChannelCachePolicy(func(ch discord.GuildChannel) bool {
+				switch ch.Type() {
+				case discord.ChannelTypeGuildText, discord.ChannelTypeGuildNews,
+					discord.ChannelTypeGuildVoice, discord.ChannelTypeGuildStageVoice:
+					return true
+				}
+				return false
+			}),
 		),
 	)
 	if err != nil {
@@ -121,7 +140,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				events.UpdatePresence(client, srv.TotalGuilds())
+				events.UpdatePresence(client, srv.FreshTotalGuilds())
 				t.Reset(24 * time.Hour)
 			}
 		}
@@ -176,4 +195,23 @@ func step(name string, fn func()) {
 	fn()
 	close(done)
 	logger.Debugf("%s done in %s", name, time.Since(start).Round(time.Millisecond))
+}
+
+// setMemoryLimit defaults the Go soft memory limit to 80% of the cgroup limit
+// when GOMEMLIMIT is unset, so the GC works harder before the container OOMs.
+// Native memory (vosk, dave) is not counted by the Go runtime.
+func setMemoryLimit() {
+	if os.Getenv("GOMEMLIMIT") != "" {
+		return
+	}
+	b, err := os.ReadFile("/sys/fs/cgroup/memory.max")
+	if err != nil {
+		return
+	}
+	limit, err := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+	if err != nil {
+		return
+	}
+	debug.SetMemoryLimit(limit / 10 * 8)
+	logger.Infof("Memory limit set to %d MiB (80%% of cgroup limit)", limit/10*8>>20)
 }

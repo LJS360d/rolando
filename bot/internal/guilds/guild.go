@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -72,24 +73,49 @@ type Guild struct {
 
 	mu    sync.Mutex
 	chain atomic.Pointer[chain.Chain]
+	// cfg caches the config row, read on every message; nil until read.
+	// Writes hold cfgMu so a concurrent miss can't cache the old row.
+	cfgMu sync.Mutex
+	cfg   *Config
+	// snapMu serializes snapshot writers, which share chain.snap.tmp
+	snapMu sync.Mutex
+	// stored message count, kept under mu once counted
+	msgCount   int64
+	msgCounted bool
 
 	refs     int
 	lastUsed time.Time
 }
+
+// migrated holds the guild dirs migrated by this process.
+var migrated sync.Map
 
 // Open opens (creating if needed) the guild directory dir.
 func Open(dir, id string) (*Guild, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	db, err := gorm.Open(sqlite.Open(filepath.Join(dir, "guild.db")+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(10000)"),
-		&gorm.Config{Logger: dbLogger})
+	_, statErr := os.Stat(filepath.Join(dir, "guild.db"))
+	fresh := statErr != nil
+	db, err := gorm.Open(sqlite.Open(filepath.Join(dir, "guild.db")+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(10000)&_pragma=cache_size(-1024)"),
+		// single statements are atomic in SQLite; multi-statement writes use explicit transactions
+		&gorm.Config{Logger: dbLogger, SkipDefaultTransaction: true})
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&Config{}, &Message{}, &Media{}); err != nil {
-		closeDB(db)
-		return nil, err
+	// pure-Go SQLite: each connection's page cache sits on the Go heap
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(2)
+		sqlDB.SetMaxIdleConns(1)
+	}
+	// the models can't change while the process runs, so a guild reopened
+	// after idle eviction skips the schema introspection; a new file never does
+	if _, done := migrated.Load(dir); !done || fresh {
+		if err := db.AutoMigrate(&Config{}, &Message{}, &Media{}); err != nil {
+			closeDB(db)
+			return nil, err
+		}
+		migrated.Store(dir, struct{}{})
 	}
 	return &Guild{ID: id, dir: dir, DB: db}, nil
 }
@@ -108,22 +134,41 @@ func closeDB(db *gorm.DB) {
 func (g *Guild) snapPath() string    { return filepath.Join(g.dir, "chain.snap") }
 func (g *Guild) summaryPath() string { return filepath.Join(g.dir, "summary.json") }
 
+// Config returns a copy of the guild config, cached until it changes.
 func (g *Guild) Config() (*Config, error) {
-	var c Config
-	return &c, g.DB.First(&c).Error
+	g.cfgMu.Lock()
+	defer g.cfgMu.Unlock()
+	if g.cfg == nil {
+		var c Config
+		if err := g.DB.First(&c).Error; err != nil {
+			return &c, err
+		}
+		g.cfg = &c
+	}
+	cp := *g.cfg
+	return &cp, nil
+}
+
+// writeConfig runs a write touching the config row and drops the cache.
+func (g *Guild) writeConfig(write func() error) error {
+	g.cfgMu.Lock()
+	defer g.cfgMu.Unlock()
+	g.cfg = nil
+	return write()
 }
 
 func (g *Guild) CreateConfig(name string) (*Config, error) {
 	c := &Config{ID: g.ID, Name: name, ReplyRate: 10, ReactionRate: 30, VcJoinRate: 100, MaxSizeMb: 25,
 		NGramSize: 2, MarkovMaxBranches: 256, TTSLanguage: "en", Pings: true}
-	if err := g.DB.Create(c).Error; err != nil {
+	if err := g.writeConfig(func() error { return g.DB.Create(c).Error }); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
 func (g *Guild) UpdateConfig(fields map[string]any) (*Config, error) {
-	if err := g.DB.Model(&Config{}).Where("id = ?", g.ID).Updates(fields).Error; err != nil {
+	err := g.writeConfig(func() error { return g.DB.Model(&Config{}).Where("id = ?", g.ID).Updates(fields).Error })
+	if err != nil {
 		return nil, err
 	}
 	c, err := g.Config()
@@ -176,19 +221,30 @@ func (g *Guild) loaded() *chain.Chain { return g.chain.Load() }
 func (g *Guild) replay(c *chain.Chain, cfg *Config) error {
 	const batch = 2000
 	last := c.Watermark()
+	// scanned directly: gorm's per-row reflection into structs dominates a rebuild
+	texts := make([]string, 0, batch)
 	for {
-		var rows []Message
-		if err := g.DB.Select("id", "content").Where("id > ?", last).Order("id").Limit(batch).Find(&rows).Error; err != nil {
+		rows, err := g.DB.Model(&Message{}).Select("id", "content").Where("id > ?", last).Order("id").Limit(batch).Rows()
+		if err != nil {
 			return err
 		}
-		if len(rows) == 0 {
+		texts = texts[:0]
+		for rows.Next() {
+			var text string
+			if err := rows.Scan(&last, &text); err != nil {
+				rows.Close()
+				return err
+			}
+			texts = append(texts, text)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		if len(texts) == 0 {
 			return nil
 		}
-		texts := make([]string, len(rows))
-		for i, r := range rows {
-			texts[i] = r.Content
-		}
-		last = rows[len(rows)-1].ID
 		c.Train(texts, last, cfg.MaxSizeBytes(), cfg.MarkovMaxBranches)
 	}
 }
@@ -227,6 +283,7 @@ func (g *Guild) AddMessages(texts []string) error {
 	if err != nil {
 		return err
 	}
+	g.msgCount += int64(len(rows))
 	if c := g.loaded(); c != nil {
 		c.Train(texts, rows[len(rows)-1].ID, cfg.MaxSizeBytes(), cfg.MarkovMaxBranches)
 	}
@@ -238,14 +295,22 @@ func (g *Guild) AddMessages(texts []string) error {
 func (g *Guild) DeleteMessage(content string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if err := g.DB.Where("content = ?", content).Delete(&Message{}).Error; err != nil {
+	var deleted int64
+	err := g.DB.Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("content = ?", content).Delete(&Message{})
+		if res.Error != nil {
+			return res.Error
+		}
+		deleted = res.RowsAffected
+		if urls := utils.ExtractUrls(content); len(urls) > 0 {
+			return tx.Where("url IN ?", urls).Delete(&Media{}).Error
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
-	if urls := utils.ExtractUrls(content); len(urls) > 0 {
-		if err := g.DB.Where("url IN ?", urls).Delete(&Media{}).Error; err != nil {
-			return err
-		}
-	}
+	g.msgCount -= deleted
 	if c := g.loaded(); c != nil {
 		c.Delete(content)
 	}
@@ -257,17 +322,23 @@ func (g *Guild) Reset() error {
 	if err != nil {
 		return err
 	}
+	// a snapshot in flight would rename the old chain back over the removal
+	g.snapMu.Lock()
+	defer g.snapMu.Unlock()
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	err = g.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("1 = 1").Delete(&Message{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("1 = 1").Delete(&Media{}).Error; err != nil {
-			return err
-		}
-		return tx.Model(&Config{}).Where("id = ?", g.ID).Update("trained_at", nil).Error
+	err = g.writeConfig(func() error {
+		return g.DB.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("1 = 1").Delete(&Message{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("1 = 1").Delete(&Media{}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&Config{}).Where("id = ?", g.ID).Update("trained_at", nil).Error
+		})
 	})
+	g.msgCounted = false
 	if err != nil {
 		return err
 	}
@@ -297,11 +368,15 @@ func (g *Guild) Rebuild() error {
 	if err != nil {
 		return err
 	}
+	// the old chain is garbage now; hand it back to the OS instead of keeping RSS at the peak
+	debug.FreeOSMemory()
 	return g.Snapshot()
 }
 
 // Snapshot writes chain.snap if the chain is loaded and dirty.
 func (g *Guild) Snapshot() error {
+	g.snapMu.Lock()
+	defer g.snapMu.Unlock()
 	c := g.loaded()
 	if c == nil || !c.Dirty() {
 		return nil
@@ -344,13 +419,26 @@ func (g *Guild) MediaCounts() (MediaCounts, error) {
 }
 
 func (g *Guild) MessagesPage(limit, offset int) ([]Message, int64, error) {
-	var total int64
-	var rows []Message
-	if err := g.DB.Model(&Message{}).Count(&total).Error; err != nil {
+	total, err := g.messageCount()
+	if err != nil {
 		return nil, 0, err
 	}
-	err := g.DB.Order("id").Limit(limit).Offset(offset).Find(&rows).Error
+	var rows []Message
+	err = g.DB.Order("id").Limit(limit).Offset(offset).Find(&rows).Error
 	return rows, total, err
+}
+
+// messageCount counts stored messages once; writers keep it current.
+func (g *Guild) messageCount() (int64, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.msgCounted {
+		if err := g.DB.Model(&Message{}).Count(&g.msgCount).Error; err != nil {
+			return 0, err
+		}
+		g.msgCounted = true
+	}
+	return g.msgCount, nil
 }
 
 // Summary computes stats from the loaded chain, falling back to the last

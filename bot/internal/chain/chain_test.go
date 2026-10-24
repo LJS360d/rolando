@@ -53,7 +53,7 @@ func TestTrainGenerateDeleteSnapshot(t *testing.T) {
 
 	l.Delete("the cat ran away fast")
 	l.Delete("the cat sat on the mat")
-	if s := l.Stats(); s.Prefixes != 0 || s.Messages != 0 || len(l.keys) != 0 {
+	if s := l.Stats(); s.Prefixes != 0 || s.Messages != 0 || len(l.keys) != 0 || len(l.edges) != 0 {
 		t.Fatalf("after delete %+v", s)
 	}
 
@@ -68,8 +68,8 @@ func TestTrainGenerateDeleteSnapshot(t *testing.T) {
 func TestCapAndSizeLimit(t *testing.T) {
 	c := New(2)
 	c.Train([]string{"a b", "a b", "a c", "a d"}, 0, 0, 2)
-	if n := len(c.next[packKey([]uint32{c.ids["a"]})].edges); n != 2 {
-		t.Fatalf("edges %d", n)
+	if i, _ := c.index.get([]uint32{c.ids["a"]}); len(c.edges[i]) != 2 {
+		t.Fatalf("edges %v", c.edges)
 	}
 	c.Train([]string{"x y", "x z", "x w"}, 0, 0, 0)
 	if removed := c.Cap(1); removed != 3 {
@@ -145,4 +145,66 @@ func TestBenchmarkLargestGuild(t *testing.T) {
 	t.Logf("guild=%s messages=%d prefixes=%d estimated=%dMB heap=%dMB rebuild=%s snapshot=%dMB write=%s load=%s",
 		guild, n, st.Prefixes, st.Bytes>>20, (after.HeapAlloc-before.HeapAlloc)>>20, rebuild, fi.Size()>>20, write, load)
 	runtime.KeepAlive(c)
+}
+
+func TestBranchCap(t *testing.T) {
+	c := New(2)
+	c.Train([]string{"a b", "a c", "a b", "a d"}, 4, 0, 2)
+	if n := c.Neighbors("a", 10); n.OutTotal != 2 || n.Out[0] != (Link{"b", 2}) || n.Out[1] != (Link{"c", 1}) {
+		t.Fatalf("capped on train: %+v", n)
+	}
+	before := c.Stats().Bytes
+	if removed := c.Cap(1); removed != 1 {
+		t.Fatalf("Cap removed %d", removed)
+	}
+	if n := c.Neighbors("a", 10); n.OutTotal != 1 || n.Out[0].Word != "b" {
+		t.Fatalf("capped: %+v", n)
+	}
+	if got := c.Stats().Bytes; got != before-edgeSize {
+		t.Fatalf("bytes %d, want %d", got, before-edgeSize)
+	}
+}
+
+func TestWideKeysAndRemoval(t *testing.T) {
+	for _, n := range []int{2, 5, MaxN} {
+		c := New(n)
+		msgs := []string{"a b c d e f g h i", "b c d e f g h i j", "x b c d e f g h y"}
+		c.Train(msgs, 3, 0, 0)
+		path := filepath.Join(t.TempDir(), "chain.snap")
+		if err := c.WriteFile(path); err != nil {
+			t.Fatal(err)
+		}
+		l, err := ReadFile(path, n)
+		if err != nil {
+			t.Fatalf("n=%d: %v", n, err)
+		}
+		// removing the first message's prefixes swaps later ones into their slots
+		l.Delete(msgs[0])
+		for i := range l.edges {
+			if j, ok := l.index.get(l.key(i)); !ok || int(j) != i {
+				t.Fatalf("n=%d: prefix %d indexed at %d", n, i, j)
+			}
+		}
+		if out := l.GenerateFromSeed(strings.Join(strings.Fields(msgs[2])[:n-1], " "), 20); !strings.HasPrefix(out, "x ") {
+			t.Fatalf("n=%d: generate after delete %q", n, out)
+		}
+		l.Delete(msgs[1])
+		l.Delete(msgs[2])
+		if s := l.Stats(); s.Prefixes != 0 || len(l.keys) != 0 {
+			t.Fatalf("n=%d: after deleting all %+v", n, s)
+		}
+	}
+}
+
+func TestOversizedN(t *testing.T) {
+	c := New(MaxN + 2)
+	c.Train([]string{"a b c d e f g h i j k"}, 1, 0, 0)
+	path := filepath.Join(t.TempDir(), "chain.snap")
+	if err := c.WriteFile(path); err != nil {
+		t.Fatal(err)
+	}
+	l, err := ReadFile(path, MaxN+2)
+	if err != nil || l.N() != MaxN {
+		t.Fatalf("n=%d err=%v", l.N(), err)
+	}
 }

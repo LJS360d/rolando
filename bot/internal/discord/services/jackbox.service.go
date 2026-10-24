@@ -81,6 +81,10 @@ func (s *JackboxService) rateLimited(guildID string) bool {
 			kept = append(kept, t)
 		}
 	}
+	if len(kept) == 0 {
+		delete(s.rateFail, guildID)
+		return false
+	}
 	s.rateFail[guildID] = kept
 	return len(kept) >= jackboxMaxFails
 }

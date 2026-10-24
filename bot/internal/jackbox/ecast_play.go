@@ -2,7 +2,9 @@ package jackbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -75,6 +77,11 @@ func DialRoomSession(ctx context.Context, room *RoomBody, roomCode, displayName 
 	}, nil
 }
 
+const (
+	readIdleTimeout = 15 * time.Minute
+	pingInterval    = time.Minute
+)
+
 func RunPlayReadLoop(ctx context.Context, conn *websocket.Conn, mod common.GameModule) error {
 	if mod == nil {
 		return fmt.Errorf("RunPlayReadLoop: nil GameModule")
@@ -86,10 +93,34 @@ func RunPlayReadLoop(ctx context.Context, conn *websocket.Conn, mod common.GameM
 		}
 	}()
 
+	// a half-open connection never errors on its own; give up on silence.
+	// Our pings keep an idle lobby talking, so only a dead peer goes quiet.
+	conn.SetPingHandler(func(data string) error {
+		conn.SetReadDeadline(time.Now().Add(readIdleTimeout))
+		return ignoreTransient(conn.WriteControl(websocket.PongMessage, []byte(data), time.Now().Add(5*time.Second)))
+	})
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(readIdleTimeout))
+	})
+	stopPings := make(chan struct{})
+	defer close(stopPings)
+	go func() {
+		t := time.NewTicker(pingInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-stopPings:
+				return
+			case <-t.C:
+				conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
+			}
+		}
+	}()
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		conn.SetReadDeadline(time.Now().Add(readIdleTimeout))
 		mt, data, err := conn.ReadMessage()
 		if err != nil {
 			if ctx.Err() != nil {
@@ -104,4 +135,14 @@ func RunPlayReadLoop(ctx context.Context, conn *websocket.Conn, mod common.GameM
 			return err
 		}
 	}
+}
+
+// ignoreTransient mirrors gorilla's default ping handler: a pong that can't
+// be written now is not a reason to drop the connection.
+func ignoreTransient(err error) error {
+	var ne net.Error
+	if errors.Is(err, websocket.ErrCloseSent) || errors.As(err, &ne) && ne.Timeout() {
+		return nil
+	}
+	return err
 }

@@ -95,17 +95,59 @@ func (m *Manager) IDs() ([]string, error) {
 // Summary returns live stats for open guilds and the persisted summary for
 // the others, without opening them.
 func (m *Manager) Summary(id string) (Summary, error) {
-	m.mu.Lock()
-	g, open := m.guilds[id]
-	if open {
-		g.refs++
+	g := m.peek(id)
+	if g == nil {
+		return m.closedSummary(id)
 	}
-	m.mu.Unlock()
-	if !open {
-		return readSummary(filepath.Join(m.guildDir(id), "summary.json"))
-	}
-	defer m.release(g)
+	defer m.unpeek(g)
 	return g.Summary()
+}
+
+// PeekConfig returns the config without opening the guild, from the
+// persisted summary when it is closed.
+func (m *Manager) PeekConfig(id string) (*Config, error) {
+	g := m.peek(id)
+	if g == nil {
+		s, err := m.closedSummary(id)
+		return &s.Config, err
+	}
+	defer m.unpeek(g)
+	return g.Config()
+}
+
+// closedSummary reads the persisted summary, opening the guild once to
+// write it if it was never written (e.g. closed before its chain loaded).
+func (m *Manager) closedSummary(id string) (Summary, error) {
+	s, err := readSummary(filepath.Join(m.guildDir(id), "summary.json"))
+	if !os.IsNotExist(err) || !m.Exists(id) {
+		return s, err
+	}
+	err = m.Use(id, func(g *Guild) error {
+		if s, err = g.Summary(); err != nil {
+			return err
+		}
+		return g.WriteSummary()
+	})
+	return s, err
+}
+
+// peek holds an open guild without counting as a use: readers polling it
+// must not keep it from evicting. nil if not open.
+func (m *Manager) peek(id string) *Guild {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	g, open := m.guilds[id]
+	if !open {
+		return nil
+	}
+	g.refs++
+	return g
+}
+
+func (m *Manager) unpeek(g *Guild) {
+	m.mu.Lock()
+	g.refs--
+	m.mu.Unlock()
 }
 
 func (m *Manager) Loaded() int {

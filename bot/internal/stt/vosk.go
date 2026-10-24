@@ -1,140 +1,151 @@
 package stt
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
-	"rolando/internal/data"
+	"os"
 	"rolando/internal/logger"
-	"rolando/internal/utils"
 	"sync"
 	"time"
 
 	vosk "github.com/alphacep/vosk-api/go"
 )
 
+// SampleRate is the rate of the mono s16le PCM fed to recognizers.
+const SampleRate = 16000
+
+// Models load on first use and are freed after modelIdleTTL without
+// recognizers; they live in native memory, outside GOMEMLIMIT. Loading takes
+// seconds, so it happens outside mu and survives speakers coming and going.
+type model struct {
+	ready chan struct{} // closed once m or err is set
+	m     *vosk.VoskModel
+	err   error
+	refs  int
+	idle  *time.Timer
+}
+
+const modelIdleTTL = 10 * time.Minute
+
 var (
-	loadedModels = make(map[string]*vosk.VoskModel)
-	modelsMutex  sync.Mutex
-	// guildId -> Recognizers
-	recognizers = make(map[string]*vosk.VoskRecognizer)
+	mu     sync.Mutex
+	models = map[string]*model{}
 )
 
 func init() {
 	vosk.SetLogLevel(-1)
-	startTime := time.Now()
-	err := utils.ParallelTaskRunner(data.Langs, func(lang string) error {
-		_, err := loadModel(lang)
-		if err != nil {
-			return fmt.Errorf("error loading model %s: %v", lang, err)
-		}
-		logger.Debugf("Loaded vosk model '%s'", lang)
-		return nil
-	})
-	if err != nil {
-		logger.Fatalf("Error loading models: %v", err)
-	}
-	logger.Infof("Loaded %d vosk models in %s", len(data.Langs), time.Since(startTime).Round(time.Millisecond))
 }
 
+// Recognizer transcribes one speaker. Not safe for concurrent use.
+type Recognizer struct {
+	r    *vosk.VoskRecognizer
+	lang string
+	m    *model
+}
+
+func NewRecognizer(lang string) (*Recognizer, error) {
+	m := acquireModel(lang)
+	if m.err != nil {
+		releaseModel(lang, m)
+		return nil, m.err
+	}
+	r, err := vosk.NewRecognizer(m.m, SampleRate)
+	if err != nil {
+		releaseModel(lang, m)
+		return nil, fmt.Errorf("failed to create recognizer for model %s: %w", lang, err)
+	}
+	return &Recognizer{r: r, lang: lang, m: m}, nil
+}
+
+// acquireModel returns the loaded (or failed) model for lang, holding a ref.
+func acquireModel(lang string) *model {
+	mu.Lock()
+	m, ok := models[lang]
+	if !ok {
+		m = &model{ready: make(chan struct{})}
+		models[lang] = m
+	}
+	m.refs++
+	if m.idle != nil {
+		m.idle.Stop()
+		m.idle = nil
+	}
+	mu.Unlock()
+	if !ok {
+		start := time.Now()
+		if m.m, m.err = loadModel(lang); m.err != nil {
+			m.err = fmt.Errorf("failed to load vosk model %s: %w", lang, m.err)
+		} else {
+			logger.Infof("Loaded vosk model '%s' in %s", lang, time.Since(start).Round(time.Millisecond))
+		}
+		close(m.ready)
+	}
+	<-m.ready
+	return m
+}
+
+// loadModel checks the folder first: vosk.NewModel never errors, it returns
+// a nil model that crashes the first recognizer.
 func loadModel(lang string) (*vosk.VoskModel, error) {
-	modelsMutex.Lock()
-	defer modelsMutex.Unlock()
-
-	if model, ok := loadedModels[lang]; ok {
-		return model, nil
+	dir := "vosk/models/" + lang
+	if _, err := os.Stat(dir); err != nil {
+		return nil, err
 	}
-
-	model, err := vosk.NewModel("vosk/models/" + lang)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load model: %w", err)
-	}
-
-	loadedModels[lang] = model
-	return model, nil
+	return vosk.NewModel(dir)
 }
 
-func loadRecognizer(lang string, guildId string) (*vosk.VoskRecognizer, error) {
-	rec, ok := recognizers[guildId]
-	if !ok {
-		model, err := loadModel(lang)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load vosk model %s: %v", lang, err)
-		}
-		rec, err = vosk.NewRecognizer(model, 48000.0)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create recognizer for model %s in guild %s: %v", lang, guildId, err)
-		}
-		// grammar := fmt.Sprintf(`["[unk]", "rolando:%f"]`, 20.0)
-		// rec.SetGrm(grammar)
-		rec.SetWords(1)
-		recognizers[guildId] = rec
-	}
-	return rec, nil
-}
-
-func FreeRecognizer(guildId string) {
-	rec, ok := recognizers[guildId]
-	if !ok {
-		// NTD
-		logger.Warnf("Tried to free a non-existent recognizer for guildId %s, ignoring", guildId)
+func releaseModel(lang string, m *model) {
+	mu.Lock()
+	defer mu.Unlock()
+	if m.refs--; m.refs > 0 {
 		return
 	}
-	rec.Free()
-	delete(recognizers, guildId)
-}
-
-func SpeechToTextNative(audio io.Reader, lang string, guildId string) (string, error) {
-	bytes, err := io.ReadAll(audio)
-	if err != nil {
-		return "", err
-	}
-	return SpeechToTextNativeFromBytes(bytes, lang, guildId)
-}
-
-// stereoToMono converts stereo PCM (interleaved int16 little-endian) to mono PCM
-func stereoToMono(stereo []byte) []byte {
-	numFrames := len(stereo) / 4
-	mono := make([]byte, numFrames*2)
-	for i := 0; i < numFrames; i++ {
-		srcIdx := i * 4
-		dstIdx := i * 2
-		left := int16(binary.LittleEndian.Uint16(stereo[srcIdx : srcIdx+2]))
-		right := int16(binary.LittleEndian.Uint16(stereo[srcIdx+2 : srcIdx+4]))
-		avg := int16((int32(left) + int32(right)) / 2)
-		binary.LittleEndian.PutUint16(mono[dstIdx:], uint16(avg))
-	}
-	return mono
-}
-
-func SpeechToTextNativeFromBytes(bytes []byte, lang string, guildId string) (string, error) {
-	rec, err := loadRecognizer(lang, guildId)
-	if err != nil {
-		return "", err
-	}
-	// Convert stereo PCM to mono since Vosk expects mono audio
-	monoBytes := stereoToMono(bytes)
-	if rec.AcceptWaveform(monoBytes) == 1 {
-		// Final result after utterance completion
-		jsonStr := rec.Result()
-		var result struct {
-			Text string `json:"text"`
+	if m.err != nil {
+		// drop the failure so the next use retries
+		if models[lang] == m {
+			delete(models, lang)
 		}
-		err = json.Unmarshal([]byte(jsonStr), &result)
-		if err != nil {
-			return "", err
+		return
+	}
+	m.idle = time.AfterFunc(modelIdleTTL, func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if m.refs > 0 || models[lang] != m {
+			return
 		}
-		return result.Text, nil
+		m.m.Free()
+		delete(models, lang)
+		logger.Infof("Freed vosk model '%s'", lang)
+	})
+}
+
+// Accept feeds PCM and returns the text of an utterance once Vosk detects
+// its end, "" otherwise.
+func (r *Recognizer) Accept(pcm []byte) string {
+	if r.r.AcceptWaveform(pcm) != 1 {
+		return ""
 	}
-	// Partial result for ongoing speech
-	jsonStr := rec.PartialResult()
-	var result struct {
-		Text string `json:"partial"`
+	return text(r.r.Result())
+}
+
+// Flush ends the current utterance and returns its text. Discord sends no
+// packets during silence, so Vosk never sees the pause that ends one.
+func (r *Recognizer) Flush() string {
+	return text(r.r.FinalResult())
+}
+
+func (r *Recognizer) Free() {
+	r.r.Free()
+	releaseModel(r.lang, r.m)
+}
+
+func text(result string) string {
+	var res struct {
+		Text string `json:"text"`
 	}
-	err = json.Unmarshal([]byte(jsonStr), &result)
-	if err != nil {
-		return "", err
+	if err := json.Unmarshal([]byte(result), &res); err != nil {
+		logger.Errorf("Failed to decode vosk result: %v", err)
+		return ""
 	}
-	return result.Text, nil
+	return res.Text
 }

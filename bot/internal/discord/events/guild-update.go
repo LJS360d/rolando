@@ -7,20 +7,16 @@ import (
 	"github.com/disgoorg/disgo/events"
 )
 
-// handler for GUILD_UPDATE event
+// handler for GUILD_UPDATE event. Only the name is stored, so other edits
+// (icon, boosts, settings) don't open the guild.
 func (h *EventsHandler) onGuildUpdate(e *events.GuildUpdate) {
-	guildID := e.Guild.ID.String()
-
-	// Get the old guild from cache if available
-	oldGuild, ok := h.Client.Caches.Guild(e.Guild.ID)
-	if !ok {
-		logger.Errorf("Failed to fetch old guild for guild update event")
-		// Still update the chain meta with new data
-		h.ChainsService.UpdateChainMeta(context.Background(), guildID, map[string]interface{}{"name": e.Guild.Name})
-		logger.Infof("Guild %s updated to: %s", guildID, e.Guild.Name)
+	if e.OldGuild.Name == e.Guild.Name {
 		return
 	}
-
-	h.ChainsService.UpdateChainMeta(context.Background(), guildID, map[string]interface{}{"name": e.Guild.Name})
-	logger.Infof("Guild %s updated: %s -> %s", guildID, oldGuild.Name, e.Guild.Name)
+	guildID := e.Guild.ID.String()
+	if _, err := h.ChainsService.UpdateChainMeta(context.Background(), guildID, map[string]any{"name": e.Guild.Name}); err != nil {
+		logger.Errorf("Failed to update name of guild %s: %v", guildID, err)
+		return
+	}
+	logger.Infof("Guild %s updated: %s -> %s", guildID, e.OldGuild.Name, e.Guild.Name)
 }

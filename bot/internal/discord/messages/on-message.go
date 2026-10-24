@@ -75,14 +75,14 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 			}
 			h.handleReply(m, chainConf.ID)
 		}
-		if ratedChoice(chainConf.ReplyRate) {
+		if utils.RatedChoice(chainConf.ReplyRate) {
 			if err := h.Client.Rest.SendTyping(m.ChannelID); err != nil {
 				logger.Errorf("Failed to send typing in '%s': %v", guild.Name, err)
 			}
 			h.handleRandomMessage(m, guild.Name, chainConf.ID)
 		}
-		if ratedChoice(chainConf.ReactionRate) && helpers.HasGuildAddReactionsPermissions(h.Client, h.Client.ID(), channel) {
-			h.handleReaction(m, guild.Name)
+		if utils.RatedChoice(chainConf.ReactionRate) && helpers.HasGuildAddReactionsPermissions(h.Client, h.Client.ID(), channel) {
+			h.handleReaction(m)
 		}
 	}()
 }
@@ -120,7 +120,7 @@ func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string
 		// ignore empty
 		return
 	}
-	if ratedChoice(10) /* 10% */ {
+	if utils.RatedChoice(10) /* 10% */ {
 		// the message replies to the original message without pinging the user
 		sendData := discord.MessageCreate{
 			Content: message,
@@ -149,14 +149,22 @@ func (h *MessageHandler) handleRandomMessage(m discord.Message, guildName string
 }
 
 // handleReaction adds a random reaction to a message.
-func (h *MessageHandler) handleReaction(m discord.Message, guildName string) {
-	guildEmojis := h.Client.Caches.Emojis((*m.GuildID))
+func (h *MessageHandler) handleReaction(m discord.Message) {
+	var botRoles []snowflake.ID
+	if self, ok := h.Client.Caches.Member(*m.GuildID, h.Client.ID()); ok {
+		botRoles = self.RoleIDs
+	}
 
-	// base emoji pool
 	emojiPool := slices.Clone(data.EmojiUnicodes)
-	// add guild custom emojis to the base pool
-	for emoji := range guildEmojis {
-		emojiPool = append(emojiPool, emoji.Name)
+	for emoji := range h.Client.Caches.Emojis(*m.GuildID) {
+		if !emoji.Available {
+			continue
+		}
+		// role-locked emojis are usable only with one of their roles
+		if len(emoji.Roles) > 0 && !slices.ContainsFunc(emoji.Roles, func(r snowflake.ID) bool { return slices.Contains(botRoles, r) }) {
+			continue
+		}
+		emojiPool = append(emojiPool, emoji.Reaction())
 	}
 
 	randEmoji := emojiPool[rand.Intn(len(emojiPool))]
@@ -186,11 +194,6 @@ func (h *MessageHandler) sendMessageCreate(channelID snowflake.ID, guildLabel st
 			logger.Errorf(errTemplate, guildLabel, err)
 		}
 	}
-}
-
-// Helper method to determine if bot should send a commit a rate weighted action
-func ratedChoice(rate int) bool {
-	return rate == 1 || (rate > 1 && utils.GetRandom(1, rate) == 1)
 }
 
 // Generate a message based on chain probabilities

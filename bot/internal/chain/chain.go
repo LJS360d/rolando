@@ -1,19 +1,14 @@
 package chain
 
 import (
-	"encoding/binary"
 	"math/rand/v2"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 type edge struct{ tok, cnt uint32 }
-
-type state struct {
-	edges []edge
-	idx   int
-}
 
 type Stats struct {
 	Prefixes int64  `json:"prefixes"`
@@ -21,37 +16,65 @@ type Stats struct {
 	Bytes    uint64 `json:"bytes"`
 }
 
-// Chain is one guild Markov chain. Tokens are interned; a prefix key is the
-// n-1 token ids packed as little-endian uint32 bytes
+// Chain is one guild Markov chain. Tokens are interned; prefix i is the n-1
+// token ids keys[i*(n-1):(i+1)*(n-1)] with successors edges[i]
 type Chain struct {
 	mu        sync.RWMutex
+	id        uint64
 	n         int
 	tokens    []string
 	ids       map[string]uint32
-	next      map[string]*state
-	keys      []string
+	index     index
+	keys      []uint32
+	edges     [][]edge
+	scratch   []uint32
 	messages  int64
 	bytes     uint64
 	watermark int64
-	dirty     bool
+	// gen counts mutations; saved is the gen last written to disk
+	gen, saved uint64
 }
 
+// estimated heap bytes, see Stats.Bytes
 const (
 	tokenOverhead  = 48
-	prefixOverhead = 96
+	prefixOverhead = 48
 	edgeSize       = 8
 )
 
+// MaxN is the largest supported n-gram size.
+const MaxN = maxKey + 1
+
 func New(n int) *Chain {
-	return &Chain{n: max(n, 2), ids: map[string]uint32{}, next: map[string]*state{}}
+	n = min(max(n, 2), MaxN)
+	c := &Chain{id: lastID.Add(1), n: n, ids: map[string]uint32{}}
+	if n-1 <= 2 {
+		c.index = smallIndex{}
+	} else {
+		c.index = bigIndex{}
+	}
+	return c
 }
 
+var lastID atomic.Uint64
+
+// ID is unique per chain in this process, so derived data can be keyed to
+// the chain it came from: a reset or rebuild swaps in a new one.
+func (c *Chain) ID() uint64 { return c.id }
+
 func (c *Chain) N() int { return c.n }
+
+func (c *Chain) key(i int) []uint32 {
+	k := c.n - 1
+	return c.keys[i*k : (i+1)*k]
+}
+
+func (c *Chain) prefixBytes() uint64 { return uint64(4*(c.n-1) + prefixOverhead) }
 
 func (c *Chain) Stats() Stats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return Stats{Prefixes: int64(len(c.next)), Messages: c.messages, Bytes: c.bytes}
+	return Stats{Prefixes: int64(len(c.edges)), Messages: c.messages, Bytes: c.bytes}
 }
 
 func (c *Chain) Watermark() int64 {
@@ -63,7 +86,7 @@ func (c *Chain) Watermark() int64 {
 func (c *Chain) Dirty() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.dirty
+	return c.gen != c.saved
 }
 
 // Train adds messages and advances the watermark to lastID. Messages are
@@ -81,7 +104,7 @@ func (c *Chain) Train(texts []string, lastID int64, maxBytes uint64, maxBranches
 	if lastID > c.watermark {
 		c.watermark = lastID
 	}
-	c.dirty = true
+	c.gen++
 }
 
 func (c *Chain) trainOne(text string, maxBranches int) {
@@ -89,12 +112,13 @@ func (c *Chain) trainOne(text string, maxBranches int) {
 	if len(toks) < c.n {
 		return
 	}
-	ids := make([]uint32, len(toks))
-	for i, t := range toks {
-		ids[i] = c.intern(t)
+	ids := c.scratch[:0]
+	for _, t := range toks {
+		ids = append(ids, c.intern(t))
 	}
+	c.scratch = ids
 	for i := 0; i+c.n <= len(ids); i++ {
-		c.add(packKey(ids[i:i+c.n-1]), ids[i+c.n-1], maxBranches)
+		c.add(ids[i:i+c.n-1], ids[i+c.n-1], maxBranches)
 	}
 	c.messages++
 }
@@ -103,6 +127,8 @@ func (c *Chain) intern(t string) uint32 {
 	if id, ok := c.ids[t]; ok {
 		return id
 	}
+	// t is a substring of the message; cloning keeps the message collectable
+	t = strings.Clone(t)
 	id := uint32(len(c.tokens))
 	c.tokens = append(c.tokens, t)
 	c.ids[t] = id
@@ -110,35 +136,38 @@ func (c *Chain) intern(t string) uint32 {
 	return id
 }
 
-func (c *Chain) add(key string, tok uint32, maxBranches int) {
-	s, ok := c.next[key]
+func (c *Chain) add(key []uint32, tok uint32, maxBranches int) {
+	i, ok := c.index.get(key)
 	if !ok {
-		s = &state{idx: len(c.keys)}
-		c.next[key] = s
-		c.keys = append(c.keys, key)
-		c.bytes += uint64(len(key) + prefixOverhead)
+		i = int32(len(c.edges))
+		c.index.put(key, i)
+		c.keys = append(c.keys, key...)
+		c.edges = append(c.edges, nil)
+		c.bytes += c.prefixBytes()
 	}
-	for i := range s.edges {
-		if s.edges[i].tok == tok {
-			s.edges[i].cnt++
+	es := c.edges[i]
+	for j := range es {
+		if es[j].tok == tok {
+			es[j].cnt++
 			return
 		}
 	}
-	s.edges = append(s.edges, edge{tok, 1})
-	c.bytes += edgeSize
-	if maxBranches > 0 && len(s.edges) > maxBranches {
-		c.bytes -= uint64(edgeSize * c.prune(s, maxBranches))
+	// a new successor would have the lowest count and be pruned right away
+	if maxBranches > 0 && len(es) >= maxBranches {
+		return
 	}
+	c.edges[i] = append(es, edge{tok, 1})
+	c.bytes += edgeSize
 }
 
-func (c *Chain) prune(s *state, maxBranches int) int {
-	if len(s.edges) <= maxBranches {
+func (c *Chain) prune(i, maxBranches int) int {
+	es := c.edges[i]
+	if len(es) <= maxBranches {
 		return 0
 	}
-	slices.SortStableFunc(s.edges, func(a, b edge) int { return int(b.cnt) - int(a.cnt) })
-	drop := len(s.edges) - maxBranches
-	s.edges = s.edges[:maxBranches]
-	return drop
+	slices.SortStableFunc(es, func(a, b edge) int { return int(b.cnt) - int(a.cnt) })
+	c.edges[i] = slices.Clone(es[:maxBranches])
+	return len(es) - maxBranches
 }
 
 // Cap applies maxBranches to every prefix and returns the removed transitions.
@@ -149,12 +178,12 @@ func (c *Chain) Cap(maxBranches int) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	removed := 0
-	for _, s := range c.next {
-		removed += c.prune(s, maxBranches)
+	for i := range c.edges {
+		removed += c.prune(i, maxBranches)
 	}
 	if removed > 0 {
 		c.bytes -= uint64(edgeSize * removed)
-		c.dirty = true
+		c.gen++
 	}
 	return removed
 }
@@ -167,55 +196,61 @@ func (c *Chain) Delete(text string) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	ids := make([]uint32, len(toks))
-	for i, t := range toks {
-		id, ok := c.ids[t]
-		if !ok {
-			return
-		}
-		ids[i] = id
-	}
-	for i := 0; i+c.n <= len(ids); i++ {
-		c.remove(packKey(ids[i:i+c.n-1]), ids[i+c.n-1])
-	}
-	c.messages = max(0, c.messages-1)
-	c.dirty = true
-}
-
-func (c *Chain) remove(key string, tok uint32) {
-	s, ok := c.next[key]
+	ids, ok := c.lookup(toks)
 	if !ok {
 		return
 	}
-	i := slices.IndexFunc(s.edges, func(e edge) bool { return e.tok == tok })
-	if i < 0 {
+	for i := 0; i+c.n <= len(ids); i++ {
+		c.remove(ids[i:i+c.n-1], ids[i+c.n-1])
+	}
+	c.messages = max(0, c.messages-1)
+	c.gen++
+}
+
+func (c *Chain) remove(key []uint32, tok uint32) {
+	i, ok := c.index.get(key)
+	if !ok {
 		return
 	}
-	if s.edges[i].cnt > 1 {
-		s.edges[i].cnt--
+	es := c.edges[i]
+	j := slices.IndexFunc(es, func(e edge) bool { return e.tok == tok })
+	if j < 0 {
 		return
 	}
-	s.edges = slices.Delete(s.edges, i, i+1)
+	if es[j].cnt > 1 {
+		es[j].cnt--
+		return
+	}
+	c.edges[i] = slices.Delete(es, j, j+1)
 	c.bytes -= edgeSize
-	if len(s.edges) > 0 {
-		return
+	if len(c.edges[i]) == 0 {
+		c.removePrefix(int(i))
 	}
-	last := c.keys[len(c.keys)-1]
-	c.keys[s.idx] = last
-	c.next[last].idx = s.idx
-	c.keys = c.keys[:len(c.keys)-1]
-	delete(c.next, key)
-	c.bytes -= uint64(len(key) + prefixOverhead)
+}
+
+// removePrefix moves the last prefix into slot i.
+func (c *Chain) removePrefix(i int) {
+	last := len(c.edges) - 1
+	c.index.del(c.key(i))
+	if i != last {
+		copy(c.key(i), c.key(last))
+		c.edges[i] = c.edges[last]
+		c.index.put(c.key(i), int32(i))
+	}
+	c.edges[last] = nil
+	c.edges = c.edges[:last]
+	c.keys = c.keys[:last*(c.n-1)]
+	c.bytes -= c.prefixBytes()
 }
 
 // Generate walks the chain from a random prefix.
 func (c *Chain) Generate(maxLength int) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if len(c.keys) == 0 {
+	if len(c.edges) == 0 {
 		return ""
 	}
-	toks, _ := c.walk(c.keys[rand.IntN(len(c.keys))], maxLength, "")
+	toks, _ := c.walk(rand.IntN(len(c.edges)), maxLength, "")
 	return c.join(toks)
 }
 
@@ -224,28 +259,43 @@ func (c *Chain) Generate(maxLength int) string {
 func (c *Chain) GenerateFromSeed(seed string, maxLength int) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	key := c.findPrefix(seed)
-	if key == "" {
+	start := c.findPrefix(seed)
+	if start < 0 {
 		return ""
 	}
-	toks, _ := c.walk(key, maxLength, "")
+	toks, _ := c.walk(start, maxLength, "")
 	return c.join(toks)
 }
 
-func (c *Chain) findPrefix(seed string) string {
-	if len(c.keys) == 0 {
-		return ""
+// findPrefix returns a prefix index, -1 when the chain is empty.
+func (c *Chain) findPrefix(seed string) int {
+	if len(c.edges) == 0 {
+		return -1
 	}
 	if seed != "" {
 		if ids, ok := c.lookup(strings.Fields(seed)); ok && len(ids) == c.n-1 {
-			if k := packKey(ids); c.next[k] != nil {
-				return k
+			if i, ok := c.index.get(ids); ok {
+				return int(i)
 			}
 		}
-		var matching []string
-		for _, k := range c.keys {
-			if strings.Contains(c.join(unpackKey(k)), seed) {
-				matching = append(matching, k)
+		contains := func(i int) bool { return strings.Contains(c.join(c.key(i)), seed) }
+		if !strings.Contains(seed, " ") {
+			// a seed without spaces can only match within one token
+			hit := map[uint32]bool{}
+			for id, t := range c.tokens {
+				if strings.Contains(t, seed) {
+					hit[uint32(id)] = true
+				}
+			}
+			if len(hit) == 0 {
+				return rand.IntN(len(c.edges))
+			}
+			contains = func(i int) bool { return slices.ContainsFunc(c.key(i), func(id uint32) bool { return hit[id] }) }
+		}
+		var matching []int
+		for i := range c.edges {
+			if contains(i) {
+				matching = append(matching, i)
 				if len(matching) >= 200 {
 					break
 				}
@@ -255,7 +305,7 @@ func (c *Chain) findPrefix(seed string) string {
 			return matching[rand.IntN(len(matching))]
 		}
 	}
-	return c.keys[rand.IntN(len(c.keys))]
+	return rand.IntN(len(c.edges))
 }
 
 func (c *Chain) lookup(toks []string) ([]uint32, bool) {
@@ -278,10 +328,10 @@ func (c *Chain) GenerateRhyme(word string, maxLength int) string {
 	suffix := rhymeSuffix(word)
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if len(c.keys) == 0 {
+	if len(c.edges) == 0 {
 		return ""
 	}
-	toks, cands := c.walk(c.keys[rand.IntN(len(c.keys))], maxLength, suffix)
+	toks, cands := c.walk(rand.IntN(len(c.edges)), maxLength, suffix)
 	if suffix == "" {
 		return c.join(toks)
 	}
@@ -303,22 +353,23 @@ func rhymeSuffix(word string) string {
 	return string(r[len(r)-min(len(r), 3):])
 }
 
-func (c *Chain) walk(start string, maxLength int, suffix string) ([]uint32, map[int][]edge) {
-	toks := unpackKey(start)
+func (c *Chain) walk(start, maxLength int, suffix string) ([]uint32, map[int][]edge) {
+	toks := slices.Clone(c.key(start))
 	var cands map[int][]edge
 	if suffix != "" {
 		cands = map[int][]edge{}
 	}
 	for range maxLength {
-		s := c.next[packKey(toks[len(toks)-c.n+1:])]
-		if s == nil || len(s.edges) == 0 {
+		i, ok := c.index.get(toks[len(toks)-c.n+1:])
+		if !ok || len(c.edges[i]) == 0 {
 			break
 		}
-		toks = append(toks, pick(s.edges))
+		es := c.edges[i]
+		toks = append(toks, pick(es))
 		if suffix == "" {
 			continue
 		}
-		for _, e := range s.edges {
+		for _, e := range es {
 			if strings.HasSuffix(strings.ToLower(c.tokens[e.tok]), suffix) {
 				cands[len(toks)-1] = append(cands[len(toks)-1], e)
 			}
@@ -363,21 +414,21 @@ type Neighborhood struct {
 func (c *Chain) Neighbors(word string, limit int) Neighborhood {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if len(c.keys) == 0 {
+	if len(c.edges) == 0 {
 		return Neighborhood{}
 	}
 	id, ok := c.ids[word]
 	if word == "" {
-		k := c.keys[rand.IntN(len(c.keys))]
-		id, ok = binary.LittleEndian.Uint32([]byte(k[len(k)-4:])), true
+		k := c.key(rand.IntN(len(c.edges)))
+		id, ok = k[len(k)-1], true
 	}
 	if !ok {
 		return Neighborhood{}
 	}
 	in, out := map[uint32]uint32{}, map[uint32]uint32{}
-	for k, s := range c.next {
-		last := binary.LittleEndian.Uint32([]byte(k[len(k)-4:]))
-		for _, e := range s.edges {
+	for i, es := range c.edges {
+		last := c.keys[(i+1)*(c.n-1)-1]
+		for _, e := range es {
 			if last == id {
 				out[e.tok] += e.cnt
 			}
@@ -409,18 +460,44 @@ func (c *Chain) join(ids []uint32) string {
 	return b.String()
 }
 
-func packKey(ids []uint32) string {
-	b := make([]byte, 4*len(ids))
-	for i, id := range ids {
-		binary.LittleEndian.PutUint32(b[4*i:], id)
-	}
-	return string(b)
+const maxKey = 7
+
+// index maps a prefix to its slot. Keys are plain values, so the map holds
+// no pointers for the GC to scan and lookups don't allocate.
+type index interface {
+	get(key []uint32) (int32, bool)
+	put(key []uint32, i int32)
+	del(key []uint32)
 }
 
-func unpackKey(k string) []uint32 {
-	ids := make([]uint32, len(k)/4)
-	for i := range ids {
-		ids[i] = binary.LittleEndian.Uint32([]byte(k[4*i : 4*i+4]))
+// smallIndex packs up to 2 ids (n <= 3) into one word.
+type smallIndex map[uint64]int32
+
+func smallKey(key []uint32) uint64 {
+	var k uint64
+	for i, id := range key {
+		k |= uint64(id) << (32 * i)
 	}
-	return ids
+	return k
 }
+
+func (x smallIndex) get(key []uint32) (int32, bool) {
+	i, ok := x[smallKey(key)]
+	return i, ok
+}
+func (x smallIndex) put(key []uint32, i int32) { x[smallKey(key)] = i }
+func (x smallIndex) del(key []uint32)          { delete(x, smallKey(key)) }
+
+type bigIndex map[[maxKey]uint32]int32
+
+func bigKey(key []uint32) (k [maxKey]uint32) {
+	copy(k[:], key)
+	return k
+}
+
+func (x bigIndex) get(key []uint32) (int32, bool) {
+	i, ok := x[bigKey(key)]
+	return i, ok
+}
+func (x bigIndex) put(key []uint32, i int32) { x[bigKey(key)] = i }
+func (x bigIndex) del(key []uint32)          { delete(x, bigKey(key)) }

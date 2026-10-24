@@ -17,8 +17,8 @@ func (h *SlashCommandsHandler) vcLeaveCommand(client *bot.Client, event *events.
 	ctx := context.Background()
 	guildID := *event.GuildID()
 
-	conn := h.Client.VoiceManager.GetConn(guildID)
-	if conn == nil {
+	sess := helpers.Current(guildID)
+	if sess == nil {
 		err := event.CreateMessage(discord.NewMessageCreate().
 			WithContent("I am not connected to a voice channel.").
 			WithEphemeral(true))
@@ -36,19 +36,26 @@ func (h *SlashCommandsHandler) vcLeaveCommand(client *bot.Client, event *events.
 		return
 	}
 
-	chainDoc, _ := h.ChainsService.GetChainConf(ctx, guildID.String())
-	provider, err := tts.GenerateTTSProvider("bye bye", chainDoc.TTSLanguage)
-	if err != nil {
-		logger.Errorf("Failed to generate TTS provider: %v", err)
-		return
-	}
+	// the goodbye plays for up to 5s; keep it off the shard read loop
+	go func() {
+		defer sess.Leave()
+		chainDoc, err := h.ChainsService.GetChainConf(ctx, guildID.String())
+		if err != nil {
+			logger.Errorf("Failed to retrieve chain document: %v", err)
+			return
+		}
+		provider, err := tts.PhraseProvider("bye bye", chainDoc.TTSLanguage)
+		if err != nil {
+			logger.Errorf("Failed to generate TTS provider: %v", err)
+			return
+		}
 
-	ctx, _ = context.WithTimeout(ctx, 5*time.Second)
-	if err := helpers.SendTTSToConn(ctx, conn, provider); err != nil {
-		logger.Errorf("Failed to stream audio: %v", err)
-	} else {
-		logger.Infof("Spoke Bye Bye message in vc, leaving...")
-	}
-
-	conn.Close(ctx)
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := sess.Play(ctx, provider); err != nil {
+			logger.Errorf("Failed to stream audio: %v", err)
+		} else {
+			logger.Infof("Spoke Bye Bye message in vc, leaving...")
+		}
+	}()
 }

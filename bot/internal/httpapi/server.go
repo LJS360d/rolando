@@ -10,11 +10,13 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"rolando/internal/analytics"
+	"rolando/internal/chain"
 	"rolando/internal/cluster"
 	"rolando/internal/config"
 	"rolando/internal/discord/services"
@@ -23,6 +25,7 @@ import (
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
 )
 
@@ -43,11 +46,24 @@ func (s *Server) Start() {
 		}
 		go func() {
 			logger.Infof("Node API listening at %v", config.NodeAPIAddress)
-			logger.Fatalf("node api: %v", http.ListenAndServe(config.NodeAPIAddress, s.nodeAPI()))
+			logger.Fatalf("node api: %v", serve(config.NodeAPIAddress, s.nodeAPI()))
 		}()
 	}
 	logger.Infof("Server listening at %v", config.ServerAddress)
-	logger.Fatalf("http server: %v", http.ListenAndServe(config.ServerAddress, s.public()))
+	logger.Fatalf("http server: %v", serve(config.ServerAddress, s.public()))
+}
+
+// serve bounds how long a client may hold a connection without making progress.
+func serve(addr string, h http.Handler) error {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+	}
+	return srv.ListenAndServe()
 }
 
 func (s *Server) public() http.Handler {
@@ -87,6 +103,15 @@ func (s *Server) guildRoutes() *http.ServeMux {
 	return mux
 }
 
+// requireGuild 404s guilds without data here; opening one would create it.
+func (s *Server) requireGuild(w http.ResponseWriter, r *http.Request) bool {
+	if !s.chains.Guilds.Exists(r.PathValue("id")) {
+		http.NotFound(w, r)
+		return false
+	}
+	return true
+}
+
 // routeGuild serves guilds owned by this node and proxies the rest to the
 // owner's node API; the session cookie travels along and is checked there.
 func (s *Server) routeGuild(local http.Handler) http.Handler {
@@ -96,6 +121,10 @@ func (s *Server) routeGuild(local http.Handler) http.Handler {
 		if err != nil {
 			http.NotFound(w, r)
 			return
+		}
+		if r.Method != http.MethodGet {
+			// a leave or config change shows in the admin listing right away
+			adminCache.clear()
 		}
 		if cluster.IsLocal(id) {
 			local.ServeHTTP(w, r)
@@ -130,7 +159,7 @@ type Command struct {
 
 func (s *Server) bot(w http.ResponseWriter, r *http.Request) {
 	self, _ := s.client.Caches.SelfUser()
-	cmds, _ := s.commands()
+	cmds := s.commands()
 	out := struct {
 		Name     string    `json:"name"`
 		Avatar   string    `json:"avatar"`
@@ -138,7 +167,7 @@ func (s *Server) bot(w http.ResponseWriter, r *http.Request) {
 		Support  string    `json:"support"`
 		Guilds   int       `json:"guilds"`
 		Commands []Command `json:"commands"`
-	}{self.Username, self.EffectiveAvatarURL(), config.InviteUrl, config.SupportURL, s.totalGuilds(r.Context()), []Command{}}
+	}{self.Username, self.EffectiveAvatarURL(), config.InviteUrl, config.SupportURL, s.TotalGuilds(), []Command{}}
 	for _, c := range cmds {
 		if sc, ok := c.(discord.SlashCommand); ok {
 			out.Commands = append(out.Commands, Command{sc.Name(), sc.Description})
@@ -147,48 +176,101 @@ func (s *Server) bot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
+// commandsCache holds the global commands, which only change on a deploy:
+// fetched until the first success, then kept for the process lifetime.
 var commandsCache struct {
 	sync.Mutex
 	cmds []discord.ApplicationCommand
-	at   time.Time
 }
 
-func (s *Server) commands() ([]discord.ApplicationCommand, error) {
+func (s *Server) commands() []discord.ApplicationCommand {
 	commandsCache.Lock()
 	defer commandsCache.Unlock()
-	if time.Since(commandsCache.at) > time.Hour {
-		cmds, err := s.client.Rest.GetGlobalCommands(s.client.ApplicationID, false)
-		if err != nil {
-			return commandsCache.cmds, err
+	if commandsCache.cmds == nil {
+		if cmds, err := s.client.Rest.GetGlobalCommands(s.client.ApplicationID, false); err == nil {
+			commandsCache.cmds = cmds
 		}
-		commandsCache.cmds, commandsCache.at = cmds, time.Now()
 	}
-	return commandsCache.cmds, nil
+	return commandsCache.cmds
 }
 
-var guildCount struct {
-	sync.Mutex
-	n  int
-	at time.Time
-}
-
-// TotalGuilds sums guild counts across the cluster, cached for 30s since
+// guildCount is the cluster guild total, refreshed every 30s since
 // /api/bot is public; unreachable nodes count 0.
-func (s *Server) totalGuilds(ctx context.Context) int {
-	guildCount.Lock()
-	defer guildCount.Unlock()
-	if time.Since(guildCount.at) > 30*time.Second {
-		n := s.client.Caches.GuildsLen()
-		counts, _ := cluster.GetJSON[int](ctx, "/node/count")
-		for _, c := range counts {
-			n += c
-		}
-		guildCount.n, guildCount.at = n, time.Now()
+var guildCount = refresher[int]{every: 30 * time.Second}
+
+func (s *Server) TotalGuilds() int { return guildCount.get(s.countGuilds) }
+
+// FreshTotalGuilds counts now instead of serving the cached total.
+func (s *Server) FreshTotalGuilds() int { return guildCount.fresh(s.countGuilds) }
+
+func (s *Server) countGuilds(ctx context.Context) (int, error) {
+	n := s.client.Caches.GuildsLen()
+	counts, _ := cluster.GetJSON[int](ctx, "/node/count")
+	for _, c := range counts {
+		n += c
 	}
-	return guildCount.n
+	return n, nil
 }
 
-func (s *Server) TotalGuilds() int { return s.totalGuilds(context.Background()) }
+// refresher serves the last fetched value and refreshes it in the
+// background once stale, so callers never wait on (or pile up behind) a
+// slow fetch. Only the very first call fetches inline.
+type refresher[T any] struct {
+	every time.Duration
+
+	mu     sync.Mutex
+	v      T
+	at     time.Time
+	busy   bool
+	inline sync.Mutex
+}
+
+func (r *refresher[T]) get(fetch func(context.Context) (T, error)) T {
+	r.mu.Lock()
+	fetched := !r.at.IsZero()
+	if fetched && time.Since(r.at) > r.every && !r.busy {
+		r.busy = true
+		go r.refresh(fetch)
+	}
+	v := r.v
+	r.mu.Unlock()
+	if fetched {
+		return v
+	}
+	r.inline.Lock()
+	defer r.inline.Unlock()
+	r.mu.Lock()
+	fetched = !r.at.IsZero()
+	r.mu.Unlock()
+	if !fetched {
+		r.refresh(fetch)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.v
+}
+
+func (r *refresher[T]) fresh(fetch func(context.Context) (T, error)) T {
+	r.refresh(fetch)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.v
+}
+
+func (r *refresher[T]) refresh(fetch func(context.Context) (T, error)) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	v, err := fetch(ctx)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.at, r.busy = time.Now(), false
+	if err != nil {
+		// retry in 30s rather than after a whole interval
+		r.at = r.at.Add(min(30*time.Second, r.every) - r.every)
+		return
+	}
+	r.v = v
+}
 
 type GuildRow struct {
 	ID        string                   `json:"id"`
@@ -203,10 +285,7 @@ type GuildRow struct {
 // localGuilds lists this node's guilds, only those in ids when given.
 func (s *Server) localGuilds(ids []string) []GuildRow {
 	rows := []GuildRow{}
-	for g := range s.client.Caches.Guilds() {
-		if ids != nil && !slices.Contains(ids, g.ID.String()) {
-			continue
-		}
+	add := func(g discord.Guild) {
 		row := GuildRow{ID: g.ID.String(), Name: g.Name, Members: g.MemberCount, State: s.chains.State(g.ID.String())}
 		if g.Icon != nil {
 			row.Icon = *g.IconURL()
@@ -215,6 +294,19 @@ func (s *Server) localGuilds(ids []string) []GuildRow {
 			row.Config, row.Analytics = sum.Config, analytics.FromSummary(sum)
 		}
 		rows = append(rows, row)
+	}
+	if ids == nil {
+		for g := range s.client.Caches.Guilds() {
+			add(g)
+		}
+		return rows
+	}
+	for _, id := range ids {
+		if sf, err := snowflake.Parse(id); err == nil {
+			if g, ok := s.client.Caches.Guild(sf); ok {
+				add(g)
+			}
+		}
 	}
 	return rows
 }
@@ -237,11 +329,21 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 	if !requireOwner(w, r) {
 		return
 	}
-	rows := s.localGuilds(nil)
-	remote, errs := cluster.GetJSON[[]GuildRow](r.Context(), "/node/guilds")
-	for _, rs := range remote {
-		rows = append(rows, rs...)
+	all, ok := adminCache.get("")
+	if !ok {
+		all.rows = s.localGuilds(nil)
+		var remote map[int][]GuildRow
+		// shared by later requests: don't let this one's cancellation cut it short
+		remote, errs := cluster.GetJSON[[]GuildRow](context.WithoutCancel(r.Context()), "/node/guilds")
+		for _, rs := range remote {
+			all.rows = append(all.rows, rs...)
+		}
+		all.errs = errs
+		if len(errs) == 0 {
+			adminCache.put("", all)
+		}
 	}
+	rows, errs := slices.Clone(all.rows), all.errs
 	if q := strings.ToLower(r.URL.Query().Get("q")); q != "" {
 		rows = slices.DeleteFunc(rows, func(g GuildRow) bool { return !strings.Contains(strings.ToLower(g.Name), q) && g.ID != q })
 	}
@@ -274,6 +376,15 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// adminCache keeps the cluster-wide listing between page, sort and search
+// requests: building it reads every guild's summary on every node.
+var adminCache = ttlCache[adminRows]{ttl: 10 * time.Second, max: 1}
+
+type adminRows struct {
+	rows []GuildRow
+	errs map[int]error
+}
+
 type broadcastReq struct {
 	Content string   `json:"content"`
 	Guilds  []string `json:"guilds"`
@@ -302,7 +413,7 @@ func (s *Server) broadcast(w http.ResponseWriter, r *http.Request) {
 		}
 		var n int
 		json.NewDecoder(resp.Body).Decode(&n)
-		resp.Body.Close()
+		cluster.CloseBody(resp)
 		sent += n
 	}
 	writeJSON(w, map[string]any{"sent": sent, "failed": failed})
@@ -388,8 +499,26 @@ func (s *Server) myGuilds(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, []GuildRow{})
 		return
 	}
-	rows := s.localGuilds(sess.Guilds)
-	remote, _ := cluster.GetJSON[[]GuildRow](r.Context(), "/node/guilds?"+url.Values{"id": sess.Guilds}.Encode())
+	local := []string{}
+	byNode := map[int][]string{}
+	for _, id := range sess.Guilds {
+		sf, err := snowflake.Parse(id)
+		if err != nil {
+			continue
+		}
+		if cluster.IsLocal(sf) {
+			local = append(local, id)
+		} else {
+			node := cluster.OwnerNode(sf)
+			byNode[node] = append(byNode[node], id)
+		}
+	}
+	rows := s.localGuilds(local)
+	paths := map[int]string{}
+	for node, ids := range byNode {
+		paths[node] = "/node/guilds?" + url.Values{"id": ids}.Encode()
+	}
+	remote, _ := cluster.GetJSONEach[[]GuildRow](r.Context(), paths)
 	for _, rs := range remote {
 		rows = append(rows, rs...)
 	}
@@ -398,10 +527,25 @@ func (s *Server) myGuilds(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
-	if !requireView(w, r) {
+	if !requireView(w, r) || !s.requireGuild(w, r) {
 		return
 	}
-	n, err := s.chains.Neighbors(r.PathValue("id"), r.URL.Query().Get("word"), 16)
+	word := r.URL.Query().Get("word")
+	var n chain.Neighborhood
+	err := s.chains.WithChain(r.PathValue("id"), func(c *chain.Chain) {
+		key := strconv.FormatUint(c.ID(), 10) + "/" + word
+		if word != "" {
+			var ok bool
+			if n, ok = graphCache.get(key); ok {
+				return
+			}
+		}
+		n = c.Neighbors(word, 16)
+		if word != "" && n.Word != "" {
+			// unknown words return before the scan; don't let them fill the cache
+			graphCache.put(key, n)
+		}
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -409,10 +553,63 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, n)
 }
 
+// graphCache holds recent neighbor lookups: each one scans every prefix of
+// the chain under its read lock. Keyed by chain ID so a wipe or rebuild
+// misses; random lookups (no word) are not cached.
+var graphCache = ttlCache[chain.Neighborhood]{ttl: time.Minute, max: 512}
+
+type ttlCache[V any] struct {
+	mu      sync.Mutex
+	ttl     time.Duration
+	max     int
+	entries map[string]ttlEntry[V]
+}
+
+type ttlEntry[V any] struct {
+	v  V
+	at time.Time
+}
+
+func (c *ttlCache[V]) get(k string) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.entries[k]
+	if !ok || time.Since(e.at) > c.ttl {
+		var zero V
+		return zero, false
+	}
+	return e.v, true
+}
+
+func (c *ttlCache[V]) clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clear(c.entries)
+}
+
+func (c *ttlCache[V]) put(k string, v V) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil {
+		c.entries = map[string]ttlEntry[V]{}
+	}
+	if len(c.entries) >= c.max {
+		for k, e := range c.entries {
+			if time.Since(e.at) > c.ttl {
+				delete(c.entries, k)
+			}
+		}
+		if len(c.entries) >= c.max {
+			clear(c.entries)
+		}
+	}
+	c.entries[k] = ttlEntry[V]{v, time.Now()}
+}
+
 const messagesPageSize = 100
 
 func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
-	if !requireView(w, r) {
+	if !requireView(w, r) || !s.requireGuild(w, r) {
 		return
 	}
 	pg := atoiOr(r.URL.Query().Get("page"), 1)
@@ -458,20 +655,33 @@ func (s *Server) mentions(guild string, contents []string) map[string]string {
 					out[m[0]] = "@" + role.Name
 				}
 			default:
-				mem, ok := s.client.Caches.Member(gid, id)
-				if !ok {
-					if p, err := s.client.Rest.GetMember(gid, id); err == nil {
-						mem, ok = *p, true
-						s.client.Caches.AddMember(mem)
-					}
-				}
-				if ok {
-					out[m[0]] = "@" + mem.EffectiveName()
+				if name := s.memberName(gid, id); name != "" {
+					out[m[0]] = "@" + name
 				}
 			}
 		}
 	}
 	return out
+}
+
+// memberNames caches mentioned members' names: the member cache holds only
+// the bot, so each would otherwise cost a REST call per page view. "" means
+// the user is not a member.
+var memberNames = ttlCache[string]{ttl: 10 * time.Minute, max: 4096}
+
+func (s *Server) memberName(gid, id snowflake.ID) string {
+	key := gid.String() + "/" + id.String()
+	if name, ok := memberNames.get(key); ok {
+		return name
+	}
+	var name string
+	if m, err := s.client.Rest.GetMember(gid, id); err == nil {
+		name = m.EffectiveName()
+	} else if !rest.IsJSONErrorCode(err, rest.JSONErrorCodeUnknownMember, rest.JSONErrorCodeUnknownUser) {
+		return ""
+	}
+	memberNames.put(key, name)
+	return name
 }
 
 var configRanges = map[string][2]int{
@@ -480,7 +690,7 @@ var configRanges = map[string][2]int{
 }
 
 func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
-	if !requireOwner(w, r) {
+	if !requireOwner(w, r) || !s.requireGuild(w, r) {
 		return
 	}
 	var raw map[string]json.RawMessage

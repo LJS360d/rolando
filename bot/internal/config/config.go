@@ -95,27 +95,14 @@ func init() {
 	}
 
 	PremiumsPageLink = os.Getenv("PREMIUMS_PAGE_LINK")
-	Intents = (gateway.IntentDirectMessageReactions |
-		gateway.IntentDirectMessageTyping |
-		gateway.IntentDirectMessages |
+	// only what a listener handles: guild join/leave/update, voice states,
+	// guild messages (with content), emoji updates (reaction pool).
+	// Interactions need no intent.
+	Intents = gateway.IntentGuilds |
+		gateway.IntentGuildExpressions |
 		gateway.IntentGuildVoiceStates |
-		// gateway.IntentAutoModerationConfiguration |
-		// gateway.IntentAutoModerationExecution |
-		// gateway.IntentDirectMessageReactions |
-		// gateway.IntentGuildEmojisAndStickers |
-		gateway.IntentGuildIntegrations |
-		gateway.IntentGuildInvites |
-		// gateway.IntentsGuildMembers |
-		gateway.IntentGuildMessageReactions |
-		gateway.IntentGuildMessageTyping |
 		gateway.IntentGuildMessages |
-		// gateway.IntentGuildModeration |
-		// gateway.IntentGuildPresences |
-		// gateway.IntentGuildScheduledEvents |
-		// gateway.IntentGuildVoiceStates |
-		gateway.IntentGuildWebhooks |
-		gateway.IntentGuilds |
-		gateway.IntentMessageContent)
+		gateway.IntentMessageContent
 
 	log.Println("Config initialized")
 }

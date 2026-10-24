@@ -1,9 +1,7 @@
 package commands
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -47,12 +45,12 @@ func (h *SlashCommandsHandler) vcJoinCommand(client *bot.Client, i *events.Appli
 	}
 
 	go func() {
-		vcCtx, _ := context.WithCancel(context.Background())
+		vcCtx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
 		// step 2: join the voice channel
-		conn := h.Client.VoiceManager.CreateConn(guildID)
-		err = conn.Open(vcCtx, *voiceState.ChannelID, false, false)
-		if err != nil || conn.Gateway().Status() != voice.StatusReady {
+		sess, err := helpers.Join(vcCtx, h.Client.VoiceManager, guildID, *voiceState.ChannelID)
+		if err != nil {
 			channel, _ := h.Client.Caches.Channel(*voiceState.ChannelID)
 			var channelName string
 			if channel != nil {
@@ -61,6 +59,9 @@ func (h *SlashCommandsHandler) vcJoinCommand(client *bot.Client, i *events.Appli
 				channelName = "unknown"
 			}
 			content := fmt.Sprintf("Failed to join the voice channel: %s", channelName)
+			if errors.Is(err, helpers.ErrInVoice) {
+				content = "I am already in a voice channel in this server."
+			}
 			logger.Errorf("%s %v", content, err)
 			_, err := client.Rest.UpdateInteractionResponse(client.ApplicationID, i.Token(), discord.NewMessageUpdate().WithContent(content))
 			if err != nil {
@@ -88,40 +89,39 @@ func (h *SlashCommandsHandler) vcJoinCommand(client *bot.Client, i *events.Appli
 		chainDoc, err := h.ChainsService.GetChainConf(vcCtx, guildID.String())
 		if err != nil {
 			logger.Errorf("Failed to retrieve chain document: %v", err)
+			sess.Leave()
 			return
 		}
-		provider, err := tts.GenerateTTSProvider("i am here", chainDoc.TTSLanguage)
+		provider, err := tts.PhraseProvider("i am here", chainDoc.TTSLanguage)
 		if err != nil {
 			logger.Errorf("Failed to generate TTS provider: %v", err)
-			conn.Close(vcCtx)
+			sess.Leave()
 			return
 		}
-		if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
+		if err := sess.Play(vcCtx, provider); err != nil {
 			if !errors.Is(err, io.EOF) {
 				logger.Errorf("Failed to stream audio in '%s' in '%s': %v", channelName, chainDoc.Name, err)
 			}
 		}
 
 		// step 5: start listening in the vc
-		listenVc(h, i, conn, vcCtx, voiceChannel, chainDoc)
+		listenVc(h, i, sess, vcCtx, *voiceState.ChannelID, channelName, chainDoc)
 	}()
 
 }
 
-func getVCUsers(h *SlashCommandsHandler, guildID snowflake.ID, channelID snowflake.ID) ([]discord.Member, error) {
-	var users []discord.Member
+func countVCUsers(h *SlashCommandsHandler, guildID snowflake.ID, channelID snowflake.ID) int {
+	n := 0
 	for vs := range h.Client.Caches.VoiceStates(guildID) {
-		if vs.ChannelID != nil && *vs.ChannelID == channelID {
-			member, ok := h.Client.Caches.Member(guildID, vs.UserID)
-			if ok {
-				users = append(users, member)
-			}
+		if vs.ChannelID != nil && *vs.ChannelID == channelID && vs.UserID != h.Client.ID() {
+			n++
 		}
 	}
-	return users, nil
+	return n
 }
 
-func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteractionCreate, conn voice.Conn, vcCtx context.Context, voiceChannel discord.Channel, chainConf *guilds.Config) {
+func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteractionCreate, sess *helpers.Session, vcCtx context.Context, channelID snowflake.ID, channelName string, chainConf *guilds.Config) {
+	conn := sess.Conn
 	var ttsMutex sync.Mutex
 	var doneOnce sync.Once
 	done := make(chan struct{})
@@ -133,13 +133,6 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 
 	guildID := *event.GuildID()
 	botUserID := h.Client.ID()
-	var channelName string
-	if voiceChannel != nil {
-		channelName = voiceChannel.Name()
-	} else {
-		channelName = "unknown"
-	}
-
 	// Listen for voice state updates to detect when we should leave
 	listener := bot.NewListenerFunc(
 		func(e events.GuildVoiceStateUpdate) {
@@ -153,20 +146,22 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 				return
 			}
 
-			currentUsers, _ := getVCUsers(h, guildID, voiceChannel.ID())
-			if len(currentUsers) < 1 { // All other users have left
+			if countVCUsers(h, guildID, channelID) < 1 { // All other users have left
 				triggerCleanup()
 			}
 		},
 	)
 	h.Client.EventManager.AddEventListeners(listener)
+	if countVCUsers(h, guildID, channelID) < 1 {
+		// everyone left while joining, before the listener was there to see it
+		triggerCleanup()
+	}
 
 	// use the 'done' channel to instruct other goroutines to stop *before* cleanup.
 	defer func(updateListener bot.EventListener) {
 		h.Client.RemoveEventListeners(updateListener)
 		triggerCleanup() // safely closes the done channel exactly once
-		conn.Close(vcCtx)
-		stt.FreeRecognizer(chainConf.ID)
+		sess.Leave()
 		logger.Infof("Cleanup complete for VC '%s' in '%s'", channelName, chainConf.Name)
 	}(listener)
 
@@ -188,81 +183,94 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 		}
 	}()
 
-	go func() {
-		pcmChan := make(chan *helpers.PCMPacket, 10)
-		receiver := helpers.NewVoskOpusReceiver(chainConf.ID, chainConf.TTSLanguage, pcmChan)
+	speak := func() {
+		// one utterance at a time; triggers while speaking are dropped
+		if !ttsMutex.TryLock() {
+			return
+		}
+		defer ttsMutex.Unlock()
 
-		// Register the opus frame receiver with the voice connection
+		if conn.Gateway().Status() != voice.StatusReady {
+			logger.Warnf("Voice connection not ready before streaming, skipping...")
+			return
+		}
+
+		msg, err := h.ChainsService.GenerateFiltered(vcCtx, guildID.String(), 10)
+		if err != nil {
+			logger.Errorf("Failed to generate random text in '%s' in '%s': %v", channelName, chainConf.Name, err)
+			return
+		}
+		if msg == "" {
+			logger.Warnf("Generated empty msg in vc handler")
+			return
+		}
+		provider, err := tts.GenerateTTSProvider(msg, chainConf.TTSLanguage)
+		if err != nil {
+			logger.Errorf("Failed to generate random TTS provider in '%s' in '%s': %v", channelName, chainConf.Name, err)
+			return
+		}
+		if err := sess.Play(vcCtx, provider); err != nil {
+			if !errors.Is(err, io.EOF) {
+				logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", channelName, chainConf.Name, err)
+				triggerCleanup()
+			}
+		}
+	}
+
+	onUtterance := func(text string) {
+		if text == "" {
+			return
+		}
+		h.ChainsService.UpdateChainState(vcCtx, guildID.String(), []string{text})
+		if strings.Contains(text, "rolando") || utils.RatedChoice(chainConf.ReplyRate) {
+			go speak()
+		}
+	}
+
+	go func() {
+		pcmChan := make(chan *helpers.PCMPacket, 100)
+		receiver := helpers.NewSpeechReceiver(pcmChan)
 		conn.SetOpusFrameReceiver(receiver)
 
+		speakers := map[snowflake.ID]*speaker{}
 		defer func() {
 			receiver.Close()
+			for _, sp := range speakers {
+				sp.rec.Free()
+			}
 		}()
 
+		ticker := time.NewTicker(speechFlushInterval)
+		defer ticker.Stop()
 		for {
 			select {
-			case packet, ok := <-pcmChan:
-				if !ok || packet == nil {
-					logger.Warnf("PCM channel closed. initiating cleanup...")
-					triggerCleanup()
-					return
-				}
-
-				if conn.Gateway().Status() != voice.StatusReady {
-					logger.Warnf("Voice connection lost during PCM processing, initiating cleanup...")
-					triggerCleanup()
-					return
-				}
-
-				pcm := packet.Sequence
-				var audioData bytes.Buffer
-				binary.Write(&audioData, binary.LittleEndian, pcm)
-				text, err := stt.SpeechToTextNative(&audioData, chainConf.TTSLanguage, chainConf.ID)
-				if err != nil {
-					logger.Errorf("Failed Speech to Text: %v", err)
+			case packet := <-pcmChan:
+				if packet.UserID == botUserID {
 					continue
 				}
+				sp, ok := speakers[packet.UserID]
+				if !ok {
+					rec, err := stt.NewRecognizer(chainConf.TTSLanguage)
+					if err != nil {
+						logger.Errorf("Failed Speech to Text: %v", err)
+						continue
+					}
+					sp = &speaker{rec: rec}
+					speakers[packet.UserID] = sp
+				}
+				onUtterance(sp.add(packet.PCM))
 
-				random := utils.GetRandom(1, 1000)
-				if text != "" {
-					h.ChainsService.UpdateChainState(vcCtx, guildID.String(), []string{text})
-					if strings.Contains(text, "rolando") {
-						random = 1
+			case now := <-ticker.C:
+				for id, sp := range speakers {
+					idle := now.Sub(sp.last)
+					if sp.pending && idle >= speechSilence {
+						onUtterance(sp.flush())
+					}
+					if idle >= speakerIdleTTL {
+						sp.rec.Free()
+						delete(speakers, id)
 					}
 				}
-				if random != 1 {
-					continue
-				}
-				go func() {
-					ttsMutex.Lock()
-					defer ttsMutex.Unlock()
-
-					if conn.Gateway().Status() != voice.StatusReady {
-						logger.Warnf("Voice connection not ready before streaming, skipping...")
-						return
-					}
-
-					msg, err := h.ChainsService.GenerateFiltered(vcCtx, guildID.String(), 10)
-					if err != nil {
-						logger.Errorf("Failed to generate random text in '%s' in '%s': %v", channelName, chainConf.Name, err)
-						return
-					}
-					if msg == "" {
-						logger.Warnf("Generated empty msg in vc handler")
-						return
-					}
-					provider, err := tts.GenerateTTSProvider(msg, chainConf.TTSLanguage)
-					if err != nil {
-						logger.Errorf("Failed to generate random TTS provider in '%s' in '%s': %v", channelName, chainConf.Name, err)
-						return
-					}
-					if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
-						if !errors.Is(err, io.EOF) {
-							logger.Errorf("Failed to stream random TTS audio in '%s' in '%s': %v", channelName, chainConf.Name, err)
-							triggerCleanup()
-						}
-					}
-				}()
 
 			case <-done:
 				logger.Infof("Received shutdown signal in Audio Processing goroutine, exiting")
@@ -279,4 +287,43 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 	case <-time.After(8 * time.Hour): // timeout after 8 hours
 		logger.Infof("VC Timeout in '%s' in '%s', initiating cleanup...", channelName, chainConf.Name)
 	}
+}
+
+const (
+	speechChunk         = stt.SampleRate * 2 / 5 // 200ms of s16le
+	speechFlushInterval = 250 * time.Millisecond
+	speechSilence       = 700 * time.Millisecond
+	speakerIdleTTL      = 2 * time.Minute
+)
+
+type speaker struct {
+	rec     *stt.Recognizer
+	buf     []byte
+	last    time.Time
+	pending bool
+}
+
+// add buffers a frame and feeds Vosk every speechChunk, returning a finished
+// utterance if Vosk detected one.
+func (sp *speaker) add(pcm []int16) string {
+	for _, v := range pcm {
+		sp.buf = append(sp.buf, byte(v), byte(v>>8))
+	}
+	sp.last = time.Now()
+	sp.pending = true
+	if len(sp.buf) < speechChunk {
+		return ""
+	}
+	text := sp.rec.Accept(sp.buf)
+	sp.buf = sp.buf[:0]
+	return text
+}
+
+func (sp *speaker) flush() string {
+	if len(sp.buf) > 0 {
+		sp.rec.Accept(sp.buf)
+		sp.buf = sp.buf[:0]
+	}
+	sp.pending = false
+	return sp.rec.Flush()
 }

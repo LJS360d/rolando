@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"errors"
 	"rolando/internal/config"
 	"rolando/internal/discord/helpers"
 	"rolando/internal/logger"
@@ -14,81 +15,58 @@ import (
 
 // for random vc joins (uses vc join rate)
 
-// handler for VOICE_STATE_UPDATE event
+// handler for VOICE_STATE_UPDATE event. Runs on the shard's read loop and
+// fires for every mute, deafen and stream toggle, so everything up to the
+// dice roll is local; the rest runs in its own goroutine.
 func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
-	ctx := context.Background()
-
-	// Convert snowflake IDs to strings for internal use
-	userID := e.VoiceState.UserID.String()
-	guildID := e.VoiceState.GuildID.String()
-	botID := h.Client.ID().String()
-
-	if userID == botID || userID == "" {
-		// ignore updates for self or empty user ID
+	vs := e.VoiceState
+	if vs.UserID == h.Client.ID() || vs.UserID == 0 {
 		return
 	}
-	if e.VoiceState.ChannelID == nil || e.VoiceState.GuildDeaf || e.VoiceState.GuildMute || e.VoiceState.SelfDeaf || e.VoiceState.SelfMute {
-		// ignore without channel (user left voice channel)
-		// ignore user deafening or muting
+	if vs.ChannelID == nil || vs.GuildDeaf || vs.GuildMute || vs.SelfDeaf || vs.SelfMute {
+		// ignore users leaving, muting or deafening
 		return
 	}
-
-	// Check if already connected in this guild
-	conn := h.Client.VoiceManager.GetConn(e.VoiceState.GuildID)
-	if conn != nil {
-		logger.Warnf("User %s tried to join voice channel %s, but bot is already connected in guild %s", userID, e.VoiceState.ChannelID, guildID)
-		// stop if already in use in another vc within the guild
+	if old := e.OldVoiceState.ChannelID; old != nil && *old == *vs.ChannelID {
+		// same channel: some other state toggled
 		return
 	}
-
-	// Get channel information
-	channel, ok := h.Client.Caches.Channel(*e.VoiceState.ChannelID)
+	if helpers.InVoice(vs.GuildID) {
+		// already in a vc within the guild
+		return
+	}
+	guildID := vs.GuildID.String()
+	chainDoc, err := h.ChainsService.Guilds.PeekConfig(guildID)
+	if err != nil || chainDoc.VcJoinRate == 0 || !utils.RatedChoice(chainDoc.VcJoinRate) {
+		return
+	}
+	channel, ok := h.Client.Caches.Channel(*vs.ChannelID)
 	if !ok {
 		logger.Errorf("Failed to fetch channel for voice state update event")
 		return
 	}
-
-	chainDoc, err := h.ChainsService.GetChainConf(ctx, guildID)
-	if err != nil {
-		logger.Errorf("Failed to fetch chain document for guild %s: %v", guildID, err)
-		return
-	}
-
-	// Get member for subscription check
-	member, err := h.Client.Rest.GetMember(e.VoiceState.GuildID, e.VoiceState.UserID)
-	if err != nil {
-		logger.Errorf("Failed to fetch member for voice state update: %v", err)
-		return
-	}
-	if member == nil {
-		logger.Warnf("Failed to fetch member for voice state update: member is nil")
-		return
-	}
-
-	hasVcFeatures := GuildSubscriptionCheck(h.Client, *member, chainDoc, config.VoiceChatFeaturesSKU)
-	if !hasVcFeatures {
-		return
-	}
-	if chainDoc.VcJoinRate == 0 {
-		// never join for guilds that have it disabled
-		return
-	}
-	if utils.GetRandom(1, chainDoc.VcJoinRate) != 1 {
-		return
-	}
+	member := e.Member
+	// the gateway member carries no guild, and the paywall check filters entitlements by it
+	member.GuildID = vs.GuildID
 
 	go func() {
+		if !GuildSubscriptionCheck(h.Client, member, chainDoc, config.VoiceChatFeaturesSKU) {
+			return
+		}
 		time.Sleep(time.Duration(2 * time.Second))
 		vcCtx, vcCancel := context.WithCancel(context.Background())
 		defer vcCancel()
 
 		// Create and open voice connection
-		conn := h.Client.VoiceManager.CreateConn(e.VoiceState.GuildID)
-		err := conn.Open(vcCtx, *e.VoiceState.ChannelID, false, false)
+		sess, err := helpers.Join(vcCtx, h.Client.VoiceManager, vs.GuildID, *vs.ChannelID)
+		if errors.Is(err, helpers.ErrInVoice) {
+			return
+		}
 		if err != nil {
 			logger.Errorf("Failed to join voice channel '%s': %v", channel.Name(), err)
 			return
 		}
+		defer sess.Leave()
 
 		content, err := h.ChainsService.GenerateFiltered(vcCtx, guildID, 100)
 		if err != nil {
@@ -98,15 +76,12 @@ func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
 		provider, err := tts.GenerateTTSProvider(content, chainDoc.TTSLanguage)
 		if err != nil {
 			logger.Errorf("Failed to generate TTS provider: %v", err)
-			conn.Close(vcCtx)
 			return
 		}
 
-		if err := helpers.SendTTSToConn(vcCtx, conn, provider); err != nil {
+		if err := sess.Play(vcCtx, provider); err != nil {
 			logger.Errorf("Failed to stream audio: %v", err)
 		}
-
-		conn.Close(vcCtx)
 
 		logger.Infof("Randomly spoke in voice channel '%s' in '%s'", channel.Name(), chainDoc.Name)
 	}()

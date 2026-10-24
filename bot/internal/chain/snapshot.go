@@ -22,7 +22,7 @@ const (
 
 var ErrSnapshot = errors.New("invalid snapshot")
 
-// WriteFile writes the snapshot atomically (tmp + fsync + rename) and clears the dirty flag.
+// WriteFile writes the snapshot atomically (tmp + fsync + rename) and marks what it wrote as clean; changes made meanwhile stay dirty.
 func (c *Chain) WriteFile(path string) error {
 	tmp := path + ".tmp"
 	f, err := os.Create(tmp)
@@ -33,6 +33,7 @@ func (c *Chain) WriteFile(path string) error {
 	defer f.Close()
 
 	c.mu.RLock()
+	gen := c.gen
 	err = c.encode(f)
 	c.mu.RUnlock()
 	if err != nil {
@@ -48,7 +49,7 @@ func (c *Chain) WriteFile(path string) error {
 		return err
 	}
 	c.mu.Lock()
-	c.dirty = false
+	c.saved = max(c.saved, gen)
 	c.mu.Unlock()
 	return nil
 }
@@ -72,12 +73,13 @@ func (c *Chain) encode(f io.Writer) error {
 		u16(uint16(len(t)))
 		w.WriteString(t)
 	}
-	u32(uint32(len(c.keys)))
-	for _, k := range c.keys {
-		w.WriteString(k)
-		s := c.next[k]
-		u32(uint32(len(s.edges)))
-		for _, e := range s.edges {
+	u32(uint32(len(c.edges)))
+	for i, es := range c.edges {
+		for _, id := range c.key(i) {
+			u32(id)
+		}
+		u32(uint32(len(es)))
+		for _, e := range es {
 			u32(e.tok)
 			u32(e.cnt)
 		}
@@ -90,8 +92,9 @@ func (c *Chain) encode(f io.Writer) error {
 	return err
 }
 
-// ReadFile loads a snapshot built with n-gram size n.
+// ReadFile loads a snapshot built with n-gram size n, clamped like New.
 func ReadFile(path string, n int) (*Chain, error) {
+	n = min(max(n, 2), MaxN)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -121,35 +124,72 @@ func ReadFile(path string, n int) (*Chain, error) {
 	c.watermark = int64(le.Uint64(take(8)))
 	c.messages = int64(le.Uint64(take(8)))
 	nt := le.Uint32(take(4))
-	c.tokens = make([]string, 0, nt)
+	// one string backs every token: find where the token section ends
+	end := 0
 	for range nt {
-		t := string(take(int(le.Uint16(take(2)))))
-		if err != nil {
-			return nil, err
+		if end+2 > len(r) {
+			return nil, ErrSnapshot
 		}
+		end += 2 + int(le.Uint16(r[end:]))
+	}
+	if err != nil || end > len(r) {
+		return nil, ErrSnapshot
+	}
+	section := string(take(end))
+	c.tokens = make([]string, 0, nt)
+	for off := 0; off < len(section); {
+		l := int(le.Uint16([]byte(section[off : off+2])))
+		t := section[off+2 : off+2+l]
+		off += 2 + l
 		c.ids[t] = uint32(len(c.tokens))
 		c.tokens = append(c.tokens, t)
 		c.bytes += uint64(len(t) + tokenOverhead)
 	}
 	np := le.Uint32(take(4))
-	c.keys = make([]string, 0, np)
-	keyLen := 4 * (n - 1)
+	k := n - 1
+	if err != nil || uint64(np)*uint64(4*k+4) > uint64(len(r)) {
+		return nil, ErrSnapshot
+	}
+	c.keys = make([]uint32, 0, int(np)*k)
+	c.edges = make([][]edge, 0, np)
+	// every edge comes from one allocation; prefixes get capped windows, so
+	// a later append moves that prefix out instead of overwriting the next
+	rest := uint64(len(r)) - uint64(np)*uint64(4*k+4)
+	if rest%8 != 0 {
+		return nil, ErrSnapshot
+	}
+	arena := make([]edge, rest/8)
 	for range np {
-		k := string(take(keyLen))
+		key := take(4 * k)
 		ne := le.Uint32(take(4))
 		if err != nil || uint64(ne)*8 > uint64(len(r)) {
 			return nil, ErrSnapshot
 		}
-		s := &state{idx: len(c.keys), edges: make([]edge, ne)}
-		for i := range s.edges {
-			s.edges[i] = edge{le.Uint32(take(4)), le.Uint32(take(4))}
-			if s.edges[i].tok >= nt {
+		start := len(c.keys)
+		for j := range k {
+			id := le.Uint32(key[4*j:])
+			if id >= nt {
+				return nil, ErrSnapshot
+			}
+			c.keys = append(c.keys, id)
+		}
+		if _, dup := c.index.get(c.keys[start:]); dup {
+			return nil, ErrSnapshot
+		}
+		c.index.put(c.keys[start:], int32(len(c.edges)))
+		if uint64(ne) > uint64(len(arena)) {
+			return nil, ErrSnapshot
+		}
+		es := arena[:ne:ne]
+		arena = arena[ne:]
+		for i := range es {
+			es[i] = edge{le.Uint32(take(4)), le.Uint32(take(4))}
+			if es[i].tok >= nt {
 				return nil, ErrSnapshot
 			}
 		}
-		c.next[k] = s
-		c.keys = append(c.keys, k)
-		c.bytes += uint64(len(k)+prefixOverhead) + uint64(edgeSize*ne)
+		c.edges = append(c.edges, es)
+		c.bytes += c.prefixBytes() + uint64(edgeSize*ne)
 	}
 	if err != nil || len(r) != 0 {
 		return nil, ErrSnapshot
