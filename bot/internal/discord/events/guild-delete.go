@@ -11,13 +11,13 @@ import (
 func (h *EventsHandler) onGuildDelete(e *events.GuildLeave) {
 	ctx := context.Background()
 	guildID := e.GuildID.String()
-	chainDoc, err := h.ChainsService.GetChainConf(ctx, guildID)
-	var guildname string
-	if err != nil {
-		logger.Warnf("Chain document not present for guild %s: %s", guildID, err)
-		guildname = guildID
-	} else {
-		guildname = chainDoc.Name
+	if !h.ChainsService.Guilds.Exists(guildID) {
+		logger.Debugf("Left guild '%s' with no local data", guildID)
+		return
+	}
+	guildname := guildID
+	if cfg, err := h.ChainsService.Guilds.PeekConfig(guildID); err == nil && cfg.Name != "" {
+		guildname = cfg.Name
 	}
 	logger.Infof("Left guild '%s'", guildname)
 	h.ChainsService.DeleteChain(ctx, guildID)
