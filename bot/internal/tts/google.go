@@ -42,13 +42,13 @@ func FetchTTS(text, lang string) ([]byte, error) {
 }
 
 // GenerateTTSProvider creates a voice.OpusFrameProvider ready for disgo using Google Translate TTS.
-// It fetches TTS audio, converts it to DCA format using common utilities, and wraps it in an OpusReader.
+// It fetches TTS audio, converts it to DCA format and wraps it in an OpusReader.
 func GenerateTTSProvider(text, lang string) (voice.OpusFrameProvider, error) {
 	mp3Data, err := FetchTTS(text, lang)
 	if err != nil {
 		return nil, err
 	}
-	return GenerateProviderFromAudio(mp3Data)
+	return GenerateProviderFromMP3(mp3Data)
 }
 
 var phrases struct {
@@ -57,7 +57,7 @@ var phrases struct {
 }
 
 // PhraseProvider is GenerateTTSProvider for fixed phrases: the encoded audio
-// is kept, so they cost no fetch or ffmpeg run after the first time.
+// is kept, so they cost no fetch or encode after the first time.
 func PhraseProvider(text, lang string) (voice.OpusFrameProvider, error) {
 	key := lang + "\x00" + text
 	phrases.Lock()
@@ -68,7 +68,7 @@ func PhraseProvider(text, lang string) (voice.OpusFrameProvider, error) {
 		if err != nil {
 			return nil, err
 		}
-		if dca, err = AudioToDCA(mp3); err != nil {
+		if dca, err = MP3ToDCA(mp3); err != nil {
 			return nil, err
 		}
 		phrases.Lock()

@@ -9,6 +9,7 @@ require (
 	github.com/glebarez/go-sqlite v1.23.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/google/uuid v1.6.0
+	github.com/hajimehoshi/go-mp3 v0.3.4
 	gorm.io/gorm v1.31.2
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
