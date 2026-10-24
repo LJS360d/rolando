@@ -45,5 +45,8 @@ vosk*.zip
 
 dave
 
+/pico/
+internal/tts/pico/ccgo_linux_amd64.go
+
 /data/
 migrate

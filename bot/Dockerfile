@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 WORKDIR /app
 COPY Makefile ./
-RUN make dave vosk && find dave vosk -exec touch -h -d @0 {} +
+RUN make dave vosk pico && find dave vosk pico -exec touch -h -d @0 {} +
 
 FROM golang:1.26-trixie AS builder
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 WORKDIR /app
 COPY --from=assets /app/dave ./dave
 COPY --from=assets /app/vosk/lib ./vosk/lib
-RUN mkdir -p vosk/models
+RUN mkdir -p vosk/models pico/lang
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
@@ -44,6 +44,7 @@ WORKDIR /app
 COPY --link --from=assets /app/vosk/models /app/vosk/models
 COPY --link --from=assets /app/vosk/lib /app/vosk/lib
 COPY --link --from=assets /app/dave/lib /app/dave/lib
+COPY --link --from=assets /app/pico/lang /app/pico/lang
 COPY --link --from=builder /app/bin/rolando /usr/local/bin/rolando
 
 ENV LD_LIBRARY_PATH=/app/vosk/lib:/app/dave/lib \

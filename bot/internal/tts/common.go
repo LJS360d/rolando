@@ -4,60 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 
-	"github.com/disgoorg/disgo/voice"
-	"github.com/hajimehoshi/go-mp3"
 	"layeh.com/gopus"
 )
-
-// MP3ToDCA decodes MP3 audio to mono PCM and encodes it to DCA format
-// (length-prefixed Opus frames).
-func MP3ToDCA(mp3Data []byte) ([]byte, error) {
-	dec, err := mp3.NewDecoder(bytes.NewReader(mp3Data))
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode mp3: %w", err)
-	}
-	stereo, err := io.ReadAll(dec)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode mp3: %w", err)
-	}
-
-	// go-mp3 always yields 16-bit little-endian stereo
-	pcm := make([]int16, len(stereo)/4)
-	for i := range pcm {
-		l := int16(binary.LittleEndian.Uint16(stereo[i*4:]))
-		r := int16(binary.LittleEndian.Uint16(stereo[i*4+2:]))
-		pcm[i] = int16((int32(l) + int32(r)) / 2)
-	}
-
-	rate := dec.SampleRate()
-	switch rate {
-	case 8000, 12000, 16000, 24000, 48000:
-	default:
-		pcm, rate = resample(pcm, rate, 48000), 48000
-	}
-	return PCMToDCA(pcm, rate)
-}
-
-// resample converts mono PCM between sample rates by linear interpolation.
-func resample(pcm []int16, from, to int) []int16 {
-	if len(pcm) == 0 {
-		return pcm
-	}
-	out := make([]int16, len(pcm)*to/from)
-	for i := range out {
-		pos := float64(i) * float64(from) / float64(to)
-		j := int(pos)
-		if j+1 >= len(pcm) {
-			out[i] = pcm[len(pcm)-1]
-			continue
-		}
-		frac := pos - float64(j)
-		out[i] = int16(float64(pcm[j])*(1-frac) + float64(pcm[j+1])*frac)
-	}
-	return out
-}
 
 // PCMToDCA encodes mono PCM at an Opus-supported sample rate to DCA format.
 func PCMToDCA(pcm []int16, sampleRate int) ([]byte, error) {
@@ -92,13 +41,4 @@ func PCMToDCA(pcm []int16, sampleRate int) ([]byte, error) {
 	}
 
 	return dcaBuf.Bytes(), nil
-}
-
-// GenerateProviderFromMP3 converts MP3 audio to a voice.OpusFrameProvider.
-func GenerateProviderFromMP3(mp3Data []byte) (voice.OpusFrameProvider, error) {
-	dcaData, err := MP3ToDCA(mp3Data)
-	if err != nil {
-		return nil, err
-	}
-	return voice.NewOpusReader(bytes.NewReader(dcaData)), nil
 }

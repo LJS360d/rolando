@@ -201,7 +201,7 @@ func step(name string, fn func()) {
 
 // setMemoryLimit defaults the Go soft memory limit to 80% of the cgroup limit
 // when GOMEMLIMIT is unset, so the GC works harder before the container OOMs.
-// Native memory (vosk, dave) is not counted by the Go runtime.
+// Native memory (vosk, dave, pico's libc arenas) is not counted by the Go runtime.
 func setMemoryLimit() {
 	if os.Getenv("GOMEMLIMIT") != "" {
 		return

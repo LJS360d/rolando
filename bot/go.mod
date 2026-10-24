@@ -9,9 +9,9 @@ require (
 	github.com/glebarez/go-sqlite v1.23.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/google/uuid v1.6.0
-	github.com/hajimehoshi/go-mp3 v0.3.4
 	gorm.io/gorm v1.31.2
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
+	modernc.org/libc v1.79.0
 )
 
 require (
@@ -27,7 +27,6 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sasha-s/go-csync v0.0.0-20240107134140-fcbab37b09ad // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	modernc.org/libc v1.79.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.61.0 // indirect

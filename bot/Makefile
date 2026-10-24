@@ -1,4 +1,4 @@
-.PHONY: all build run dev test lint clean vosk dave
+.PHONY: all build run dev test lint clean vosk dave pico pico-gen
 
 VERSION      ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 BUILD_DIR    := bin
@@ -37,6 +37,18 @@ VOSK_MODEL_IT     := vosk-model-small-it-0.22
 VOSK_MODEL_DE     := vosk-model-small-de-0.15
 VOSK_MODEL_ES     := vosk-model-small-es-0.42
 
+# ── PICO ──────────────────────────────────────────────────────────────────────
+
+# SVOX Pico, transpiled to pure Go (internal/tts/pico, regenerate with pico-gen);
+# only the voice files are downloaded
+PICO_REPO        := https://android.googlesource.com/platform/external/svox/+
+PICO_COMMIT      := c5a33e4fdc55b63d4aa33aecefcc91b63da921e7
+PICO_LANG        := pico/lang
+PICO_VOICES      := en-GB_ta.bin en-GB_kh0_sg.bin it-IT_ta.bin it-IT_cm0_sg.bin \
+                    de-DE_ta.bin de-DE_gl0_sg.bin es-ES_ta.bin es-ES_zl0_sg.bin
+PICO_GEN         := internal/tts/pico/ccgo_linux_amd64.go
+CCGO             := modernc.org/ccgo/v4@v4.38.0
+
 # ── CGO ───────────────────────────────────────────────────────────────────────
 
 DAVE_LIB_PATH    := $(PWD)/$(DAVE_LIB_DIR)
@@ -58,7 +70,7 @@ all: dev
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
-$(BUILDPATH): $(BUILD_DIR) vosk dave
+$(BUILDPATH): $(BUILD_DIR) vosk dave pico
 	@echo "[build] compiling $(BINARY_NAME) $(VERSION) (env=$(ENV))"
 	$(CGO_FLAGS) go build $(LDFLAGS) -o $(BUILDPATH) $(MAIN_PACKAGE)
 	@echo "[build] done -> $(BUILDPATH)"
@@ -76,7 +88,7 @@ dev: ENV=development
 dev: LDFLAGS=$(LDFLAGS_DEV)
 dev: build-force run
 
-test: vosk dave
+test: vosk dave pico
 	$(CGO_FLAGS) $(RUNTIME_FLAGS) go test ./...
 
 lint:
@@ -88,7 +100,7 @@ lint:
 clean:
 	@echo "[clean] removing build artifacts"
 	@go clean
-	@rm -rf $(BUILD_DIR) vosk dave
+	@rm -rf $(BUILD_DIR) vosk dave pico
 
 # ── DAVE ──────────────────────────────────────────────────────────────────────
 
@@ -138,3 +150,30 @@ $(VOSK_MODELS):
 	$(call download-model,$(VOSK_MODEL_ES),es)
 	@rm -rf $(VOSK_MODELS)/.tmp
 	@echo "[vosk] all models ready"
+
+# ── PICO ──────────────────────────────────────────────────────────────────────
+
+pico: $(PICO_LANG)
+
+$(PICO_LANG):
+	@echo "[pico] downloading voices"
+	@mkdir -p $(PICO_LANG).tmp
+	@set -e; for f in $(PICO_VOICES); do \
+		$(CURL) "$(PICO_REPO)/$(PICO_COMMIT)/pico/lang/$$f?format=TEXT" -o $(PICO_LANG).tmp/$$f.b64; \
+		base64 -d $(PICO_LANG).tmp/$$f.b64 > $(PICO_LANG).tmp/$$f; \
+		rm $(PICO_LANG).tmp/$$f.b64; \
+	done
+	@mv $(PICO_LANG).tmp $(PICO_LANG)
+	@echo "[pico] voices ready"
+
+# The C sources need two fixes for ccgo: a missing <stdint.h> and GCC-only
+# '\x010'-style character constants.
+pico-gen:
+	@echo "[pico] transpiling svox $(PICO_COMMIT) to $(PICO_GEN)"
+	@rm -rf pico/.src && mkdir -p pico/.src $(dir $(PICO_GEN))
+	@$(CURL) "$(PICO_REPO)archive/$(PICO_COMMIT)/pico/lib.tar.gz" | tar xz -C pico/.src
+	@sed -i '1i #include <stdint.h>' $$(grep -l uintptr_t pico/.src/*.c)
+	@sed -i -E "s/'\\\\x0([1248])0'/0x\10/" pico/.src/picoktab.c
+	@cd pico/.src && go run $(CCGO) --package-name pico -o $(CURDIR)/$(PICO_GEN) -I. *.c
+	@rm -rf pico/.src
+	@echo "[pico] generated $(PICO_GEN)"
