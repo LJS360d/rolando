@@ -48,14 +48,17 @@ export type AdminPage = {
   pages: number;
   started: number;
   loaded: number;
+  batch: BatchStatus | null;
 };
+
+export type BatchStatus = { op: string; total: number; ok: number; failed: number; started: number };
 
 export type MessagesPage = { messages: string[]; mentions?: Record<string, string>; page: number; pages: number };
 
 export const browser = typeof window !== "undefined";
 export const login = () => location.assign("/api/auth/login");
 
-export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request(method: string, path: string, body?: unknown) {
   const res = await fetch(`/api${path}`, {
     method,
     headers: method === "GET" ? undefined : { "Content-Type": "application/json" },
@@ -64,7 +67,25 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
   if (res.status === 401) login();
   if (res.status === 429) throw new Error("Too many requests, slow down a bit.");
   if (!res.ok) throw new Error((await res.text()) || res.statusText);
+  return res;
+}
+
+export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await request(method, path, body);
   return res.status === 204 ? (undefined as T) : res.json();
+}
+
+// ndjson yields each line of a streamed NDJSON response as it arrives.
+export async function* ndjson<T>(method: string, path: string, body?: unknown): AsyncGenerator<T> {
+  const reader = (await request(method, path, body)).body!.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    const lines = (buf + value).split("\n");
+    buf = lines.pop()!;
+    for (const l of lines) if (l) yield JSON.parse(l);
+  }
 }
 
 export type Resource<T> = { data?: T; error?: string };

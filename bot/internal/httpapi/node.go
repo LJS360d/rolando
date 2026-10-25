@@ -26,6 +26,8 @@ func (s *Server) nodeAPI() http.Handler {
 		}
 		json.NewEncoder(w).Encode(s.broadcastLocal(req.Content, req.Guilds))
 	})
+	mux.HandleFunc("POST /node/batch", s.nodeBatch)
+	mux.HandleFunc("POST /node/batch/cancel", nodeCancelBatch)
 	mux.Handle("/api/guilds/{id}/", s.guildRoutes())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Node-Secret")), []byte(config.NodeSecret)) != 1 {

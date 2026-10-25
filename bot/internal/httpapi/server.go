@@ -76,6 +76,8 @@ func (s *Server) public() http.Handler {
 	mux.HandleFunc("GET /api/me/guilds", s.myGuilds)
 	mux.HandleFunc("GET /api/admin/guilds", s.admin)
 	mux.HandleFunc("POST /api/admin/broadcast", s.broadcast)
+	mux.HandleFunc("POST /api/admin/batch", s.batch)
+	mux.HandleFunc("POST /api/admin/batch/cancel", s.cancelBatch)
 	mux.Handle("/api/guilds/{id}/", s.routeGuild(s.guildRoutes()))
 	return jsonOnly(mux)
 }
@@ -329,23 +331,11 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 	if !requireOwner(w, r) {
 		return
 	}
-	all, ok := adminCache.get("")
-	if !ok {
-		all.rows = s.localGuilds(nil)
-		var remote map[int][]GuildRow
-		// shared by later requests: don't let this one's cancellation cut it short
-		remote, errs := cluster.GetJSON[[]GuildRow](context.WithoutCancel(r.Context()), "/node/guilds")
-		for _, rs := range remote {
-			all.rows = append(all.rows, rs...)
-		}
-		all.errs = errs
-		if len(errs) == 0 {
-			adminCache.put("", all)
-		}
-	}
-	rows, errs := slices.Clone(all.rows), all.errs
-	if q := strings.ToLower(r.URL.Query().Get("q")); q != "" {
-		rows = slices.DeleteFunc(rows, func(g GuildRow) bool { return !strings.Contains(strings.ToLower(g.Name), q) && g.ID != q })
+	all := s.allRows(r.Context())
+	rows, err := filterRows(slices.Clone(all.rows), r.URL.Query())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	size := adminPageSize
 	if r.URL.Query().Has("all") {
@@ -366,14 +356,33 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 	pg := atoiOr(r.URL.Query().Get("page"), 1)
 	start := min((pg-1)*size, len(rows))
 	nodeErrs := map[int]string{}
-	for n, err := range errs {
+	for n, err := range all.errs {
 		nodeErrs[n] = err.Error()
 	}
 	writeJSON(w, map[string]any{
 		"rows": rows[start:min(start+size, len(rows))], "total": len(rows), "errors": nodeErrs,
 		"sort": sortBy, "page": pg, "pages": (len(rows) + size - 1) / size,
 		"started": config.StartupTime.Unix(), "loaded": s.chains.Guilds.Loaded(),
+		"batch": currentStatus(),
 	})
+}
+
+// allRows is every guild in the cluster, cached in adminCache.
+func (s *Server) allRows(ctx context.Context) adminRows {
+	if all, ok := adminCache.get(""); ok {
+		return all
+	}
+	all := adminRows{rows: s.localGuilds(nil)}
+	// shared by later requests: don't let this one's cancellation cut it short
+	remote, errs := cluster.GetJSON[[]GuildRow](context.WithoutCancel(ctx), "/node/guilds")
+	for _, rs := range remote {
+		all.rows = append(all.rows, rs...)
+	}
+	all.errs = errs
+	if len(errs) == 0 {
+		adminCache.put("", all)
+	}
+	return all
 }
 
 // adminCache keeps the cluster-wide listing between page, sort and search
@@ -689,6 +698,38 @@ var configRanges = map[string][2]int{
 	"n_gram_size": {2, 8}, "max_size_mb": {1, 1 << 14}, "markov_max_branches": {0, 1 << 16},
 }
 
+var configBools = []string{"pings", "premium"}
+
+// configFields validates config edits; partial only takes the fields present.
+func configFields(raw map[string]json.RawMessage, partial bool) (map[string]any, error) {
+	fields := map[string]any{}
+	for _, k := range configBools {
+		v, ok := raw[k]
+		if !ok {
+			if !partial {
+				fields[k] = false
+			}
+			continue
+		}
+		var b *bool
+		if err := json.Unmarshal(v, &b); err != nil || b == nil {
+			return nil, fmt.Errorf("%s must be true or false", k)
+		}
+		fields[k] = *b
+	}
+	for k, rg := range configRanges {
+		if _, ok := raw[k]; partial && !ok {
+			continue
+		}
+		v := -1
+		if err := json.Unmarshal(raw[k], &v); err != nil || v < rg[0] || v > rg[1] {
+			return nil, fmt.Errorf("%s must be between %d and %d", k, rg[0], rg[1])
+		}
+		fields[k] = v
+	}
+	return fields, nil
+}
+
 func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 	if !requireOwner(w, r) || !s.requireGuild(w, r) {
 		return
@@ -698,19 +739,10 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fields := map[string]any{}
-	for _, k := range []string{"pings", "premium"} {
-		var b bool
-		json.Unmarshal(raw[k], &b)
-		fields[k] = b
-	}
-	for k, rg := range configRanges {
-		v := -1
-		if err := json.Unmarshal(raw[k], &v); err != nil || v < rg[0] || v > rg[1] {
-			http.Error(w, fmt.Sprintf("%s must be between %d and %d", k, rg[0], rg[1]), http.StatusBadRequest)
-			return
-		}
-		fields[k] = v
+	fields, err := configFields(raw, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	cfg, err := s.chains.UpdateChainMeta(r.Context(), r.PathValue("id"), fields)
 	if err != nil {
@@ -742,13 +774,23 @@ func (s *Server) leave(w http.ResponseWriter, r *http.Request) {
 	if !requireOwner(w, r) {
 		return
 	}
-	id := snowflake.MustParse(r.PathValue("id"))
-	if err := s.client.Rest.LeaveGuild(id); err != nil {
+	if err := s.leaveGuild(r.Context(), r.PathValue("id")); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.chains.DeleteChain(r.Context(), id.String()); err != nil {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) leaveGuild(ctx context.Context, id string) error {
+	sf, err := snowflake.Parse(id)
+	if err != nil {
+		return err
+	}
+	if err := s.client.Rest.LeaveGuild(sf); err != nil {
+		return err
+	}
+	if err := s.chains.DeleteChain(ctx, id); err != nil {
 		logger.Errorf("delete chain after leaving %s: %v", id, err)
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return nil
 }

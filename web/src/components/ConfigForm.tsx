@@ -1,13 +1,18 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, guildId, resource, session, type Config, type GuildRow } from "../lib/api";
 
-const numbers: [keyof Config, string, number, number?][] = [
+export const configNumbers: [keyof Config, string, number, number?][] = [
   ["reply_rate", "Reply rate", 0],
   ["reaction_rate", "Reaction rate", 0],
   ["vc_join_rate", "VC join rate", 0],
   ["n_gram_size", "N-gram size", 2, 8],
   ["max_size_mb", "Max size (MB)", 1],
   ["markov_max_branches", "Max transitions per prefix (0 = unlimited)", 0],
+];
+
+export const configBools: [keyof Config, string][] = [
+  ["pings", "Pings"],
+  ["premium", "Premium"],
 ];
 
 const row = "flex items-center justify-between gap-3 rounded border-l-2 py-0.5 pl-2 text-sm";
@@ -62,13 +67,13 @@ export default function ConfigForm() {
         {changed.length > 0 && <span class="ml-auto rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs font-medium text-indigo-300">{changed.length} unsaved</span>}
       </h2>
       <form class="flex flex-col gap-2" onSubmit={save}>
-        {(["pings", "premium"] as const).map((k) => (
+        {configBools.map(([k, label]) => (
           <label class={`${row} ${mark(k)}`}>
-            {k === "pings" ? "Pings" : "Premium"}
-            <input class="mr-1 size-4" type="checkbox" checked={value(k)} onChange={(e) => set(k, e.currentTarget.checked)} />
+            {label}
+            <input class="mr-1 size-4" type="checkbox" checked={value(k) as boolean} onChange={(e) => set(k, e.currentTarget.checked)} />
           </label>
         ))}
-        {numbers.map(([k, label, min, max]) => (
+        {configNumbers.map(([k, label, min, max]) => (
           <label class={`${row} ${mark(k)}`}>
             {label}
             <input

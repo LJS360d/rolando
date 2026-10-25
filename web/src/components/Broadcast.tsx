@@ -2,9 +2,20 @@ import { useState } from "preact/hooks";
 import { api, resource, type AdminPage } from "../lib/api";
 import { ChainStateBar, GuildIcon } from "./GuildLinks";
 
+// handedOff takes the selection the admin table's "Broadcast to selected" left behind.
+function handedOff() {
+  try {
+    const ids: string[] = JSON.parse(sessionStorage.getItem("broadcast-ids") ?? "[]");
+    sessionStorage.removeItem("broadcast-ids");
+    return new Set(ids);
+  } catch {
+    return new Set<string>();
+  }
+}
+
 export default function Broadcast() {
   const { data, error } = resource<AdminPage>("/admin/guilds?all=1&sort=members").value;
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [picked, setPicked] = useState<Set<string>>(handedOff);
   const [filter, setFilter] = useState("");
   const [result, setResult] = useState<string>();
   const [busy, setBusy] = useState(false);

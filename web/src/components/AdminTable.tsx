@@ -1,7 +1,9 @@
 import { useRef, useState } from "preact/hooks";
-import { adminLoading, adminPage, adminPath } from "../lib/admin";
+import { adminFilters, adminLoading, adminPage, adminParams, adminPath, allMatching, guildFields, selected, setAdminFilters, setAdminQuery } from "../lib/admin";
 import { api, formatBytes, resource, type GuildRow } from "../lib/api";
 import { ChainStateBar, GuildIcon } from "./GuildLinks";
+import { BatchBar, BatchPanel } from "./AdminBatch";
+import FilterBar from "./FilterBar";
 import Pager from "./Pager";
 
 const columns: [string, string][] = [
@@ -38,18 +40,29 @@ function InviteButton({ id }: { id: string }) {
 }
 
 export default function AdminTable() {
-  const q = new URLSearchParams(adminPath.value.split("?")[1]);
-  const sort = q.get("sort")!;
+  const q = adminParams.value;
+  const sort = q.get("sort") ?? "bytes";
   const dir = q.get("dir") ?? "desc";
-  const go = (s: string, page: number, search = q.get("q") ?? "", d = dir) =>
-    (adminPath.value = `/admin/guilds?${new URLSearchParams({ sort: s, dir: d, page: String(page), q: search })}`);
-  const sortBy = (k: string) => go(k, 1, undefined, k === sort && dir === "desc" ? "asc" : "desc");
+  const page = (p: number) => setAdminQuery({ page: String(p) });
+  const sortBy = (k: string) => setAdminQuery({ sort: k, dir: k === sort && dir === "desc" ? "asc" : "desc", page: "1" });
   const { data, error } = adminPage.value;
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const search = (v: string) => {
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => go(sort, 1, v.trim()), 300);
+    timer.current = setTimeout(() => setAdminQuery({ q: v.trim(), page: "1" }), 300);
   };
+  const sel = selected.value;
+  const all = allMatching.value;
+  const rows = data?.rows ?? [];
+  const pagePicked = rows.length > 0 && (all || rows.every((g) => sel.has(g.id)));
+  const pick = (fn: (next: Map<string, GuildRow>) => void) => {
+    const next = new Map(sel);
+    fn(next);
+    selected.value = next;
+    allMatching.value = false;
+  };
+  const toggle = (g: GuildRow) => pick((m) => m.delete(g.id) || m.set(g.id, g));
+  const togglePage = () => pick((m) => rows.forEach((g) => (pagePicked ? m.delete(g.id) : m.set(g.id, g))));
   const leave = async (g: GuildRow) => {
     if (!confirm(`Leave guild ${g.name} and delete its data?`)) return;
     await api("POST", `/guilds/${g.id}/leave`).catch((e: Error) => alert(e.message));
@@ -63,13 +76,26 @@ export default function AdminTable() {
           <span class="icon-[fa6-solid--magnifying-glass] muted absolute top-1/2 left-2.5 -translate-y-1/2" />
           <input class="input w-56 pl-8" placeholder="Name or ID" value={q.get("q") ?? ""} onInput={(e) => search(e.currentTarget.value)} />
         </label>
-        {data && <Pager page={data.page} pages={data.pages} onPage={(p) => go(sort, p)} />}
+        <FilterBar fields={guildFields} filters={adminFilters.value} onChange={setAdminFilters} />
+        {data && <div class="ml-auto"><Pager page={data.page} pages={data.pages} onPage={page} /></div>}
       </div>
       {error && <p class="banner">{error}</p>}
+      <BatchPanel />
+      <BatchBar />
+      {data && pagePicked && data.total > rows.length && (
+        <p class="mb-3 text-center text-sm">
+          {all ? (
+            <>All {data.total.toLocaleString()} matching guilds are selected. <button class="link" onClick={() => (allMatching.value = false)}>Select only the ticked ones</button></>
+          ) : (
+            <>All {rows.length} on this page are selected. <button class="link" onClick={() => (allMatching.value = true)}>Select all {data.total.toLocaleString()} matching guilds</button></>
+          )}
+        </p>
+      )}
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="muted text-xs uppercase">
             <tr>
+              <th class="w-8"><input type="checkbox" checked={pagePicked} onChange={togglePage} aria-label="Select page" /></th>
               <th>Guild</th>
               {columns.map(([k, label]) => (
                 <th class="text-right">
@@ -85,7 +111,8 @@ export default function AdminTable() {
           </thead>
           <tbody class={adminLoading.value ? "animate-pulse opacity-60" : ""}>
             {data?.rows.map((g) => (
-              <tr class="hover:bg-neutral-800/40 [&>td.n]:text-right [&>td.n]:tabular-nums">
+              <tr class={`hover:bg-neutral-800/40 [&>td.n]:text-right [&>td.n]:tabular-nums ${all || sel.has(g.id) ? "bg-indigo-500/10" : ""}`}>
+                <td><input type="checkbox" checked={all || sel.has(g.id)} disabled={all} onChange={() => toggle(g)} aria-label={`Select ${g.name}`} /></td>
                 <td>
                   <a class="flex items-center gap-2" href={`/guild?id=${g.id}`}>
                     <ChainStateBar state={g.state} class="h-7" />
@@ -115,11 +142,11 @@ export default function AdminTable() {
                 </td>
               </tr>
             ))}
-            {data && !data.rows.length && <tr><td colSpan={columns.length + 3} class="muted py-8 text-center">No guilds match.</td></tr>}
+            {data && !data.rows.length && <tr><td colSpan={columns.length + 4} class="muted py-8 text-center">No guilds match.</td></tr>}
           </tbody>
         </table>
       </div>
-      {data && data.pages > 1 && <div class="mt-3 flex justify-end"><Pager page={data.page} pages={data.pages} onPage={(p) => go(sort, p)} /></div>}
+      {data && data.pages > 1 && <div class="mt-3 flex justify-end"><Pager page={data.page} pages={data.pages} onPage={page} /></div>}
     </section>
   );
 }

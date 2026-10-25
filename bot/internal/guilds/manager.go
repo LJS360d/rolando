@@ -2,6 +2,7 @@ package guilds
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -20,10 +21,13 @@ type Manager struct {
 
 	mu     sync.Mutex
 	guilds map[string]*Guild
+	// guilds taken out of guilds that are still snapshotting and closing;
+	// the channel closes when they are done
+	closing map[string]chan struct{}
 }
 
 func NewManager(dir string, idleTTL, snapshotInterval time.Duration) *Manager {
-	return &Manager{Dir: dir, IdleTTL: idleTTL, SnapshotInterval: snapshotInterval, guilds: map[string]*Guild{}}
+	return &Manager{Dir: dir, IdleTTL: idleTTL, SnapshotInterval: snapshotInterval, guilds: map[string]*Guild{}, closing: map[string]chan struct{}{}}
 }
 
 func (m *Manager) guildDir(id string) string { return filepath.Join(m.Dir, id) }
@@ -41,6 +45,7 @@ func (m *Manager) Use(id string, fn func(*Guild) error) error {
 func (m *Manager) acquire(id string) (*Guild, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.waitClosing(id)
 	g, ok := m.guilds[id]
 	if !ok {
 		var err error
@@ -69,12 +74,63 @@ func (m *Manager) Exists(id string) bool {
 // Remove closes the guild and deletes its directory.
 func (m *Manager) Remove(id string) error {
 	m.mu.Lock()
+	m.waitClosing(id)
 	if g, ok := m.guilds[id]; ok {
 		delete(m.guilds, id)
 		closeDB(g.DB)
 	}
 	m.mu.Unlock()
 	return os.RemoveAll(m.guildDir(id))
+}
+
+var ErrBusy = errors.New("guild is in use")
+
+// Unload snapshots and closes an open guild now instead of waiting for
+// IdleTTL; ErrBusy while something holds it.
+func (m *Manager) Unload(id string) error {
+	m.mu.Lock()
+	g, ok := m.guilds[id]
+	switch {
+	case !ok:
+		m.mu.Unlock()
+		return nil
+	case g.refs > 0:
+		m.mu.Unlock()
+		return ErrBusy
+	}
+	m.evict(g)
+	m.mu.Unlock()
+	m.closeEvicted(g)
+	return nil
+}
+
+// evict takes g out of the open guilds, with mu held. Until closeEvicted
+// finishes, acquire waits instead of opening the guild a second time while
+// its snapshot is still being written.
+func (m *Manager) evict(g *Guild) {
+	delete(m.guilds, g.ID)
+	m.closing[g.ID] = make(chan struct{})
+}
+
+func (m *Manager) closeEvicted(g *Guild) {
+	m.closeGuild(g)
+	m.mu.Lock()
+	close(m.closing[g.ID])
+	delete(m.closing, g.ID)
+	m.mu.Unlock()
+}
+
+// waitClosing returns, with mu held, once id is not closing.
+func (m *Manager) waitClosing(id string) {
+	for {
+		done, ok := m.closing[id]
+		if !ok {
+			return
+		}
+		m.mu.Unlock()
+		<-done
+		m.mu.Lock()
+	}
 }
 
 // IDs lists every guild directory on this node.
@@ -210,16 +266,16 @@ func (m *Manager) evictIdle() {
 	cutoff := time.Now().Add(-m.IdleTTL)
 	m.mu.Lock()
 	var idle []*Guild
-	for id, g := range m.guilds {
+	for _, g := range m.guilds {
 		if g.refs == 0 && g.lastUsed.Before(cutoff) {
-			delete(m.guilds, id)
+			m.evict(g)
 			idle = append(idle, g)
 		}
 	}
 	m.mu.Unlock()
 	for _, g := range idle {
 		logger.Debugf("guild %s: evicting, idle since %s", g.label(), g.lastUsed.Format(time.TimeOnly))
-		m.closeGuild(g)
+		m.closeEvicted(g)
 	}
 }
 
@@ -232,14 +288,17 @@ func (m *Manager) closeGuild(g *Guild) {
 
 func (m *Manager) Close() {
 	m.mu.Lock()
-	all := m.guilds
-	m.guilds = map[string]*Guild{}
+	all := make([]*Guild, 0, len(m.guilds))
+	for _, g := range m.guilds {
+		all = append(all, g)
+		m.evict(g)
+	}
 	m.mu.Unlock()
 	for _, g := range all {
 		start := time.Now()
 		name := g.label()
 		logger.Debugf("guild %s: snapshot+close", name)
-		m.closeGuild(g)
+		m.closeEvicted(g)
 		logger.Debugf("guild %s: closed in %s", name, time.Since(start).Round(time.Millisecond))
 	}
 }

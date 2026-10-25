@@ -70,10 +70,23 @@ func (l *SlotLimiter) Unlock(int) { l.mu.Unlock() }
 
 func (l *SlotLimiter) Close(context.Context) {}
 
-var peerClient = &http.Client{Timeout: 5 * time.Second}
+var (
+	peerClient = &http.Client{Timeout: 5 * time.Second}
+	// streamClient has no overall timeout: streamed responses last as long as ctx
+	streamClient = &http.Client{}
+)
 
 // Do sends an authenticated request to a peer's node api.
 func Do(ctx context.Context, node int, method, path string, body io.Reader) (*http.Response, error) {
+	return do(ctx, peerClient, node, method, path, body)
+}
+
+// Stream is Do for long-running streamed responses, bounded only by ctx.
+func Stream(ctx context.Context, node int, method, path string, body io.Reader) (*http.Response, error) {
+	return do(ctx, streamClient, node, method, path, body)
+}
+
+func do(ctx context.Context, c *http.Client, node int, method, path string, body io.Reader) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, PeerURL(node)+path, body)
 	if err != nil {
 		return nil, err
@@ -82,7 +95,7 @@ func Do(ctx context.Context, node int, method, path string, body io.Reader) (*ht
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := peerClient.Do(req)
+	resp, err := c.Do(req)
 	if err == nil && resp.StatusCode >= 300 {
 		CloseBody(resp)
 		return nil, fmt.Errorf("node %d: %s %s: %s", node, method, path, resp.Status)

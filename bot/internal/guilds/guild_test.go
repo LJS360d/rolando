@@ -161,3 +161,72 @@ func TestPeekConfigWithoutSummary(t *testing.T) {
 		t.Fatal("unknown guild created")
 	}
 }
+
+func TestUnload(t *testing.T) {
+	m := NewManager(t.TempDir(), time.Hour, time.Hour)
+	defer m.Close()
+	err := m.Use("1", func(g *Guild) error {
+		if _, err := g.CreateConfig("test"); err != nil {
+			return err
+		}
+		if err := g.AddMessages([]string{"a b c"}); err != nil {
+			return err
+		}
+		if _, err := g.Chain(); err != nil {
+			return err
+		}
+		if err := m.Unload("1"); err != ErrBusy {
+			t.Fatalf("unload in use: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.IsLoaded("1") {
+		t.Fatal("not loaded")
+	}
+	if err := m.Unload("1"); err != nil || m.IsLoaded("1") {
+		t.Fatalf("unload: %v loaded=%v", err, m.IsLoaded("1"))
+	}
+	if err := m.Unload("2"); err != nil {
+		t.Fatalf("unload unopened: %v", err)
+	}
+	if err := m.Use("1", func(g *Guild) error {
+		c, err := g.Chain()
+		if err == nil && c.Stats().Messages != 1 {
+			t.Fatalf("reopened %+v", c.Stats())
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUseWaitsForClose(t *testing.T) {
+	m := NewManager(t.TempDir(), time.Hour, time.Hour)
+	defer m.Close()
+	done := make(chan struct{})
+	m.mu.Lock()
+	m.closing["1"] = done
+	m.mu.Unlock()
+	used := make(chan struct{})
+	go func() {
+		m.Use("1", func(*Guild) error { return nil })
+		close(used)
+	}()
+	select {
+	case <-used:
+		t.Fatal("opened while closing")
+	case <-time.After(50 * time.Millisecond):
+	}
+	m.mu.Lock()
+	delete(m.closing, "1")
+	close(done)
+	m.mu.Unlock()
+	select {
+	case <-used:
+	case <-time.After(time.Second):
+		t.Fatal("never opened after close")
+	}
+}

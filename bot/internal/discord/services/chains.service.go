@@ -86,6 +86,18 @@ func (cs *ChainsService) State(id string) string {
 	return "unloaded"
 }
 
+// Load builds the chain now; it is still evicted after IdleTTL
+func (cs *ChainsService) Load(id string) error {
+	return cs.WithChain(id, func(*chain.Chain) {})
+}
+
+func (cs *ChainsService) Unload(id string) error {
+	if cs.State(id) == "fetching" {
+		return guilds.ErrBusy
+	}
+	return cs.Guilds.Unload(id)
+}
+
 func (cs *ChainsService) UpdateChainState(_ context.Context, id string, texts []string) error {
 	return cs.Guilds.Use(id, func(g *guilds.Guild) error { return g.AddMessages(texts) })
 }
@@ -169,36 +181,67 @@ func (cs *ChainsService) MessagesPage(id string, limit, offset int) (rows []guil
 }
 
 // UpdateChainMeta applies config updates. An n-gram change rebuilds the chain
-// and a lower branch cap prunes it, both in the background.
+// and a branch cap change prunes it, both in the background.
 func (cs *ChainsService) UpdateChainMeta(ctx context.Context, id string, fields map[string]any) (*guilds.Config, error) {
-	if _, ok := fields["id"]; ok {
-		return nil, errors.New("cannot change field 'id'")
-	}
-	old, err := cs.GetChainConf(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	var updated *guilds.Config
-	err = cs.Guilds.Use(id, func(g *guilds.Guild) error {
-		updated, err = g.UpdateConfig(fields)
-		return err
-	})
+	old, updated, err := cs.updateConfig(ctx, id, fields)
 	if err != nil {
 		return nil, err
 	}
 	switch {
 	case updated.NGramSize != old.NGramSize:
 		go cs.background(id, "rebuild", func(g *guilds.Guild) error { return g.Rebuild() })
-	case updated.MarkovMaxBranches > 0 && updated.MarkovMaxBranches != old.MarkovMaxBranches:
-		go cs.background(id, "cap branches", func(g *guilds.Guild) error {
-			c, err := g.Chain()
-			if err == nil {
-				c.Cap(updated.MarkovMaxBranches)
-			}
-			return err
-		})
+	case branchesChanged(old, updated):
+		go cs.background(id, "cap branches", func(g *guilds.Guild) error { return capBranches(g, updated.MarkovMaxBranches) })
 	}
 	return updated, nil
+}
+
+// UpdateChainMetaSync is UpdateChainMeta for batches: the branch cap runs
+// before it returns, and a chain loaded only to be capped is unloaded again,
+// so a batch holds at most one chain per worker. No n-gram changes.
+func (cs *ChainsService) UpdateChainMetaSync(ctx context.Context, id string, fields map[string]any) (*guilds.Config, error) {
+	if _, ok := fields["n_gram_size"]; ok {
+		return nil, errors.New("n_gram_size changes rebuild the chain")
+	}
+	wasLoaded := cs.Guilds.IsLoaded(id)
+	old, updated, err := cs.updateConfig(ctx, id, fields)
+	if err != nil || !branchesChanged(old, updated) {
+		return updated, err
+	}
+	if err := cs.Guilds.Use(id, func(g *guilds.Guild) error { return capBranches(g, updated.MarkovMaxBranches) }); err != nil {
+		return nil, err
+	}
+	if !wasLoaded {
+		// ErrBusy: someone started using it meanwhile, it evicts after IdleTTL
+		cs.Unload(id)
+	}
+	return updated, nil
+}
+
+func (cs *ChainsService) updateConfig(ctx context.Context, id string, fields map[string]any) (old, updated *guilds.Config, err error) {
+	if _, ok := fields["id"]; ok {
+		return nil, nil, errors.New("cannot change field 'id'")
+	}
+	if old, err = cs.GetChainConf(ctx, id); err != nil {
+		return nil, nil, err
+	}
+	err = cs.Guilds.Use(id, func(g *guilds.Guild) error {
+		updated, err = g.UpdateConfig(fields)
+		return err
+	})
+	return old, updated, err
+}
+
+func branchesChanged(old, updated *guilds.Config) bool {
+	return updated.MarkovMaxBranches > 0 && updated.MarkovMaxBranches != old.MarkovMaxBranches
+}
+
+func capBranches(g *guilds.Guild, n int) error {
+	c, err := g.Chain()
+	if err == nil {
+		c.Cap(n)
+	}
+	return err
 }
 
 func (cs *ChainsService) background(id, what string, fn func(*guilds.Guild) error) {
