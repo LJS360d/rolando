@@ -1,5 +1,6 @@
 import { useRef, useState } from "preact/hooks";
-import { adminPath, api, formatBytes, resource, type AdminPage, type GuildRow } from "../lib/api";
+import { adminLoading, adminPage, adminPath } from "../lib/admin";
+import { api, formatBytes, resource, type GuildRow } from "../lib/api";
 import { ChainStateBar, GuildIcon } from "./GuildLinks";
 import Pager from "./Pager";
 
@@ -43,7 +44,7 @@ export default function AdminTable() {
   const go = (s: string, page: number, search = q.get("q") ?? "", d = dir) =>
     (adminPath.value = `/admin/guilds?${new URLSearchParams({ sort: s, dir: d, page: String(page), q: search })}`);
   const sortBy = (k: string) => go(k, 1, undefined, k === sort && dir === "desc" ? "asc" : "desc");
-  const { data, error } = resource<AdminPage>(adminPath.value).value;
+  const { data, error } = adminPage.value;
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const search = (v: string) => {
     clearTimeout(timer.current);
@@ -82,7 +83,7 @@ export default function AdminTable() {
               <th></th>
             </tr>
           </thead>
-          <tbody class={data ? "" : "animate-pulse"}>
+          <tbody class={adminLoading.value ? "animate-pulse opacity-60" : ""}>
             {data?.rows.map((g) => (
               <tr class="hover:bg-neutral-800/40 [&>td.n]:text-right [&>td.n]:tabular-nums">
                 <td>

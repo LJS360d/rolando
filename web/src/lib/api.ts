@@ -93,5 +93,3 @@ export function formatBytes(n: number) {
   while (n >= 1024 && i < units.length - 1) (n /= 1024), i++;
   return `${n.toFixed(i ? 2 : 0)} ${units[i]}`;
 }
-
-export const adminPath = signal("/admin/guilds?sort=bytes&dir=desc&page=1&q=");

@@ -1,22 +1,26 @@
 import { useEffect, useState } from "preact/hooks";
-import { adminPath, resource, type AdminPage } from "../lib/api";
+import { adminPage } from "../lib/admin";
 
 const uptime = (s: number) => {
   const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
   return `${d ? `${d}d ` : ""}${d || h ? `${h}h ` : ""}${m}m ${s % 60}s`;
 };
 
-export default function AdminStats() {
-  const { data, error } = resource<AdminPage>(adminPath.value).value;
+function Uptime({ started }: { started: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+  return <>{uptime(Math.max(0, Math.floor(now / 1000) - started))}</>;
+}
+
+export default function AdminStats() {
+  const { data, error } = adminPage.value;
   if (error) return <p class="banner">{error}</p>;
   const nodeErrors = Object.entries(data?.errors ?? {});
-  const tiles: [string, string | number | undefined][] = [
-    ["Uptime", data && uptime(Math.max(0, Math.floor(now / 1000) - data.started))],
+  const tiles: [string, preact.ComponentChildren][] = [
+    ["Uptime", data && <Uptime started={data.started} />],
     ["Guilds", data?.total],
     ["Chains loaded on this node", data?.loaded],
     ["Unreachable nodes", data && nodeErrors.length],
