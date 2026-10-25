@@ -25,7 +25,7 @@ export type Analytics = {
 
 export type GuildRow = { id: string; name: string; icon: string; members: number; state: ChainState; config: Config; analytics: Analytics };
 
-export type ChainState = "loaded" | "unloaded" | "fetching";
+export type ChainState = "loaded" | "unloaded" | "fetching" | "empty";
 
 export type Link = { w: string; c: number };
 export type Graph = { word: string; in: Link[] | null; out: Link[] | null; in_total: number; out_total: number };

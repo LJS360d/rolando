@@ -29,7 +29,7 @@ export const setAdminFilters = (fs: Filter[]) => setAdminQuery({ f: fs.map((f) =
 export const guildFields: Field[] = [
   { key: "name", label: "Name", type: "string" },
   { key: "id", label: "ID", type: "string" },
-  { key: "state", label: "Chain", type: "enum", values: ["loaded", "unloaded", "fetching"] },
+  { key: "state", label: "Chain", type: "enum", values: ["loaded", "unloaded", "fetching", "empty"] },
   { key: "members", label: "Members", type: "number" },
   { key: "analytics.bytes", label: "Size", type: "number", scale: 2 ** 20, unit: "MB" },
   { key: "analytics.messages", label: "Messages", type: "number" },

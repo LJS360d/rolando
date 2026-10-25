@@ -10,6 +10,7 @@ const states: Record<ChainState, [string, string]> = {
   loaded: ["bg-emerald-400", "Chain is active"],
   unloaded: ["bg-neutral-600", "Chain is inactive"],
   fetching: ["animate-pulse bg-amber-400", "Train in progress"],
+  empty: ["bg-transparent ring-1 ring-inset ring-neutral-600", "No data yet"],
 };
 
 export function ChainStateBar({ state, class: cls = "h-8" }: { state: ChainState; class?: string }) {

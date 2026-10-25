@@ -7,7 +7,7 @@ const clip = (w: string) => (w.length > 18 ? w.slice(0, 17) + "…" : w);
 export default function ChainGraph() {
   const summary = resource<GuildRow>(`/guilds/${guildId}/summary`);
   const state = summary.value.data?.state;
-  const loaded = state && state !== "unloaded";
+  const loaded = state === "loaded" || state === "fetching";
   const [graph, setGraph] = useState<Graph>();
   const [trail, setTrail] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);

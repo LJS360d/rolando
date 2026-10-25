@@ -75,10 +75,13 @@ func (cs *ChainsService) StartFetch(id string) bool {
 
 func (cs *ChainsService) EndFetch(id string) { cs.fetching.Delete(id) }
 
-// State is "fetching", "loaded" or "unloaded".
+// "fetching", "empty", "loaded", "unloaded"
 func (cs *ChainsService) State(id string) string {
 	if _, ok := cs.fetching.Load(id); ok {
 		return "fetching"
+	}
+	if !cs.Guilds.Exists(id) {
+		return "empty"
 	}
 	if cs.Guilds.IsLoaded(id) {
 		return "loaded"
