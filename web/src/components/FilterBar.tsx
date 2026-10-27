@@ -48,7 +48,7 @@ export default function FilterBar({ fields, filters, onChange }: { fields: Field
       <button class="link flex items-center gap-1 text-sm" onClick={() => setEditing(-1)}><span class="icon-[fa6-solid--plus]" />Filter</button>
       {filters.length > 1 && <button class="muted text-sm hover:text-neutral-200" onClick={() => onChange([])}>Clear all</button>}
       {editing !== null && (
-        <Editor fields={fields} initial={editing === -1 ? blank(fields[0]) : filters[editing]} onSave={save} onClose={() => setEditing(null)} />
+        <Editor key={editing} fields={fields} initial={editing === -1 ? blank(fields[0]) : filters[editing]} onSave={save} onClose={() => setEditing(null)} />
       )}
     </div>
   );

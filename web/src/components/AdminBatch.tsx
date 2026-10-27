@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
   adminPage,
-  adminPath,
   allMatching,
   batchRun,
   batchTargets,
   cancelBatch,
   clearSelection,
+  refreshAdmin,
   runBatch,
   selected,
   selectedRows,
   type BatchOp,
   type BatchTarget,
 } from "../lib/admin";
-import { resource, type Config, type GuildRow } from "../lib/api";
+import type { Config, GuildRow } from "../lib/api";
 import { configBools, configNumbers } from "./ConfigForm";
 
 const ops: Record<BatchOp, { label: string; icon: string; describe: string; danger?: boolean }> = {
@@ -35,9 +35,11 @@ const flat = (g: GuildRow): Record<string, unknown> => ({
   ...Object.fromEntries(Object.entries(g.analytics).map(([k, v]) => [`analytics.${k}`, v])),
 });
 
+// guild names are user-controlled: a leading = + - @ would run as a formula in spreadsheet apps
 const csvCell = (v: unknown) => {
-  const s = String(v ?? "");
-  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+  let s = String(v ?? "");
+  if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 
 function download(name: string, type: string, text: string) {
@@ -45,7 +47,7 @@ function download(name: string, type: string, text: string) {
   a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = name;
   a.click();
-  URL.revokeObjectURL(a.href);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 export function BatchBar() {
@@ -210,7 +212,7 @@ export function BatchPanel() {
   const [error, setError] = useState<string>();
   useEffect(() => {
     if (!running) return;
-    const t = setInterval(() => resource(adminPath.value, true), 5000);
+    const t = setInterval(() => refreshAdmin(), 5000);
     return () => clearInterval(t);
   }, [running]);
   if (!live && !server) return null;

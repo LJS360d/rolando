@@ -79,18 +79,24 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
 export async function* ndjson<T>(method: string, path: string, body?: unknown): AsyncGenerator<T> {
   const reader = (await request(method, path, body)).body!.pipeThrough(new TextDecoderStream()).getReader();
   let buf = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) return;
-    const lines = (buf + value).split("\n");
-    buf = lines.pop()!;
-    for (const l of lines) if (l) yield JSON.parse(l);
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const lines = (buf + value).split("\n");
+      buf = lines.pop()!;
+      for (const l of lines) if (l.trim()) yield JSON.parse(l);
+    }
+    if (buf.trim()) yield JSON.parse(buf);
+  } finally {
+    reader.cancel().catch(() => {});
   }
 }
 
 export type Resource<T> = { data?: T; error?: string };
 
 const cache = new Map<string, Signal<Resource<any>>>();
+const latest = new Map<string, number>();
 
 // resource fetches path once per page load and shares the result with every island that asks for it.
 export function resource<T>(path: string, refresh = false): Signal<Resource<T>> {
@@ -99,9 +105,21 @@ export function resource<T>(path: string, refresh = false): Signal<Resource<T>> 
     s ??= signal({});
     cache.set(path, s);
     const target = s;
-    if (browser) api<T>("GET", path).then((data) => (target.value = { data }), (e: Error) => (target.value = { error: e.message }));
+    const n = (latest.get(path) ?? 0) + 1;
+    latest.set(path, n);
+    // a refresh that fails keeps the data it was refreshing; an older response never overwrites a newer one
+    if (browser)
+      api<T>("GET", path).then(
+        (data) => latest.get(path) === n && (target.value = { data }),
+        (e: Error) => latest.get(path) === n && (target.value = { data: target.value.data, error: e.message }),
+      );
   }
   return s;
+}
+
+// forget drops cached resources whose path starts with prefix (except keep), so they refetch on next use.
+export function forget(prefix: string, keep?: string) {
+  for (const k of cache.keys()) if (k.startsWith(prefix) && k !== keep) cache.delete(k);
 }
 
 export const session = () => resource<Session | null>("/session");

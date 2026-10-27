@@ -1,6 +1,6 @@
 import { computed, effect, signal } from "@preact/signals";
 import type { Field, Filter } from "../components/FilterBar";
-import { api, browser, ndjson, resource, type AdminPage, type GuildRow, type Resource } from "./api";
+import { api, browser, forget, ndjson, resource, type AdminPage, type GuildRow, type Resource } from "./api";
 
 export const adminPath = signal(`/admin/guilds?${(browser && location.search.slice(1)) || "sort=bytes&dir=desc&page=1"}`);
 export const adminQuery = computed(() => adminPath.value.split("?")[1] ?? "");
@@ -58,6 +58,12 @@ export const adminLoading = computed(() => {
   const r = resource<AdminPage>(adminPath.value).value;
   return !r.data && !r.error;
 });
+
+// refreshAdmin refetches the current listing and drops other cached pages, which a mutation made stale.
+export function refreshAdmin() {
+  forget("/admin/guilds?", adminPath.value);
+  resource(adminPath.value, true);
+}
 
 export const selected = signal<Map<string, GuildRow>>(new Map());
 // allMatching targets every guild matching the search and filters it was picked under.
@@ -120,5 +126,5 @@ export async function runBatch(op: BatchOp, targets: BatchTarget[], params?: Rec
     if (streaming) batchRun.value = null;
     else update(() => ({ done: true, error: (e as Error).message }));
   }
-  resource(adminPath.value, true);
+  refreshAdmin();
 }

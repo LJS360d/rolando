@@ -1,6 +1,6 @@
 import { useRef, useState } from "preact/hooks";
-import { adminFilters, adminLoading, adminPage, adminParams, adminPath, allMatching, guildFields, selected, setAdminFilters, setAdminQuery } from "../lib/admin";
-import { api, formatBytes, resource, type GuildRow } from "../lib/api";
+import { adminFilters, adminLoading, adminPage, adminParams, allMatching, guildFields, refreshAdmin, selected, setAdminFilters, setAdminQuery } from "../lib/admin";
+import { api, formatBytes, type GuildRow } from "../lib/api";
 import { ChainStateBar, GuildIcon } from "./GuildLinks";
 import { BatchBar, BatchPanel } from "./AdminBatch";
 import FilterBar from "./FilterBar";
@@ -65,8 +65,16 @@ export default function AdminTable() {
   const togglePage = () => pick((m) => rows.forEach((g) => (pagePicked ? m.delete(g.id) : m.set(g.id, g))));
   const leave = async (g: GuildRow) => {
     if (!confirm(`Leave guild ${g.name} and delete its data?`)) return;
-    await api("POST", `/guilds/${g.id}/leave`).catch((e: Error) => alert(e.message));
-    resource(adminPath.value, true);
+    await api("POST", `/guilds/${g.id}/leave`).then(
+      () => {
+        if (!selected.value.has(g.id)) return;
+        const next = new Map(selected.value);
+        next.delete(g.id);
+        selected.value = next;
+      },
+      (e: Error) => alert(e.message),
+    );
+    refreshAdmin();
   };
 
   return (
@@ -74,7 +82,7 @@ export default function AdminTable() {
       <div class="mb-3 flex flex-wrap items-center gap-3">
         <label class="relative">
           <span class="icon-[fa6-solid--magnifying-glass] muted absolute top-1/2 left-2.5 -translate-y-1/2" />
-          <input class="input w-56 pl-8" placeholder="Name or ID" value={q.get("q") ?? ""} onInput={(e) => search(e.currentTarget.value)} />
+          <input class="input w-56 pl-8" placeholder="Name or ID" defaultValue={q.get("q") ?? ""} onInput={(e) => search(e.currentTarget.value)} />
         </label>
         <FilterBar fields={guildFields} filters={adminFilters.value} onChange={setAdminFilters} />
         {data && <div class="ml-auto"><Pager page={data.page} pages={data.pages} onPage={page} /></div>}
@@ -111,7 +119,7 @@ export default function AdminTable() {
           </thead>
           <tbody class={adminLoading.value ? "animate-pulse opacity-60" : ""}>
             {data?.rows.map((g) => (
-              <tr class={`hover:bg-neutral-800/40 [&>td.n]:text-right [&>td.n]:tabular-nums ${all || sel.has(g.id) ? "bg-indigo-500/10" : ""}`}>
+              <tr key={g.id} class={`hover:bg-neutral-800/40 [&>td.n]:text-right [&>td.n]:tabular-nums ${all || sel.has(g.id) ? "bg-indigo-500/10" : ""}`}>
                 <td><input type="checkbox" checked={all || sel.has(g.id)} disabled={all} onChange={() => toggle(g)} aria-label={`Select ${g.name}`} /></td>
                 <td>
                   <a class="flex items-center gap-2" href={`/guild?id=${g.id}`}>
