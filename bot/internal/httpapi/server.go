@@ -98,6 +98,10 @@ func (s *Server) guildRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/guilds/{id}/summary", s.guild)
 	mux.HandleFunc("GET /api/guilds/{id}/messages", s.messages)
+	mux.HandleFunc("DELETE /api/guilds/{id}/messages", s.deleteMessage)
+	mux.HandleFunc("GET /api/guilds/{id}/media", s.media)
+	mux.HandleFunc("DELETE /api/guilds/{id}/media", s.deleteMedia)
+	mux.HandleFunc("POST /api/guilds/{id}/reset", s.reset)
 	mux.HandleFunc("GET /api/guilds/{id}/graph", s.graph)
 	mux.HandleFunc("PUT /api/guilds/{id}/config", s.updateConfig)
 	mux.HandleFunc("POST /api/guilds/{id}/invite", s.invite)
@@ -627,7 +631,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	qs := r.URL.Query()
-	q := guilds.PageQuery{Page: atoiOr(qs.Get("page"), 1)}
+	q := guilds.PageQuery{Page: atoiOr(qs.Get("page"), 1), Search: strings.TrimSpace(qs.Get("q"))}
 	q.After, _ = strconv.ParseInt(qs.Get("after"), 10, 64)
 	q.Before, _ = strconv.ParseInt(qs.Get("before"), 10, 64)
 	msgs, total, err := s.chains.MessagesPage(r.PathValue("id"), messagesPageSize, q)
@@ -653,6 +657,87 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		"first": first,
 		"last":  last,
 	})
+}
+
+// decodeField reads the one string field a delete body carries.
+func decodeField(w http.ResponseWriter, r *http.Request, key string) (string, bool) {
+	var body map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body[key] == "" {
+		http.Error(w, key+" is required", http.StatusBadRequest)
+		return "", false
+	}
+	return body[key], true
+}
+
+// deleteMessage removes every stored copy of a message, like /wipe.
+func (s *Server) deleteMessage(w http.ResponseWriter, r *http.Request) {
+	if !requireView(w, r) || !s.requireGuild(w, r) {
+		return
+	}
+	content, ok := decodeField(w, r, "content")
+	if !ok {
+		return
+	}
+	if err := s.chains.DeleteTextData(r.Context(), r.PathValue("id"), content); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+const mediaPageSize = 48
+
+var mediaKinds = []string{"gif", "image", "video"}
+
+func (s *Server) media(w http.ResponseWriter, r *http.Request) {
+	if !requireView(w, r) || !s.requireGuild(w, r) {
+		return
+	}
+	kind := r.URL.Query().Get("kind")
+	if !slices.Contains(mediaKinds, kind) {
+		http.Error(w, "kind must be gif, image or video", http.StatusBadRequest)
+		return
+	}
+	pg := atoiOr(r.URL.Query().Get("page"), 1)
+	urls, total, err := s.chains.MediaPage(r.PathValue("id"), kind, mediaPageSize, pg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	pages := (int(total) + mediaPageSize - 1) / mediaPageSize
+	writeJSON(w, map[string]any{"urls": urls, "page": min(pg, max(pages, 1)), "pages": pages, "total": total})
+}
+
+func (s *Server) deleteMedia(w http.ResponseWriter, r *http.Request) {
+	if !requireView(w, r) || !s.requireGuild(w, r) {
+		return
+	}
+	u, ok := decodeField(w, r, "url")
+	if !ok {
+		return
+	}
+	if err := s.chains.DeleteMedia(r.PathValue("id"), u); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// reset deletes all learned messages and media, keeping the config.
+func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
+	if !requireView(w, r) || !s.requireGuild(w, r) {
+		return
+	}
+	id := r.PathValue("id")
+	if s.chains.State(id) == "fetching" {
+		http.Error(w, "a /train is running, try again when it ends", http.StatusConflict)
+		return
+	}
+	if err := s.chains.ResetChain(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 var mentionRe = regexp.MustCompile(`<(@!?|@&|#)(\d+)>`)
@@ -716,6 +801,11 @@ var configRanges = map[string][2]int{
 
 var configBools = []string{"pings", "premium"}
 
+// ownerConfig are the fields only the bot owner may change: they cost
+// memory and disk (size, branch cap) or are paid for (premium, VC join rate
+// is behind the voice SKU in Discord).
+var ownerConfig = []string{"premium", "max_size_mb", "markov_max_branches", "vc_join_rate"}
+
 // configFields validates config edits; partial only takes the fields present.
 func configFields(raw map[string]json.RawMessage, partial bool) (map[string]any, error) {
 	fields := map[string]any{}
@@ -746,8 +836,10 @@ func configFields(raw map[string]json.RawMessage, partial bool) (map[string]any,
 	return fields, nil
 }
 
+// updateConfig takes the whole config; for server managers the owner-only
+// fields are dropped, so they keep their stored values.
 func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
-	if !requireOwner(w, r) || !s.requireGuild(w, r) {
+	if !requireView(w, r) || !s.requireGuild(w, r) {
 		return
 	}
 	var raw map[string]json.RawMessage
@@ -755,7 +847,13 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fields, err := configFields(raw, false)
+	owner := getSession(r).Owner
+	if !owner {
+		for _, k := range ownerConfig {
+			delete(raw, k)
+		}
+	}
+	fields, err := configFields(raw, !owner)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

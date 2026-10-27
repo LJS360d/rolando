@@ -230,3 +230,42 @@ func TestUseWaitsForClose(t *testing.T) {
 		t.Fatal("never opened after close")
 	}
 }
+
+func TestSearchAndMedia(t *testing.T) {
+	m := NewManager(t.TempDir(), time.Hour, time.Hour)
+	defer m.Close()
+	err := m.Use("1", func(g *Guild) error {
+		if _, err := g.CreateConfig("test"); err != nil {
+			return err
+		}
+		if err := g.AddMessages([]string{"Hello there", "100% sure", "hello_world", "bye https://a.com/1.png", "https://a.com/2.png"}); err != nil {
+			return err
+		}
+		for q, want := range map[string]int64{"hello": 2, "%": 1, "_": 1, "nope": 0} {
+			rows, total, err := g.MessagesPage(10, PageQuery{Page: 1, Search: q})
+			if err != nil {
+				return err
+			}
+			if total != want || int64(len(rows)) != want {
+				t.Fatalf("search %q: total %d rows %d, want %d", q, total, len(rows), want)
+			}
+		}
+		urls, total, err := g.MediaPage("image", 1, 1)
+		if err != nil {
+			return err
+		}
+		if total != 2 || len(urls) != 1 || urls[0] != "https://a.com/2.png" {
+			t.Fatalf("media page %v total %d", urls, total)
+		}
+		if err := g.DeleteMedia("https://a.com/2.png"); err != nil {
+			return err
+		}
+		if mc, _ := g.MediaCounts(); mc.Images != 1 {
+			t.Fatalf("after delete %+v", mc)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

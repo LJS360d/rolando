@@ -1,6 +1,6 @@
 import { useSignal } from "@preact/signals";
 import { useRef } from "preact/hooks";
-import { guildId, resource, type MessagesPage } from "../lib/api";
+import { api, forget, guildId, resource, type MessagesPage } from "../lib/api";
 import Pager from "./Pager";
 
 const tokenRe = /(<(?:@!?|@&|#)\d+>|<a?:\w+:\d+>|https?:\/\/\S+)/g;
@@ -59,21 +59,39 @@ function render(text: string, mentions: Record<string, string>) {
 export default function Messages() {
   // next/prev go by id cursor (cheap keyset query); jumps go by page number
   const query = useSignal("page=1");
-  const r = resource<MessagesPage>(
-    `/guilds/${guildId}/messages?${query.value}`,
-  ).value;
+  const search = useSignal("");
+  const base = `/guilds/${guildId}/messages?`;
+  const path = `${base}${query.value}${search.value ? `&q=${encodeURIComponent(search.value)}` : ""}`;
+  const r = resource<MessagesPage>(path).value;
   // keep the previous page (and its pager) on screen while the next one loads
   const last = useRef(r);
   if (r.data || r.error) last.current = r;
   const { data, error } = last.current;
   const loading = r !== last.current;
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const onSearch = (v: string) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => ((search.value = v.trim()), (query.value = "page=1")), 300);
+  };
+  const remove = (m: string) => {
+    if (!confirm(`Forget this message? Every copy of it is deleted and Rolando stops using it.\n\n${m.slice(0, 300)}`)) return;
+    api("DELETE", `/guilds/${guildId}/messages`, { content: m }).then(() => {
+      forget(base, path);
+      resource(path, true);
+      resource(`/guilds/${guildId}/summary`, true);
+    }, (e: Error) => alert(e.message));
+  };
   return (
     <section class="card">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="mb-0 flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <h2 class="mb-0 mr-auto flex items-center gap-2">
           <span class="icon-[fa6-solid--message] text-indigo-400" />
           Learned messages
         </h2>
+        <label class="relative">
+          <span class="icon-[fa6-solid--magnifying-glass] muted absolute top-1/2 left-2.5 -translate-y-1/2" />
+          <input class="input w-48 pl-8" placeholder="Search" onInput={(e) => onSearch(e.currentTarget.value)} />
+        </label>
         {data && (
           <Pager
             page={data.page}
@@ -92,12 +110,20 @@ export default function Messages() {
       {error && <p class="banner">{error}</p>}
       <ul class={`mt-3 max-h-128 overflow-y-auto rounded-lg bg-neutral-950/60 text-sm ${loading ? "animate-pulse opacity-60" : ""}`}>
         {data?.messages.map((m) => (
-          <li class="border-b border-neutral-800/70 px-3 py-1.5 wrap-break-word whitespace-pre-wrap last:border-0">
-            {render(m, data.mentions ?? {})}
+          <li class="group flex items-start gap-2 border-b border-neutral-800/70 px-3 py-1.5 last:border-0">
+            <div class="min-w-0 flex-1 wrap-break-word whitespace-pre-wrap">{render(m, data.mentions ?? {})}</div>
+            <button
+              class="grid size-6 shrink-0 place-items-center rounded text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-600/30 focus-visible:opacity-100"
+              onClick={() => remove(m)}
+              title="Forget this message"
+              aria-label="Forget this message"
+            >
+              <span class="icon-[fa6-solid--trash-can] size-3" />
+            </button>
           </li>
         ))}
         {data && !data.messages.length && (
-          <li class="muted px-3 py-6 text-center">Nothing learned yet.</li>
+          <li class="muted px-3 py-6 text-center">{search.value ? "No messages match." : "Nothing learned yet."}</li>
         )}
       </ul>
     </section>

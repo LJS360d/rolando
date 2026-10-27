@@ -16,12 +16,12 @@ export default function GuildHeader() {
   const a = g.analytics;
   const max = g.config.max_size_mb * 2 ** 20;
   const stats: [string, string, number][] = [
-    ["message", "Messages", a.messages],
-    ["font", "Words", a.words],
-    ["diagram-project", "Complexity", a.complexity_score],
-    ["film", "Gifs", a.gifs],
-    ["image", "Images", a.images],
-    ["video", "Videos", a.videos],
+    ["icon-[fa6-solid--message]", "Messages", a.messages],
+    ["icon-[fa6-solid--font]", "Words", a.words],
+    ["icon-[fa6-solid--diagram-project]", "Complexity", a.complexity_score],
+    ["icon-[fa6-solid--film]", "Gifs", a.gifs],
+    ["icon-[fa6-solid--image]", "Images", a.images],
+    ["icon-[fa6-solid--video]", "Videos", a.videos],
   ];
   return (
     <section class="card">
@@ -52,7 +52,7 @@ export default function GuildHeader() {
       <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {stats.map(([icon, label, v]) => (
           <div class="rounded-lg bg-neutral-800/60 p-3">
-            <div class="muted flex items-center gap-1.5 text-xs"><span class={`icon-[fa6-solid--${icon}]`} />{label}</div>
+            <div class="muted flex items-center gap-1.5 text-xs"><span class={icon} />{label}</div>
             <div class="mt-1 text-xl font-semibold tabular-nums">{v.toLocaleString()}</div>
           </div>
         ))}

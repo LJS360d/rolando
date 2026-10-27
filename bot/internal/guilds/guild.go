@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -414,6 +415,25 @@ func (g *Guild) RandomMedia(kind string) (string, error) {
 	return urls[0], nil
 }
 
+// MediaPage returns a page (1-based) of media URLs of kind, newest first.
+func (g *Guild) MediaPage(kind string, limit, page int) ([]string, int64, error) {
+	var total int64
+	if err := g.DB.Model(&Media{}).Where("kind = ?", kind).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	urls := []string{}
+	err := g.DB.Model(&Media{}).Where("kind = ?", kind).Order("rowid DESC").
+		Limit(limit).Offset(max(page-1, 0)*limit).Pluck("url", &urls).Error
+	return urls, total, err
+}
+
+func (g *Guild) DeleteMedia(url string) error {
+	if err := g.DB.Where("url = ?", url).Delete(&Media{}).Error; err != nil {
+		return err
+	}
+	return g.WriteSummary()
+}
+
 func (g *Guild) MediaCounts() (MediaCounts, error) {
 	var rows []struct {
 		Kind string
@@ -437,21 +457,34 @@ func (g *Guild) MediaCounts() (MediaCounts, error) {
 }
 
 // PageQuery selects a messages page: keyset after/before an id when set
-// (O(log n), used for next/prev), else page number (1-based).
+// (O(log n), used for next/prev), else page number (1-based). Search keeps
+// only messages containing it (case-insensitive for ASCII).
 type PageQuery struct {
 	Page          int
 	After, Before int64
+	Search        string
 }
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`)
 
 // MessagesPage returns limit messages in id order. A page jump walks from
 // whichever end is closer, since OFFSET steps through every skipped row.
 func (g *Guild) MessagesPage(limit int, q PageQuery) ([]Message, int64, error) {
-	total, err := g.messageCount()
+	match := func(tx *gorm.DB) *gorm.DB { return tx }
+	var total int64
+	var err error
+	if q.Search != "" {
+		like := "%" + likeEscaper.Replace(q.Search) + "%"
+		match = func(tx *gorm.DB) *gorm.DB { return tx.Where(`content LIKE ? ESCAPE '\'`, like) }
+		err = g.DB.Model(&Message{}).Scopes(match).Count(&total).Error
+	} else {
+		total, err = g.messageCount()
+	}
 	if err != nil {
 		return nil, 0, err
 	}
 	var rows []Message
-	tx := g.DB.Select("id", "content").Limit(limit)
+	tx := g.DB.Select("id", "content").Scopes(match).Limit(limit)
 	offset := int64(max(q.Page-1, 0)) * int64(limit)
 	desc := false
 	switch {

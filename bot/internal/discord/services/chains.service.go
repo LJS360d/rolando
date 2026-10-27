@@ -182,6 +182,18 @@ func (cs *ChainsService) MessagesPage(id string, limit int, q guilds.PageQuery) 
 	return
 }
 
+func (cs *ChainsService) MediaPage(id, kind string, limit, page int) (urls []string, total int64, err error) {
+	err = cs.Guilds.Use(id, func(g *guilds.Guild) error {
+		urls, total, err = g.MediaPage(kind, limit, page)
+		return err
+	})
+	return
+}
+
+func (cs *ChainsService) DeleteMedia(id, url string) error {
+	return cs.Guilds.Use(id, func(g *guilds.Guild) error { return g.DeleteMedia(url) })
+}
+
 // UpdateChainMeta applies config updates. An n-gram change rebuilds the chain
 // and a branch cap change prunes it, both in the background.
 func (cs *ChainsService) UpdateChainMeta(ctx context.Context, id string, fields map[string]any) (*guilds.Config, error) {

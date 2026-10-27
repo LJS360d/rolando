@@ -4,6 +4,7 @@ import GuildHeader from "../components/GuildHeader";
 import ChainGraph from "../components/ChainGraph";
 import ConfigForm from "../components/ConfigForm";
 import Messages from "../components/Messages";
+import Media from "../components/Media";
 ---
 
 <Layout title="Server">
@@ -12,6 +13,7 @@ import Messages from "../components/Messages";
     <div class="min-w-0">
       <ChainGraph client:only="preact" />
       <Messages client:only="preact" />
+      <Media client:only="preact" />
     </div>
     <aside class="lg:sticky lg:top-20">
       <ConfigForm client:only="preact" />

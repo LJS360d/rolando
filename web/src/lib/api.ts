@@ -53,6 +53,8 @@ export type AdminPage = {
 
 export type BatchStatus = { op: string; total: number; ok: number; failed: number; started: number };
 
+export type MediaPage = { urls: string[]; page: number; pages: number; total: number };
+
 export type MessagesPage = { messages: string[]; mentions?: Record<string, string>; page: number; pages: number; first: number; last: number };
 
 export const browser = typeof window !== "undefined";
