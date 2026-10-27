@@ -43,6 +43,9 @@ func FetchEcastRoom(ctx context.Context, client *http.Client, roomCode string) (
 	if len(roomCode) < 4 || len(roomCode) > 8 {
 		return nil, fmt.Errorf("invalid room code length")
 	}
+	if strings.IndexFunc(roomCode, func(r rune) bool { return (r < 'A' || r > 'Z') && (r < '0' || r > '9') }) >= 0 {
+		return nil, fmt.Errorf("invalid room code")
+	}
 	url := "https://ecast.jackboxgames.com/api/v2/rooms/" + roomCode
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -54,7 +57,7 @@ func FetchEcastRoom(ctx context.Context, client *http.Client, roomCode string) (
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return nil, err
 	}

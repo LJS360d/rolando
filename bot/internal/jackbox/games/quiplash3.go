@@ -27,7 +27,7 @@ type quiplash3 struct {
 	seq            atomic.Uint64
 	selfID         atomic.Int64
 	pickMu         sync.Mutex
-	picked         bool
+	picked         atomic.Bool
 	startMu        sync.Mutex
 	vipStarted     bool
 	textMu         sync.Mutex
@@ -59,7 +59,7 @@ func (m *quiplash3) HandleWSMessage(ctx context.Context, messageType int, payloa
 			if id, ok := common.AsInt(r["id"]); ok && id > 0 {
 				m.selfID.Store(int64(id))
 			}
-			if names := walkCharacters(r); len(names) > 0 {
+			if names := m.availableAvatars(r); len(names) > 0 {
 				m.tryPickAvatar(names)
 			}
 		}
@@ -68,7 +68,7 @@ func (m *quiplash3) HandleWSMessage(ctx context.Context, messageType int, payloa
 			key, _ := r["key"].(string)
 			if key == "room" {
 				if val, ok := r["val"]; ok {
-					if names := walkCharacters(val); len(names) > 0 {
+					if names := m.availableAvatars(val); len(names) > 0 {
 						m.tryPickAvatar(names)
 					}
 				}
@@ -80,7 +80,7 @@ func (m *quiplash3) HandleWSMessage(ctx context.Context, messageType int, payloa
 					m.tryMakeChoice(val, r)
 				}
 			}
-			if names := walkCharacters(r); len(names) > 0 {
+			if names := m.availableAvatars(r); len(names) > 0 {
 				m.tryPickAvatar(names)
 			}
 		}
@@ -91,7 +91,7 @@ func (m *quiplash3) HandleWSMessage(ctx context.Context, messageType int, payloa
 func (m *quiplash3) tryPickAvatar(available []string) {
 	m.pickMu.Lock()
 	defer m.pickMu.Unlock()
-	if m.picked {
+	if m.picked.Load() {
 		return
 	}
 	id := int(m.selfID.Load())
@@ -114,7 +114,15 @@ func (m *quiplash3) tryPickAvatar(available []string) {
 	if err := common.WriteTextJSON(m.sess.Conn, msg); err != nil {
 		return
 	}
-	m.picked = true
+	m.picked.Store(true)
+}
+
+// availableAvatars skips the walk over every object once an avatar is picked
+func (m *quiplash3) availableAvatars(v any) []string {
+	if m.picked.Load() {
+		return nil
+	}
+	return walkCharacters(v)
 }
 
 func (m *quiplash3) nextSeq() uint64 {
@@ -158,6 +166,11 @@ func (m *quiplash3) tryEnterText(ctx context.Context, val map[string]any) {
 	if entryID == "" {
 		return
 	}
+	m.textMu.Lock()
+	defer m.textMu.Unlock()
+	if m.lastEntry == entryID {
+		return
+	}
 	state, _ := val["state"].(string)
 	var textVal string
 	switch state {
@@ -178,11 +191,6 @@ func (m *quiplash3) tryEnterText(ctx context.Context, val map[string]any) {
 		if rand.IntN(100) == 0 {
 			textVal = safetyQuipVal
 		}
-	}
-	m.textMu.Lock()
-	defer m.textMu.Unlock()
-	if m.lastEntry == entryID {
-		return
 	}
 	id := int(m.selfID.Load())
 	if id <= 0 {
