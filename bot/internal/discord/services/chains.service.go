@@ -174,10 +174,9 @@ func (cs *ChainsService) Summary(id string) (s guilds.Summary, err error) {
 	return
 }
 
-// Neighbors loads the chain if needed. See chain.Neighbors.
-func (cs *ChainsService) MessagesPage(id string, limit, offset int) (rows []guilds.Message, total int64, err error) {
+func (cs *ChainsService) MessagesPage(id string, limit int, q guilds.PageQuery) (rows []guilds.Message, total int64, err error) {
 	err = cs.Guilds.Use(id, func(g *guilds.Guild) error {
-		rows, total, err = g.MessagesPage(limit, offset)
+		rows, total, err = g.MessagesPage(limit, q)
 		return err
 	})
 	return

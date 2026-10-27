@@ -53,7 +53,7 @@ export type AdminPage = {
 
 export type BatchStatus = { op: string; total: number; ok: number; failed: number; started: number };
 
-export type MessagesPage = { messages: string[]; mentions?: Record<string, string>; page: number; pages: number };
+export type MessagesPage = { messages: string[]; mentions?: Record<string, string>; page: number; pages: number; first: number; last: number };
 
 export const browser = typeof window !== "undefined";
 export const login = () => location.assign("/api/auth/login");

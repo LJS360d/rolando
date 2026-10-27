@@ -107,7 +107,7 @@ func TestMessageCount(t *testing.T) {
 	g.AddMessages([]string{"a b", "c d", "a b"})
 	total := func() int64 {
 		t.Helper()
-		_, n, err := g.MessagesPage(10, 0)
+		_, n, err := g.MessagesPage(10, PageQuery{})
 		if err != nil {
 			t.Fatal(err)
 		}

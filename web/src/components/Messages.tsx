@@ -1,4 +1,5 @@
 import { useSignal } from "@preact/signals";
+import { useRef } from "preact/hooks";
 import { guildId, resource, type MessagesPage } from "../lib/api";
 import Pager from "./Pager";
 
@@ -56,10 +57,16 @@ function render(text: string, mentions: Record<string, string>) {
 }
 
 export default function Messages() {
-  const page = useSignal(1);
-  const { data, error } = resource<MessagesPage>(
-    `/guilds/${guildId}/messages?page=${page.value}`,
+  // next/prev go by id cursor (cheap keyset query); jumps go by page number
+  const query = useSignal("page=1");
+  const r = resource<MessagesPage>(
+    `/guilds/${guildId}/messages?${query.value}`,
   ).value;
+  // keep the previous page (and its pager) on screen while the next one loads
+  const last = useRef(r);
+  if (r.data || r.error) last.current = r;
+  const { data, error } = last.current;
+  const loading = r !== last.current;
   return (
     <section class="card">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -71,12 +78,19 @@ export default function Messages() {
           <Pager
             page={data.page}
             pages={data.pages}
-            onPage={(p) => (page.value = p)}
+            onPage={(p) =>
+              (query.value =
+                p === data.page + 1 && data.last
+                  ? `page=${p}&after=${data.last}`
+                  : p === data.page - 1 && data.first
+                    ? `page=${p}&before=${data.first}`
+                    : `page=${p}`)
+            }
           />
         )}
       </div>
       {error && <p class="banner">{error}</p>}
-      <ul class="mt-3 max-h-128 overflow-y-auto rounded-lg bg-neutral-950/60 text-sm">
+      <ul class={`mt-3 max-h-128 overflow-y-auto rounded-lg bg-neutral-950/60 text-sm ${loading ? "animate-pulse opacity-60" : ""}`}>
         {data?.messages.map((m) => (
           <li class="border-b border-neutral-800/70 px-3 py-1.5 wrap-break-word whitespace-pre-wrap last:border-0">
             {render(m, data.mentions ?? {})}

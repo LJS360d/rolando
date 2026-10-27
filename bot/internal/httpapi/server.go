@@ -621,21 +621,32 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	if !requireView(w, r) || !s.requireGuild(w, r) {
 		return
 	}
-	pg := atoiOr(r.URL.Query().Get("page"), 1)
-	msgs, total, err := s.chains.MessagesPage(r.PathValue("id"), messagesPageSize, (pg-1)*messagesPageSize)
+	qs := r.URL.Query()
+	q := guilds.PageQuery{Page: atoiOr(qs.Get("page"), 1)}
+	q.After, _ = strconv.ParseInt(qs.Get("after"), 10, 64)
+	q.Before, _ = strconv.ParseInt(qs.Get("before"), 10, 64)
+	msgs, total, err := s.chains.MessagesPage(r.PathValue("id"), messagesPageSize, q)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	contents := make([]string, len(msgs))
+	var first, last int64
 	for i, m := range msgs {
 		contents[i] = m.Content
 	}
+	if len(msgs) > 0 {
+		first, last = msgs[0].ID, msgs[len(msgs)-1].ID
+	}
+	pages := (int(total) + messagesPageSize - 1) / messagesPageSize
 	writeJSON(w, map[string]any{
 		"messages": contents,
 		"mentions": s.mentions(r.PathValue("id"), contents),
-		"page":     pg,
-		"pages":    (int(total) + messagesPageSize - 1) / messagesPageSize,
+		// keyset pages don't know their number; the client tracks it
+		"page":  min(q.Page, max(pages, 1)),
+		"pages": pages,
+		"first": first,
+		"last":  last,
 	})
 }
 

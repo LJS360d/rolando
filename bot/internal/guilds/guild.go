@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -435,13 +436,41 @@ func (g *Guild) MediaCounts() (MediaCounts, error) {
 	return mc, nil
 }
 
-func (g *Guild) MessagesPage(limit, offset int) ([]Message, int64, error) {
+// PageQuery selects a messages page: keyset after/before an id when set
+// (O(log n), used for next/prev), else page number (1-based).
+type PageQuery struct {
+	Page          int
+	After, Before int64
+}
+
+// MessagesPage returns limit messages in id order. A page jump walks from
+// whichever end is closer, since OFFSET steps through every skipped row.
+func (g *Guild) MessagesPage(limit int, q PageQuery) ([]Message, int64, error) {
 	total, err := g.messageCount()
 	if err != nil {
 		return nil, 0, err
 	}
 	var rows []Message
-	err = g.DB.Order("id").Limit(limit).Offset(offset).Find(&rows).Error
+	tx := g.DB.Select("id", "content").Limit(limit)
+	offset := int64(max(q.Page-1, 0)) * int64(limit)
+	desc := false
+	switch {
+	case q.After > 0:
+		tx = tx.Where("id > ?", q.After).Order("id")
+	case q.Before > 0:
+		tx, desc = tx.Where("id < ?", q.Before).Order("id DESC"), true
+	case offset > total/2 && offset < total:
+		tail := total - offset - int64(limit)
+		if tail < 0 {
+			tx, tail = tx.Limit(limit+int(tail)), 0
+		}
+		tx, desc = tx.Order("id DESC").Offset(int(tail)), true
+	default:
+		tx = tx.Order("id").Offset(int(offset))
+	}
+	if err = tx.Find(&rows).Error; err == nil && desc {
+		slices.Reverse(rows)
+	}
 	return rows, total, err
 }
 
