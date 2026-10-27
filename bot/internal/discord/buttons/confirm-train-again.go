@@ -23,6 +23,13 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *bot.Client, i *events.ComponentI
 	chainDoc, err := h.ChainsService.GetChainConf(ctx, i.GuildID().String())
 	if err != nil {
 		logger.Errorf("Failed to fetch chainDoc for guild %s: %v", i.GuildID(), err)
+		s.Rest.DeleteInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token())
+		return
+	}
+	// a second click would fail to fetch and clear trained_at under the first
+	if h.ChainsService.State(chainDoc.ID) == "fetching" {
+		cnt := "Messages are already being fetched in this server."
+		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token(), discord.MessageUpdate{Content: &cnt})
 		return
 	}
 
@@ -38,9 +45,13 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *bot.Client, i *events.ComponentI
 		Flags:   new(discord.MessageFlagEphemeral),
 	})
 
-	// reset the chain (clear data but keep config)
-	id := chainDoc.ID
-	err = h.ChainsService.ResetChain(ctx, id)
+	// resetting takes a while; keep it off the shard read loop
+	go h.retrain(s, i, chainDoc.ID)
+}
+
+func (h *ButtonsHandler) retrain(s *bot.Client, i *events.ComponentInteractionCreate, id string) {
+	ctx := context.Background()
+	err := h.ChainsService.ResetChain(ctx, id)
 	if err != nil {
 		logger.Errorf("Failed to reset chain for guild %s: %v", i.GuildID(), err)
 		// Send error message
@@ -58,22 +69,20 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *bot.Client, i *events.ComponentI
 	s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent(content))
 	s.Rest.DeleteInteractionResponse(s.ApplicationID, i.ComponentInteraction.Token())
 
-	// Update chain status
 	now := time.Now()
-	chainDoc.TrainedAt = &now
 	if _, err = h.ChainsService.UpdateChainMeta(ctx, i.GuildID().String(), map[string]any{"trained_at": now}); err != nil {
 		logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID(), err)
 		return
 	}
 
-	// background job
-	go func(s *bot.Client, i *events.ComponentInteractionCreate) {
+	go func() {
 		startTime := time.Now()
 		n, err := h.DataFetchService.FetchAllGuildMessages(i.GuildID().String())
 		if err != nil {
 			logger.Errorf("Failed to fetch messages for guild %s: %v", i.GuildID(), err)
-			// Revert chain status
-			chainDoc.TrainedAt = nil
+			if h.ChainsService.State(i.GuildID().String()) == "fetching" {
+				return
+			}
 			if _, err = h.ChainsService.UpdateChainMeta(ctx, i.GuildID().String(), map[string]any{"trained_at": nil}); err != nil {
 				logger.Errorf("Failed to update chain document for guild %s: %v", i.GuildID(), err)
 			}
@@ -93,6 +102,5 @@ func (h *ButtonsHandler) onConfirmTrainAgain(s *bot.Client, i *events.ComponentI
 		if _, err := s.Rest.CreateMessage(i.Channel().ID(), discord.NewMessageCreate().WithContent(finalMsg)); err != nil {
 			logger.Errorf("Failed to send training finished msg: %v", err)
 		}
-	}(s, i)
-
+	}()
 }
