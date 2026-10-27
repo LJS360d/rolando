@@ -47,11 +47,10 @@ func (h *ButtonsHandler) OnButtonInteraction(i *events.ComponentInteractionCreat
 	if i.GuildID() == nil {
 		where = "DMs"
 	} else {
-		if guild, ok := h.Client.Caches.Guild(*i.GuildID()); !ok {
-			logger.Errorf("Guild with id '%s' not found in cache", i.GuildID())
-			return
-		} else {
+		if guild, ok := h.Client.Caches.Guild(*i.GuildID()); ok {
 			where = guild.Name
+		} else {
+			where = i.GuildID().String()
 		}
 	}
 

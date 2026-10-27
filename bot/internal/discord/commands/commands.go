@@ -416,8 +416,7 @@ func (h *SlashCommandsHandler) OnSlashCommandInteraction(event *events.Applicati
 		if guild, ok := h.Client.Caches.Guild(*event.GuildID()); ok {
 			where = guild.Name
 		} else {
-			logger.Errorf("Failed to fetch guild '%s' for command interaction", event.GuildID().String())
-			return
+			where = event.GuildID().String()
 		}
 	}
 
