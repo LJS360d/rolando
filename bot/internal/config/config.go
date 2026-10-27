@@ -39,6 +39,7 @@ var (
 	VoiceChatFeaturesSKU snowflake.ID
 	PremiumsPageLink     string
 	DBLToken             string
+	RepoURL              string
 )
 
 func init() {
@@ -56,6 +57,7 @@ func init() {
 	if InviteUrl == "" {
 		log.Println("INVITE_URL not set in the environment")
 	}
+	RepoURL = envOr("REPO_URL", "https://github.com/LJS360d/rolando")
 	ownerIDsStr := os.Getenv("OWNER_IDS")
 	if ownerIDsStr == "" {
 		log.Println("OWNER_IDS not set in the environment")

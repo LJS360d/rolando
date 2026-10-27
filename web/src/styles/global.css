@@ -19,4 +19,6 @@
   .btn-danger { @apply bg-red-600 hover:bg-red-500; }
   .link { @apply cursor-pointer text-indigo-400 hover:underline; }
   .input { @apply rounded border border-neutral-700 bg-neutral-800 p-1.5; }
+  /* links from container env: an unset var leaves an empty href */
+  .env-link[href=""] { @apply hidden; }
 }

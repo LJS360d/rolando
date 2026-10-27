@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"rolando/internal/config"
 	"rolando/internal/logger"
 
 	"github.com/disgoorg/disgo/bot"
@@ -10,11 +11,10 @@ import (
 
 // implementation of /src command
 func (h *SlashCommandsHandler) srcCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
-	repoURL := "https://github.com/LJS360d/rolando"
 	err := h.Client.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
 		Type: discord.InteractionResponseTypeCreateMessage,
 		Data: discord.MessageCreate{
-			Content: repoURL,
+			Content: config.RepoURL,
 		},
 	})
 	if err != nil {

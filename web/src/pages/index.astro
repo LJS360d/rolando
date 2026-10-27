@@ -1,15 +1,30 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import BotCard from "../components/BotCard";
+import BotCard, { BotName } from "../components/BotCard";
 import Commands from "../components/Commands";
+
+const steps: [string, string][] = [
+  ["Invite it", "Add it to your server and give it access to the channels it should learn from."],
+  ["Let it learn", "Run /train to read the chat history, or just keep chatting: every new message teaches it."],
+  ["It talks back", "It replies, reacts and drops gifs in your server's own style. Tune how often from My servers."],
+];
 ---
 
 <Layout>
   <div class="grid gap-4 lg:grid-cols-2">
     <section class="card text-center">
-      <h1 class="text-4xl">Meet Rolando</h1>
+      <h1 class="text-4xl">Meet <BotName client:only="preact" /></h1>
       <p>The learning AI that makes your Discord server dangerously fun.</p>
       <BotCard client:only="preact" />
+      <h2 class="mt-6">How it works</h2>
+      <ol class="mx-auto max-w-md space-y-3 text-left">
+        {steps.map(([title, text], i) => (
+          <li>
+            <h3 class="mt-0">{i + 1}. {title}</h3>
+            <p class="muted text-sm">{text}</p>
+          </li>
+        ))}
+      </ol>
       <p class="muted mt-4 text-sm">
         Warning: This AI bot learns from messages and can generate NSFW content.<br />
         User discretion is advised.
