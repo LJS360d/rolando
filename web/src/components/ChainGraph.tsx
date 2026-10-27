@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api, guildId, resource, type Graph, type GuildRow, type Link } from "../lib/api";
 
 const W = 760, ROW = 30, CX = W / 2, LX = 190, RX = W - 190;
@@ -12,19 +12,22 @@ export default function ChainGraph() {
   const [trail, setTrail] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const seq = useRef(0);
 
   // keep: index of the breadcrumb clicked; "reset" starts a new trail.
   const go = (word: string, keep?: number | "reset") => {
+    const n = ++seq.current;
     setBusy(true);
     setError(undefined);
     api<Graph>("GET", `/guilds/${guildId}/graph?word=${encodeURIComponent(word)}`)
       .then((g) => {
+        if (n !== seq.current) return;
         if (!g.word) return setError(word ? `“${word}” is not in the chain` : "The chain is empty");
         setGraph(g);
         setTrail((t) => (keep === "reset" ? [g.word] : keep !== undefined ? t.slice(0, keep + 1) : [...t.slice(-7), g.word]));
         if (!loaded) resource(`/guilds/${guildId}/summary`, true);
-      }, (e: Error) => setError(e.message))
-      .finally(() => setBusy(false));
+      }, (e: Error) => n === seq.current && setError(e.message))
+      .finally(() => n === seq.current && setBusy(false));
   };
   useEffect(() => { if (loaded && !graph) go("", "reset"); }, [loaded]);
 
@@ -54,6 +57,8 @@ export default function ChainGraph() {
           <span class="icon-[fa6-solid--circle-nodes] size-10 text-neutral-600" />
           {state === "unloaded" ? (
             <p class="muted max-w-sm">The chain is unloaded. Load it to explore it.</p>
+          ) : state === "empty" ? (
+            <p class="muted max-w-sm">Nothing learned yet.</p>
           ) : (
             <p class="muted">{busy ? "Loading…" : ""}</p>
           )}
@@ -108,21 +113,28 @@ function Ego({ graph, onPick, busy }: { graph: Graph; onPick: (w: string) => voi
       const nx = left ? LX : RX;
       const cx = left ? CX - half : CX + half;
       return (
-        <g class="group cursor-pointer" onClick={() => onPick(l.w)}>
+        <g
+          class="group cursor-pointer outline-none"
+          role="button"
+          tabIndex={0}
+          aria-label={`${l.w}, ${l.c} times`}
+          onClick={() => onPick(l.w)}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onPick(l.w))}
+        >
           <title>{`${l.w} · ${l.c}×`}</title>
           <path
             d={`M${nx} ${ny} C${(nx + cx) / 2} ${ny} ${(nx + cx) / 2} ${cy} ${cx} ${cy}`}
             fill="none"
-            class={`${left ? "stroke-sky-500/40" : "stroke-indigo-500/50"} transition group-hover:stroke-amber-400`}
+            class={`${left ? "stroke-sky-500/40" : "stroke-indigo-500/50"} transition group-hover:stroke-amber-400 group-focus-visible:stroke-amber-400`}
             stroke-width={stroke(l.c)}
           />
-          <circle cx={nx} cy={ny} r={4} class={`${left ? "fill-sky-400" : "fill-indigo-400"} group-hover:fill-amber-400`} />
+          <circle cx={nx} cy={ny} r={4} class={`${left ? "fill-sky-400" : "fill-indigo-400"} group-hover:fill-amber-400 group-focus-visible:fill-amber-400`} />
           <text
             x={left ? nx - 10 : nx + 10}
             y={ny}
             dominant-baseline="middle"
             text-anchor={left ? "end" : "start"}
-            class="fill-neutral-200 text-[13px] group-hover:fill-amber-300"
+            class="fill-neutral-200 text-[13px] group-hover:fill-amber-300 group-focus-visible:fill-amber-300"
           >
             {left && <tspan class="fill-neutral-500 text-[11px]">{l.c} </tspan>}
             {clip(l.w)}
