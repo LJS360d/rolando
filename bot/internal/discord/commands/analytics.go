@@ -15,25 +15,33 @@ import (
 
 // implementation of /analytics command
 func (h *SlashCommandsHandler) analyticsCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
-	ctx := context.Background()
+	if err := i.DeferCreateMessage(false); err != nil {
+		logger.Errorf("Failed to defer interaction response: %v", err)
+		return
+	}
+	go h.analytics(s, i)
+}
 
-	if _, err := h.ChainsService.GetChainConf(ctx, i.GuildID().String()); err != nil {
-		logger.Errorf("Failed to fetch chain document for guild %s: %v", i.GuildID(), err)
+func (h *SlashCommandsHandler) analytics(s *bot.Client, i *events.ApplicationCommandInteractionCreate) {
+	fail := func(format string, args ...any) {
+		logger.Errorf(format, args...)
+		s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.NewMessageUpdate().WithContent("Failed to compute analytics."))
+	}
+	if _, err := h.ChainsService.GetChainConf(context.Background(), i.GuildID().String()); err != nil {
+		fail("Failed to fetch chain document for guild %s: %v", i.GuildID(), err)
 		return
 	}
 	summary, err := h.ChainsService.Summary(i.GuildID().String())
-	analytics := ianalytics.FromSummary(summary)
 	if err != nil {
-		logger.Errorf("failed to analyze chain: %v", err)
+		fail("failed to analyze chain: %v", err)
 		return
 	}
-	// Constructing the embed
+	analytics := ianalytics.FromSummary(summary)
 	botUser, ok := s.Caches.SelfUser()
 	if !ok {
-		logger.Errorf("Could not fetch selfUser")
+		fail("Could not fetch selfUser")
 		return
 	}
-	botAvatarUrl := botUser.AvatarURL(discord.WithSize(256))
 	embed := discord.Embed{
 		Title:       "Analytics",
 		Description: "**Complexity Score**: indicates how *smart* the bot is.\nA higher value means smarter",
@@ -92,15 +100,11 @@ func (h *SlashCommandsHandler) analyticsCommand(s *bot.Client, i *events.Applica
 		},
 		Footer: &discord.EmbedFooter{
 			Text:    fmt.Sprintf("Version: %s", config.Version),
-			IconURL: *botAvatarUrl,
+			IconURL: botUser.EffectiveAvatarURL(discord.WithSize(256)),
 		},
 	}
 
-	// Send the response with the embed
-	err = s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
-		Type: discord.InteractionResponseTypeCreateMessage,
-		Data: discord.NewMessageCreate().WithEmbeds(embed),
-	})
+	_, err = s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.NewMessageUpdate().WithEmbeds(embed))
 	if err != nil {
 		logger.Errorf("Failed to send analytics embed: %v", err)
 	}

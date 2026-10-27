@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"rolando/internal/logger"
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
@@ -26,14 +27,19 @@ func (h *SlashCommandsHandler) videoCommand(s *bot.Client, i *events.Application
 
 // common helper
 func (h *SlashCommandsHandler) mediaCommand(s *bot.Client, i *events.ApplicationCommandInteractionCreate, kind string) {
-	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
-		Type: discord.InteractionResponseTypeDeferredCreateMessage,
-	})
-	media, err := h.ChainsService.GetRandomMedia(context.Background(), i.GuildID().String(), kind)
-	if err != nil || media == "" {
-		media = fmt.Sprintf("No valid %s found.", kind)
+	if err := i.DeferCreateMessage(false); err != nil {
+		logger.Errorf("Failed to defer interaction response: %v", err)
+		return
 	}
-	s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.MessageUpdate{
-		Content: &media,
-	})
+	go func() {
+		media, err := h.ChainsService.GetRandomMedia(context.Background(), i.GuildID().String(), kind)
+		if err != nil || media == "" {
+			media = fmt.Sprintf("No valid %s found.", kind)
+		}
+		if _, err := s.Rest.UpdateInteractionResponse(s.ApplicationID, i.Token(), discord.MessageUpdate{
+			Content: &media,
+		}); err != nil {
+			logger.Errorf("Failed to update interaction response: %v", err)
+		}
+	}()
 }
