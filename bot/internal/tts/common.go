@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 
 	"github.com/disgoorg/disgo/voice"
 	"github.com/hajimehoshi/go-mp3"
@@ -18,10 +17,11 @@ func MP3ToDCA(mp3Data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode mp3: %w", err)
 	}
-	stereo, err := io.ReadAll(dec)
-	if err != nil {
+	raw := bytes.NewBuffer(make([]byte, 0, max(dec.Length(), 0)))
+	if _, err := raw.ReadFrom(dec); err != nil {
 		return nil, fmt.Errorf("failed to decode mp3: %w", err)
 	}
+	stereo := raw.Bytes()
 
 	// go-mp3 always yields 16-bit little-endian stereo
 	pcm := make([]int16, len(stereo)/4)
@@ -59,6 +59,9 @@ func resample(pcm []int16, from, to int) []int16 {
 	return out
 }
 
+// maxOpusPacket is the largest packet one Opus frame can produce.
+const maxOpusPacket = 1275
+
 // PCMToDCA encodes mono PCM at an Opus-supported sample rate to DCA format.
 func PCMToDCA(pcm []int16, sampleRate int) ([]byte, error) {
 	encoder, err := gopus.NewEncoder(sampleRate, 1, gopus.Voip)
@@ -80,7 +83,7 @@ func PCMToDCA(pcm []int16, sampleRate int) ([]byte, error) {
 		// pad the last frame with silence
 		clear(samples[n:])
 
-		opusData, err := encoder.Encode(samples, frameSamples, 3840)
+		opusData, err := encoder.Encode(samples, frameSamples, maxOpusPacket)
 		if err != nil {
 			return nil, fmt.Errorf("opus encode error: %w", err)
 		}

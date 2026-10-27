@@ -8,24 +8,28 @@ import (
 	"net/url"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/disgoorg/disgo/voice"
 )
 
 var client = &http.Client{Timeout: 10 * time.Second}
 
+// maxChars is the longest text the endpoint accepts
+const maxChars = 200
+
 // maxAudio bounds the response; 200 chars of speech is well under it
 const maxAudio = 4 << 20
 
 // FetchTTS downloads TTS audio from Google Translate and returns the raw MP3 bytes.
 func FetchTTS(text, lang string) ([]byte, error) {
-	if len(text) > 200 {
-		text = text[:200]
+	if r := []rune(text); len(r) > maxChars {
+		text = string(r[:maxChars])
 	}
 
 	ttsURL := fmt.Sprintf(
 		"http://translate.google.com/translate_tts?ie=UTF-8&total=1&idx=0&textlen=%d&client=tw-ob&q=%s&tl=%s",
-		len(text), url.QueryEscape(text), lang,
+		utf8.RuneCountInString(text), url.QueryEscape(text), url.QueryEscape(lang),
 	)
 
 	resp, err := client.Get(ttsURL)
