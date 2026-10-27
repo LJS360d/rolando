@@ -17,8 +17,9 @@ func (h *SlashCommandsHandler) vcLeaveCommand(client *bot.Client, event *events.
 	ctx := context.Background()
 	guildID := *event.GuildID()
 
-	sess := helpers.Current(guildID)
-	if sess == nil {
+	// Current would wait out a join in progress, and the join needs this
+	// read loop to finish
+	if !helpers.InVoice(guildID) {
 		err := event.CreateMessage(discord.NewMessageCreate().
 			WithContent("I am not connected to a voice channel.").
 			WithEphemeral(true))
@@ -38,6 +39,10 @@ func (h *SlashCommandsHandler) vcLeaveCommand(client *bot.Client, event *events.
 
 	// the goodbye plays for up to 5s; keep it off the shard read loop
 	go func() {
+		sess := helpers.Current(guildID)
+		if sess == nil {
+			return
+		}
 		defer sess.Leave()
 		chainDoc, err := h.ChainsService.GetChainConf(ctx, guildID.String())
 		if err != nil {

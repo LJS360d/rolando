@@ -120,19 +120,21 @@ func (s *Session) Play(ctx context.Context, provider voice.OpusFrameProvider) er
 
 	conn.SetOpusFrameProvider(wrapped)
 
+	var err error
 	select {
 	case <-ctx.Done():
-		conn.SetOpusFrameProvider(nil)
-		conn.SetSpeaking(ctx, 0)
-		return ctx.Err()
-	case err := <-done:
-		conn.SetSpeaking(ctx, 0)
-		conn.SetOpusFrameProvider(nil)
+		err = ctx.Err()
+	case err = <-done:
 		if errors.Is(err, io.EOF) {
-			return nil
+			err = nil
 		}
-		return err
 	}
+	conn.SetOpusFrameProvider(nil)
+	// ctx may be done already, and speaking must still be cleared
+	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	conn.SetSpeaking(stopCtx, 0)
+	cancel()
+	return err
 }
 
 type trackingProvider struct {

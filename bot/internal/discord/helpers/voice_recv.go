@@ -21,6 +21,7 @@ type PCMPacket struct {
 type SpeechReceiver struct {
 	// decoders holds the Opus decoders, keyed by SSRC.
 	decoders map[uint32]*gopus.Decoder
+	ssrcs    map[snowflake.ID]uint32
 	mu       sync.Mutex
 	pcmChan  chan *PCMPacket
 	closed   bool
@@ -32,6 +33,7 @@ const maxFrameSamples = stt.SampleRate * 60 / 1000
 func NewSpeechReceiver(pcmChan chan *PCMPacket) *SpeechReceiver {
 	return &SpeechReceiver{
 		decoders: make(map[uint32]*gopus.Decoder),
+		ssrcs:    make(map[snowflake.ID]uint32),
 		pcmChan:  pcmChan,
 	}
 }
@@ -58,6 +60,9 @@ func (r *SpeechReceiver) ReceiveOpusFrame(userID snowflake.ID, packet *voice.Pac
 			return err
 		}
 		r.decoders[packet.SSRC] = decoder
+		if userID != 0 {
+			r.ssrcs[userID] = packet.SSRC
+		}
 	}
 	r.mu.Unlock()
 
@@ -75,7 +80,14 @@ func (r *SpeechReceiver) ReceiveOpusFrame(userID snowflake.ID, packet *voice.Pac
 	return nil
 }
 
-func (r *SpeechReceiver) CleanupUser(userID snowflake.ID) {}
+func (r *SpeechReceiver) CleanupUser(userID snowflake.ID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if ssrc, ok := r.ssrcs[userID]; ok {
+		delete(r.decoders, ssrc)
+		delete(r.ssrcs, userID)
+	}
+}
 
 // Close drops the decoders and stops forwarding packets. pcmChan is never
 // closed: disgo's receive goroutine may still be delivering a frame.
@@ -84,4 +96,5 @@ func (r *SpeechReceiver) Close() {
 	defer r.mu.Unlock()
 	r.closed = true
 	clear(r.decoders)
+	clear(r.ssrcs)
 }

@@ -54,7 +54,7 @@ func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
 			return
 		}
 		time.Sleep(time.Duration(2 * time.Second))
-		vcCtx, vcCancel := context.WithCancel(context.Background())
+		vcCtx, vcCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer vcCancel()
 
 		// Create and open voice connection
@@ -69,7 +69,7 @@ func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
 		defer sess.Leave()
 
 		content, err := h.ChainsService.GenerateFiltered(vcCtx, guildID, 100)
-		if err != nil {
+		if err != nil || content == "" {
 			logger.Errorf("Failed to generate text: %v", err)
 			return
 		}
@@ -81,6 +81,7 @@ func (h *EventsHandler) onVoiceStateUpdate(e *events.GuildVoiceStateUpdate) {
 
 		if err := sess.Play(vcCtx, provider); err != nil {
 			logger.Errorf("Failed to stream audio: %v", err)
+			return
 		}
 
 		logger.Infof("Randomly spoke in voice channel '%s' in '%s'", channel.Name(), chainDoc.Name)

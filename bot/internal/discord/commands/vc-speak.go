@@ -68,8 +68,9 @@ func (h *SlashCommandsHandler) vcSpeakCommand(client *bot.Client, event *events.
 		}
 
 		content, err := h.ChainsService.GenerateFiltered(vcCtx, guildID.String(), 100)
-		if err != nil {
+		if err != nil || content == "" {
 			logger.Errorf("Failed to generate text: %v", err)
+			client.Rest.UpdateInteractionResponse(appID, token, discord.NewMessageUpdate().WithContent("Failed to generate text."))
 			return
 		}
 		_, err = client.Rest.UpdateInteractionResponse(appID, token, discord.NewMessageUpdate().WithContent(content))

@@ -141,6 +141,10 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 			}
 
 			if e.VoiceState.UserID == botUserID {
+				if ch := e.VoiceState.ChannelID; ch != nil && *ch == channelID {
+					// muted, deafened or otherwise edited, still here
+					return
+				}
 				logger.Infof("Left voice channel '%s' in '%s', initiating cleanup...", channelName, chainConf.Name)
 				triggerCleanup()
 				return
@@ -217,13 +221,32 @@ func listenVc(h *SlashCommandsHandler, event *events.ApplicationCommandInteracti
 		}
 	}
 
+	// utterances are stored in order by one worker, off the audio loop: a
+	// slow DB write must not stall Opus decoding and drop speech
+	utterances := make(chan string, 64)
+	go func() {
+		for {
+			select {
+			case text := <-utterances:
+				if err := h.ChainsService.UpdateChainState(vcCtx, guildID.String(), []string{text}); err != nil {
+					logger.Errorf("Failed to store utterance in '%s': %v", chainConf.Name, err)
+				}
+				if strings.Contains(text, "rolando") || utils.RatedChoice(chainConf.ReplyRate) {
+					go speak()
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
 	onUtterance := func(text string) {
 		if text == "" {
 			return
 		}
-		h.ChainsService.UpdateChainState(vcCtx, guildID.String(), []string{text})
-		if strings.Contains(text, "rolando") || utils.RatedChoice(chainConf.ReplyRate) {
-			go speak()
+		select {
+		case utterances <- text:
+		default:
+			logger.Warnf("Utterance queue full in '%s', dropping one", chainConf.Name)
 		}
 	}
 
