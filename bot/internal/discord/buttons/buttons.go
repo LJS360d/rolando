@@ -1,6 +1,7 @@
 package buttons
 
 import (
+	"rolando/internal/discord/pager"
 	"rolando/internal/discord/services"
 	"rolando/internal/logger"
 	"time"
@@ -62,6 +63,8 @@ func (h *ButtonsHandler) OnButtonInteraction(i *events.ComponentInteractionCreat
 	// Check if there's a handler for the button ID
 	if handler, exists := h.Handlers[buttonId]; exists {
 		handler(h.Client, i) // Call the function bound to the button ID
+	} else if ok, err := pager.Handle(h.Client, i); ok && err != nil {
+		logger.Errorf("btn:%s pager: %v", buttonId, err)
 	}
 	logger.Infof("btn:%s handler from '%s' in '%s' completed in %s", buttonId, who, where, time.Since(startTime).Round(time.Millisecond))
 }
