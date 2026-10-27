@@ -4,7 +4,7 @@ const link = "flex items-center gap-2 rounded px-3 py-2 text-neutral-100 hover:b
 
 export default function Header() {
   const { data } = session().value;
-  const logout = () => api("POST", "/auth/logout").then(() => location.assign("/"));
+  const logout = () => api("POST", "/auth/logout").then(() => location.assign("/"), (e: Error) => alert(e.message));
   const color = data?.c ? `#${data.c.toString(16).padStart(6, "0")}` : undefined;
   return (
     <header class="sticky top-0 z-10 bg-neutral-900 shadow-lg">

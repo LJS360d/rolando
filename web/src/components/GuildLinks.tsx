@@ -2,7 +2,7 @@ import { formatBytes, login, resource, session, type ChainState, type GuildRow }
 
 export function GuildIcon({ g, class: cls }: { g: Pick<GuildRow, "icon" | "name">; class: string }) {
   if (g.icon) return <img class={`${cls} rounded-2xl object-cover`} src={g.icon} alt="" />;
-  const initials = g.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 3);
+  const initials = g.name.split(/\s+/).map((w) => [...w][0] ?? "").slice(0, 3).join("");
   return <span class={`${cls} grid place-items-center rounded-2xl bg-indigo-600 font-bold text-white`}>{initials}</span>;
 }
 
