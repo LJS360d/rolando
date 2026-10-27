@@ -14,7 +14,7 @@ func FormatBytes(bytes uint64) string {
 		return "0 Byte"
 	}
 
-	i := math.Floor(math.Log2(float64(bytes)) / 10)
+	i := min(math.Floor(math.Log2(float64(bytes))/10), float64(len(sizes)-1))
 	formattedSize := float64(bytes) / math.Pow(1024, i)
 	return fmt.Sprintf("%.2f %s", formattedSize, sizes[int(i)])
 }
