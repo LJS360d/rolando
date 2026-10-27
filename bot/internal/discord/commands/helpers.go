@@ -85,7 +85,7 @@ func (h *SlashCommandsHandler) guildSubscriptionCheck(s *bot.Client, i *events.A
 	// pass if the user is a bot owner
 	for _, ownerID := range config.OwnerIDs {
 		if i.User().ID.String() == ownerID {
-			logger.Infof("User %s is a bot owner, skipping guild subscription check", *i.User().GlobalName)
+			logger.Infof("User %s is a bot owner, skipping guild subscription check", i.User().EffectiveName())
 			return true
 		}
 	}
@@ -102,7 +102,7 @@ func (h *SlashCommandsHandler) guildSubscriptionCheck(s *bot.Client, i *events.A
 	logger.Infof("Performing guild subscription check for sku '%s' in guild '%s'", skuId, chainDoc.Name)
 	// Check if the guild has the SKU
 	for _, ent := range i.Entitlements() {
-		if ent.SkuID == skuId && ent.EndsAt != nil && ent.EndsAt.After(time.Now()) {
+		if ent.SkuID == skuId && (ent.EndsAt == nil || ent.EndsAt.After(time.Now())) {
 			return true
 		}
 	}

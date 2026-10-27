@@ -38,7 +38,7 @@ func GuildSubscriptionCheck(client *bot.Client, member discord.Member, chainDoc 
 
 	// Check if the guild has the SKU
 	for _, ent := range entitlements {
-		if ent.SkuID == skuId && ent.EndsAt != nil && ent.EndsAt.After(time.Now()) {
+		if ent.SkuID == skuId && !ent.Deleted && (ent.EndsAt == nil || ent.EndsAt.After(time.Now())) {
 			return true
 		}
 	}
