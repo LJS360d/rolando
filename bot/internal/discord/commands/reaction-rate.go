@@ -34,6 +34,16 @@ func (h *SlashCommandsHandler) reactionRateCommand(s *bot.Client, i *events.Appl
 		return
 	}
 	var ratePercent float64
+	if rate != nil && *rate < 0 {
+		s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
+			Type: discord.InteractionResponseTypeCreateMessage,
+			Data: discord.MessageCreate{
+				Content: "The reaction rate cannot be negative.",
+				Flags:   discord.MessageFlagEphemeral,
+			},
+		})
+		return
+	}
 	if rate != nil {
 		if !h.checkAdmin(i, "You are not authorized to change the reaction rate.") {
 			return

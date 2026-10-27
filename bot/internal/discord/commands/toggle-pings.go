@@ -35,7 +35,7 @@ func (h *SlashCommandsHandler) togglePingsCommand(s *bot.Client, i *events.Appli
 	}
 
 	state := "disabled"
-	if chain.Pings {
+	if !chain.Pings {
 		state = "enabled"
 	}
 	s.Rest.CreateInteractionResponse(i.ID(), i.Token(), discord.InteractionResponse{
