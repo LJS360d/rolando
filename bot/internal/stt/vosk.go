@@ -7,6 +7,7 @@ import (
 	"rolando/internal/logger"
 	"sync"
 	"time"
+	"unsafe"
 
 	vosk "github.com/alphacep/vosk-api/go"
 )
@@ -50,6 +51,9 @@ func NewRecognizer(lang string) (*Recognizer, error) {
 		return nil, m.err
 	}
 	r, err := vosk.NewRecognizer(m.m, SampleRate)
+	if err == nil && isNull(r) {
+		err = fmt.Errorf("vosk returned no recognizer")
+	}
 	if err != nil {
 		releaseModel(lang, m)
 		return nil, fmt.Errorf("failed to create recognizer for model %s: %w", lang, err)
@@ -91,7 +95,17 @@ func loadModel(lang string) (*vosk.VoskModel, error) {
 	if _, err := os.Stat(dir); err != nil {
 		return nil, err
 	}
-	return vosk.NewModel(dir)
+	m, err := vosk.NewModel(dir)
+	if err == nil && isNull(m) {
+		return nil, fmt.Errorf("vosk could not load %s", dir)
+	}
+	return m, err
+}
+
+// isNull reports whether a vosk handle wraps a NULL C pointer: the bindings
+// hide the field, and both handle types hold just that pointer.
+func isNull[T vosk.VoskModel | vosk.VoskRecognizer](h *T) bool {
+	return h == nil || *(*unsafe.Pointer)(unsafe.Pointer(h)) == nil
 }
 
 func releaseModel(lang string, m *model) {
