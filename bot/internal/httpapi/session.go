@@ -106,6 +106,7 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid oauth state", http.StatusBadRequest)
 		return
 	}
+	http.SetCookie(w, &http.Cookie{Name: stateCookie, Path: "/api/auth", MaxAge: -1})
 	token, err := s.exchange(r.URL.Query().Get("code"))
 	if err != nil {
 		http.Error(w, "login failed: "+err.Error(), http.StatusBadGateway)
@@ -183,9 +184,10 @@ func discordGet(token, path string, out any) error {
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
+// atoiOr parses a positive page number, capped so offsets can't overflow.
 func atoiOr(s string, def int) int {
 	if v, err := strconv.Atoi(s); err == nil && v > 0 {
-		return v
+		return min(v, 1<<24)
 	}
 	return def
 }

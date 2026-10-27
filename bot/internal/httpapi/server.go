@@ -479,7 +479,12 @@ func (s *Server) guild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	g, ok := s.client.Caches.Guild(snowflake.MustParse(id))
+	sf, err := snowflake.Parse(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	g, ok := s.client.Caches.Guild(sf)
 	if !ok || !s.chains.Guilds.Exists(id) {
 		http.NotFound(w, r)
 		return
@@ -767,7 +772,12 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 	if !requireOwner(w, r) {
 		return
 	}
-	for ch := range s.client.Caches.ChannelsForGuild(snowflake.MustParse(r.PathValue("id"))) {
+	gid, err := snowflake.Parse(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	for ch := range s.client.Caches.ChannelsForGuild(gid) {
 		if ch.Type() != discord.ChannelTypeGuildText {
 			continue
 		}
