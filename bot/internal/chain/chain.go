@@ -342,7 +342,7 @@ func (c *Chain) GenerateRhyme(word string, maxLength int) string {
 		}
 	}
 	out := c.join(toks)
-	if out != "" && !strings.HasSuffix(strings.ToLower(out), suffix) {
+	if out != "" && !hasSuffixFold(out, suffix) {
 		out += suffix
 	}
 	return out
@@ -351,6 +351,11 @@ func (c *Chain) GenerateRhyme(word string, maxLength int) string {
 func rhymeSuffix(word string) string {
 	r := []rune(strings.ToLower(strings.TrimSpace(word)))
 	return string(r[len(r)-min(len(r), 3):])
+}
+
+// hasSuffixFold is HasSuffix(ToLower(s), suffix) without allocating per token.
+func hasSuffixFold(s, suffix string) bool {
+	return len(s) >= len(suffix) && strings.EqualFold(s[len(s)-len(suffix):], suffix)
 }
 
 func (c *Chain) walk(start, maxLength int, suffix string) ([]uint32, map[int][]edge) {
@@ -370,7 +375,7 @@ func (c *Chain) walk(start, maxLength int, suffix string) ([]uint32, map[int][]e
 			continue
 		}
 		for _, e := range es {
-			if strings.HasSuffix(strings.ToLower(c.tokens[e.tok]), suffix) {
+			if hasSuffixFold(c.tokens[e.tok], suffix) {
 				cands[len(toks)-1] = append(cands[len(toks)-1], e)
 			}
 		}
