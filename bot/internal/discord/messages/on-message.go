@@ -74,8 +74,7 @@ func (h *MessageHandler) OnMessageCreate(e *events.MessageCreate) {
 				logger.Errorf("Failed to send typing in '%s': %v", guild.Name, err)
 			}
 			h.handleReply(m, chainConf.ID)
-		}
-		if utils.RatedChoice(chainConf.ReplyRate) {
+		} else if utils.RatedChoice(chainConf.ReplyRate) {
 			if err := h.Client.Rest.SendTyping(m.ChannelID); err != nil {
 				logger.Errorf("Failed to send typing in '%s': %v", guild.Name, err)
 			}
@@ -155,7 +154,7 @@ func (h *MessageHandler) handleReaction(m discord.Message) {
 		botRoles = self.RoleIDs
 	}
 
-	emojiPool := slices.Clone(data.EmojiUnicodes)
+	var custom []string
 	for emoji := range h.Client.Caches.Emojis(*m.GuildID) {
 		if !emoji.Available {
 			continue
@@ -164,10 +163,15 @@ func (h *MessageHandler) handleReaction(m discord.Message) {
 		if len(emoji.Roles) > 0 && !slices.ContainsFunc(emoji.Roles, func(r snowflake.ID) bool { return slices.Contains(botRoles, r) }) {
 			continue
 		}
-		emojiPool = append(emojiPool, emoji.Reaction())
+		custom = append(custom, emoji.Reaction())
 	}
 
-	randEmoji := emojiPool[rand.Intn(len(emojiPool))]
+	var randEmoji string
+	if i := rand.Intn(len(data.EmojiUnicodes) + len(custom)); i < len(data.EmojiUnicodes) {
+		randEmoji = data.EmojiUnicodes[i]
+	} else {
+		randEmoji = custom[i-len(data.EmojiUnicodes)]
+	}
 	if err := h.Client.Rest.AddReaction(m.ChannelID, m.ID, randEmoji); err != nil {
 		logger.Errorf("Failed to add reaction: %v", err)
 	}
