@@ -169,8 +169,8 @@ func shutdown(client *bot.Client, stopManager context.CancelFunc, managerDone <-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	step("closing voice", func() { client.VoiceManager.Close(ctx) })
-	step("closing rest", func() { client.Rest.Close(ctx) })
 	step("closing shard manager", func() { client.ShardManager.Close(ctx) })
+	step("closing rest", func() { client.Rest.Close(ctx) })
 	step("flushing guilds", func() {
 		stopManager()
 		<-managerDone
