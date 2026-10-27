@@ -79,9 +79,14 @@ type Guild struct {
 	cfg   *Config
 	// snapMu serializes snapshot writers, which share chain.snap.tmp
 	snapMu sync.Mutex
+	// rebuildMu serializes rebuilds, so the last one uses the latest config
+	rebuildMu sync.Mutex
 	// stored message count, kept under mu once counted
 	msgCount   int64
 	msgCounted bool
+	// wipes counts deletes and resets under mu; a rebuild that read rows
+	// before one of them replays from scratch
+	wipes uint64
 
 	refs     int
 	lastUsed time.Time
@@ -160,10 +165,11 @@ func (g *Guild) writeConfig(write func() error) error {
 func (g *Guild) CreateConfig(name string) (*Config, error) {
 	c := &Config{ID: g.ID, Name: name, ReplyRate: 10, ReactionRate: 30, VcJoinRate: 100, MaxSizeMb: 25,
 		NGramSize: 2, MarkovMaxBranches: 256, TTSLanguage: "en", Pings: true}
-	if err := g.writeConfig(func() error { return g.DB.Create(c).Error }); err != nil {
+	// concurrent first messages race to create it; the loser reads the winner's row
+	if err := g.writeConfig(func() error { return g.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(c).Error }); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return g.Config()
 }
 
 func (g *Guild) UpdateConfig(fields map[string]any) (*Config, error) {
@@ -311,6 +317,7 @@ func (g *Guild) DeleteMessage(content string) error {
 		return err
 	}
 	g.msgCount -= deleted
+	g.wipes++
 	if c := g.loaded(); c != nil {
 		c.Delete(content)
 	}
@@ -339,27 +346,37 @@ func (g *Guild) Reset() error {
 		})
 	})
 	g.msgCounted = false
+	g.wipes++
 	if err != nil {
 		return err
 	}
 	g.chain.Store(chain.New(cfg.NGramSize))
 	os.Remove(g.snapPath())
-	return nil
+	return g.WriteSummary()
 }
 
 // Rebuild retrains the chain from all stored messages with the current
 // config, then swaps it in. Live writes keep landing on the old chain and are
 // replayed from SQLite before the swap.
 func (g *Guild) Rebuild() error {
+	g.rebuildMu.Lock()
+	defer g.rebuildMu.Unlock()
 	cfg, err := g.Config()
 	if err != nil {
 		return err
 	}
+	g.mu.Lock()
+	wipes := g.wipes
+	g.mu.Unlock()
 	c := chain.New(cfg.NGramSize)
 	if err := g.replay(c, cfg); err != nil {
 		return err
 	}
 	g.mu.Lock()
+	if g.wipes != wipes {
+		// rows replayed off-lock may since have been deleted
+		c = chain.New(cfg.NGramSize)
+	}
 	err = g.replay(c, cfg)
 	if err == nil {
 		g.chain.Store(c)
@@ -465,11 +482,22 @@ func (g *Guild) WriteSummary() error {
 		return err
 	}
 	b, _ := json.Marshal(s)
-	tmp := g.summaryPath() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	// writers run concurrently (snapshot, config update), so each gets its own tmp
+	f, err := os.CreateTemp(g.dir, "summary-*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, g.summaryPath())
+	defer os.Remove(f.Name())
+	if err = f.Chmod(0o644); err == nil {
+		_, err = f.Write(b)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), g.summaryPath())
 }
 
 func readSummary(path string) (Summary, error) {

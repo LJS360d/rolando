@@ -21,13 +21,13 @@ type Manager struct {
 
 	mu     sync.Mutex
 	guilds map[string]*Guild
-	// guilds taken out of guilds that are still snapshotting and closing;
-	// the channel closes when they are done
-	closing map[string]chan struct{}
+	// guilds being opened, closed or removed outside mu; the channel closes
+	// when they are done
+	pending map[string]chan struct{}
 }
 
 func NewManager(dir string, idleTTL, snapshotInterval time.Duration) *Manager {
-	return &Manager{Dir: dir, IdleTTL: idleTTL, SnapshotInterval: snapshotInterval, guilds: map[string]*Guild{}, closing: map[string]chan struct{}{}}
+	return &Manager{Dir: dir, IdleTTL: idleTTL, SnapshotInterval: snapshotInterval, guilds: map[string]*Guild{}, pending: map[string]chan struct{}{}}
 }
 
 func (m *Manager) guildDir(id string) string { return filepath.Join(m.Dir, id) }
@@ -42,20 +42,39 @@ func (m *Manager) Use(id string, fn func(*Guild) error) error {
 	return fn(g)
 }
 
+// acquire opens the guild outside mu, so a slow open (migration, cold disk)
+// doesn't stall every other guild.
 func (m *Manager) acquire(id string) (*Guild, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.waitClosing(id)
+	m.waitPending(id)
 	g, ok := m.guilds[id]
 	if !ok {
-		var err error
-		if g, err = Open(m.guildDir(id), id); err != nil {
+		done := m.markPending(id)
+		m.mu.Unlock()
+		g, err := Open(m.guildDir(id), id)
+		m.mu.Lock()
+		m.unmarkPending(id, done)
+		if err != nil {
 			return nil, err
 		}
+		g.refs++
 		m.guilds[id] = g
+		return g, nil
 	}
 	g.refs++
 	return g, nil
+}
+
+func (m *Manager) markPending(id string) chan struct{} {
+	done := make(chan struct{})
+	m.pending[id] = done
+	return done
+}
+
+func (m *Manager) unmarkPending(id string, done chan struct{}) {
+	close(done)
+	delete(m.pending, id)
 }
 
 func (m *Manager) release(g *Guild) {
@@ -71,16 +90,26 @@ func (m *Manager) Exists(id string) bool {
 	return err == nil
 }
 
-// Remove closes the guild and deletes its directory.
+// Remove closes the guild and deletes its directory. Users of the guild
+// meanwhile wait, so nothing reopens it halfway through the delete.
 func (m *Manager) Remove(id string) error {
 	m.mu.Lock()
-	m.waitClosing(id)
-	if g, ok := m.guilds[id]; ok {
-		delete(m.guilds, id)
-		closeDB(g.DB)
-	}
+	m.waitPending(id)
+	g, ok := m.guilds[id]
+	delete(m.guilds, id)
+	done := m.markPending(id)
 	m.mu.Unlock()
-	return os.RemoveAll(m.guildDir(id))
+	if ok {
+		// an in-flight snapshot would recreate files in the removed dir
+		g.snapMu.Lock()
+		closeDB(g.DB)
+		defer g.snapMu.Unlock()
+	}
+	err := os.RemoveAll(m.guildDir(id))
+	m.mu.Lock()
+	m.unmarkPending(id, done)
+	m.mu.Unlock()
+	return err
 }
 
 var ErrBusy = errors.New("guild is in use")
@@ -109,21 +138,20 @@ func (m *Manager) Unload(id string) error {
 // its snapshot is still being written.
 func (m *Manager) evict(g *Guild) {
 	delete(m.guilds, g.ID)
-	m.closing[g.ID] = make(chan struct{})
+	m.markPending(g.ID)
 }
 
 func (m *Manager) closeEvicted(g *Guild) {
 	m.closeGuild(g)
 	m.mu.Lock()
-	close(m.closing[g.ID])
-	delete(m.closing, g.ID)
+	m.unmarkPending(g.ID, m.pending[g.ID])
 	m.mu.Unlock()
 }
 
-// waitClosing returns, with mu held, once id is not closing.
-func (m *Manager) waitClosing(id string) {
+// waitPending returns, with mu held, once id is not opening or closing.
+func (m *Manager) waitPending(id string) {
 	for {
-		done, ok := m.closing[id]
+		done, ok := m.pending[id]
 		if !ok {
 			return
 		}

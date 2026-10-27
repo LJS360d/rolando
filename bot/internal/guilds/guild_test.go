@@ -208,7 +208,7 @@ func TestUseWaitsForClose(t *testing.T) {
 	defer m.Close()
 	done := make(chan struct{})
 	m.mu.Lock()
-	m.closing["1"] = done
+	m.pending["1"] = done
 	m.mu.Unlock()
 	used := make(chan struct{})
 	go func() {
@@ -221,7 +221,7 @@ func TestUseWaitsForClose(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 	}
 	m.mu.Lock()
-	delete(m.closing, "1")
+	delete(m.pending, "1")
 	close(done)
 	m.mu.Unlock()
 	select {
