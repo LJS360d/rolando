@@ -70,7 +70,7 @@ export default function ConfigForm() {
     );
   };
   const reset = () =>
-    confirm(`Delete every message and media Rolando learned in ${g.name}? The config is kept. This can't be undone.`) &&
+    confirm(`Delete every message and media learned in ${g.name}? The config is kept. This can't be undone.`) &&
     api("POST", `/guilds/${guildId}/reset`).then(() => location.reload(), (err: Error) => setStatus({ error: err.message }));
   const leave = () =>
     confirm("Leave this server and delete its data?") &&

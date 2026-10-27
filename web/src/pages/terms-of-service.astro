@@ -1,29 +1,63 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import CommunityLink from "../components/CommunityLink.astro";
 ---
 
 <Layout title="Terms of Service">
-<section class="card space-y-2">
-  <h1>Terms of Service</h1>
-  <h3>Acceptance of Terms</h3>
-  <p>By using the service, you agree to comply with and be bound by these Terms of Service. If you do not agree, do not use the application.</p>
-  <h3>Description of Service</h3>
-  <p>The bot collects message content data from channels it has access to, using that data for training a Markov chain for text generation. Users must use the /train command to let the bot fetch messages.</p>
-  <h3>Data Collection</h3>
-  <p>The bot collects message content data, excluding user data or timestamps. It saves media URLs, including images, GIFs, and videos, even NSFW ones.</p>
-  <h3>User Responsibilities</h3>
-  <p>You are responsible for ensuring the bot has the correct permissions to access channels. You agree not to misuse the bot for illegal activities.</p>
-  <h3>Prohibited Conduct</h3>
-  <p>No spamming, phishing, malicious activities, harassment, hate speech, or any other harmful behavior. Do not use automated scripts to interact with the bot inappropriately.</p>
-  <h3>Open Source and Usage</h3>
-  <p>The bot's code is open source, and we encourage free and open use.</p>
-  <h3>Termination</h3>
-  <p>We reserve the right to suspend or terminate your access at any time, without notice, if your conduct violates these Terms of Service or harms others.</p>
-  <h3>Limitation of Liability</h3>
-  <p>The bot is provided "as is" without warranties of any kind. We are not liable for any damages, including loss of profits, goodwill, use, or data.</p>
-  <h3>Amendments</h3>
-  <p>We reserve the right to modify these Terms of Service at any time. Changes will be effective immediately upon posting. Continued use of the application constitutes acceptance of the modified terms.</p>
-  <h3>Contact Information</h3>
-  <p>For questions about these Terms of Service, contact the owner "zlejon" on Discord via the official Discord server.</p>
-</section>
+  <section class="card space-y-4 [&>p]:ml-4">
+    <h1 class="text-center">Terms of Service</h1>
+    <h3>Acceptance of Terms</h3>
+    <p>
+      By using the service, you agree to comply with and be bound by these Terms
+      of Service. If you do not agree, do not use the application.
+    </p>
+    <h3>Description of Service</h3>
+    <p>
+      The bot collects message content data from channels it has access to, and
+      transcribes speech in voice channels it joins, using that data for
+      training a Markov chain for text generation. It learns from new messages
+      as they are sent; the /train command also lets it fetch past messages.
+    </p>
+    <h3>Data Collection</h3>
+    <p>
+      The bot collects message content and voice transcripts, not their authors.
+      It saves media URLs, including images, GIFs, and videos, even NSFW ones.
+      See the <a href="/privacy-policy">Privacy Policy</a> for details.
+    </p>
+    <h3>User Responsibilities</h3>
+    <p>
+      You are responsible for ensuring the bot has the correct permissions to
+      access channels. You agree not to misuse the bot for illegal activities.
+    </p>
+    <h3>Prohibited Conduct</h3>
+    <p>
+      No spamming, phishing, malicious activities, harassment, hate speech, or
+      any other harmful behavior. Do not use automated scripts to interact with
+      the bot inappropriately.
+    </p>
+    <h3>Open Source and Usage</h3>
+    <p>The bot's code is open source, and we encourage free and open use.</p>
+    <h3>Termination</h3>
+    <p>
+      We reserve the right to suspend or terminate your access at any time,
+      without notice, if your conduct violates these Terms of Service or harms
+      others.
+    </p>
+    <h3>Limitation of Liability</h3>
+    <p>
+      The bot is provided "as is" without warranties of any kind. We are not
+      liable for any damages, including loss of profits, goodwill, use, or data.
+    </p>
+    <h3>Amendments</h3>
+    <p>
+      We reserve the right to modify these Terms of Service at any time. Changes
+      will be effective immediately upon posting. Continued use of the
+      application constitutes acceptance of the modified terms.
+    </p>
+    <h3>Contact Information</h3>
+    <p>
+      For questions about these Terms of Service, contact us on the{" "}
+      <CommunityLink />.
+    </p>
+  </section>
 </Layout>

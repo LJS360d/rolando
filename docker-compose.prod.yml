@@ -15,6 +15,7 @@ services:
       API_URL: http://rolando-0:8080
       INVITE_URL: ${INVITE_URL:-}
       REPO_URL: ${REPO_URL:-}
+      COMMUNITY_INVITE_URL: ${COMMUNITY_INVITE_URL:-}
       SITE_URL: ${SITE_URL:?set SITE_URL in .env}
     depends_on:
       - rolando-0

@@ -21,4 +21,5 @@
   .input { @apply rounded border border-neutral-700 bg-neutral-800 p-1.5; }
   /* links from container env: an unset var leaves an empty href */
   .env-link[href=""] { @apply hidden; }
+  .env-text[href=""] { @apply pointer-events-none text-inherit no-underline; }
 }

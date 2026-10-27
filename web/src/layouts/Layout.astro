@@ -15,7 +15,7 @@ const url = new URL(
 const image = new URL("/android-chrome-512x512.png", Astro.site).href;
 // Docker builds bake placeholders here; the container swaps in its env on start (see Dockerfile).
 const invite = process.env.INVITE_URL ?? "";
-const github = process.env.REPO_URL ?? "";
+const repo = process.env.REPO_URL ?? "";
 ---
 
 <!doctype html>
@@ -50,8 +50,8 @@ const github = process.env.REPO_URL ?? "";
       <a href="/premium">Premium</a>
       <a href="/privacy-policy">Privacy Policy</a>
       <a href="/terms-of-service">Terms of Service</a>
-      {github && (
-        <a class="env-link" href={github} rel="noopener">
+      {repo && (
+        <a class="env-link" href={repo} rel="noopener">
           Source code
         </a>
       )}

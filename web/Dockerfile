@@ -7,7 +7,8 @@ RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile --store
 COPY . .
 ENV SITE_URL=http://site.invalid \
     INVITE_URL=__INVITE_URL__ \
-    REPO_URL=__REPO_URL__
+    REPO_URL=__REPO_URL__ \
+    COMMUNITY_INVITE_URL=__COMMUNITY_INVITE_URL__
 RUN pnpm run build
 
 FROM nginx:alpine
@@ -24,7 +25,8 @@ esc() { printf '%s' "$1" | sed -e 's/"/%22/g' -e 's/[\\&#]/\\&/g'; }
 find /usr/share/nginx/html -type f \( -name '*.html' -o -name '*.xml' -o -name '*.txt' \) \
 	-exec sed -i -e "s#http://site.invalid#${SITE_URL%/}#g" \
 	-e "s#__INVITE_URL__#$(esc "$INVITE_URL")#g" \
-	-e "s#__REPO_URL__#$(esc "$REPO_URL")#g" {} +
+	-e "s#__REPO_URL__#$(esc "$REPO_URL")#g" \
+	-e "s#__COMMUNITY_INVITE_URL__#$(esc "$COMMUNITY_INVITE_URL")#g" {} +
 EOF
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

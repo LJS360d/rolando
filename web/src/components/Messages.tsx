@@ -74,7 +74,7 @@ export default function Messages() {
     timer.current = setTimeout(() => ((search.value = v.trim()), (query.value = "page=1")), 300);
   };
   const remove = (m: string) => {
-    if (!confirm(`Forget this message? Every copy of it is deleted and Rolando stops using it.\n\n${m.slice(0, 300)}`)) return;
+    if (!confirm(`Forget this message?\n\n${m.slice(0, 300)}`)) return;
     api("DELETE", `/guilds/${guildId}/messages`, { content: m }).then(() => {
       forget(base, path);
       resource(path, true);

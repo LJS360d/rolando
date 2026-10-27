@@ -1,25 +1,79 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import CommunityLink from "../components/CommunityLink.astro";
 ---
 
 <Layout title="Privacy Policy">
-<section class="card space-y-2">
-  <h1>Privacy Policy</h1>
-  <h3>Introduction</h3>
-  <p>Welcome to the Privacy Policy. Your privacy is important to us. This policy explains what information we collect, how we use it, and your rights regarding that information.</p>
-  <h3>Information We Collect</h3>
-  <p>We collect message content data from Discord channels. We do not collect personal user data, such as usernames or timestamps. Media URLs, including images, GIFs, and videos, even NSFW ones, are stored.</p>
-  <h3>How We Use Collected Information</h3>
-  <p>The collected message content data is used to train a lightweight Markov chain for text generation tied to the server. Media URLs are stored for the bot's operational purposes. We do not share this data with third parties.</p>
-  <h3>Data Storage and Security</h3>
-  <p>We implement reasonable security measures to protect the data collected. However, no method of transmission over the Internet or electronic storage is 100% secure.</p>
-  <h3>User Controls and Data Deletion</h3>
-  <p>Users can manage what data the bot learns via commands. Users can also request the deletion of collected data by contacting the owner "zlejon" on Discord through the official Discord server.</p>
-  <h3>Children's Privacy</h3>
-  <p>The bot is not intended for use by individuals under the age of 13. We do not knowingly collect personal data from children under 13.</p>
-  <h3>Changes to This Privacy Policy</h3>
-  <p>We may update this Privacy Policy from time to time. We will notify users of any changes by posting the new Privacy Policy on this page.</p>
-  <h3>Contact Us</h3>
-  <p>If you have any questions about this Privacy Policy, please contact the owner "zlejon" on Discord.</p>
-</section>
+  <section class="card space-y-4 [&>p]:ml-4">
+    <h1 class="text-center">Privacy Policy</h1>
+    <p class="muted text-sm">Last updated: October 27, 2026</p>
+    <h3>Introduction</h3>
+    <p>
+      This policy explains what information the bot collects, how it is used,
+      and your rights regarding that information.
+    </p>
+    <h3>Information We Collect</h3>
+    <p>
+      <b>Text messages.</b> The content of messages in channels the bot can
+      read, both as they are sent and, when a server manager runs /train, from
+      the channel history. Only the text is stored, together with the time it
+      was stored: not the author, channel or original send time. Mentions inside
+      a message are stored as written, so the text can contain Discord user,
+      role or channel IDs.
+    </p>
+    <p>
+      <b>Media links.</b> URLs of images, GIFs and videos found in messages or
+      attachments, NSFW ones included. The files themselves are not downloaded.
+    </p>
+    <p>
+      <b>Voice.</b> When the bot is in a voice channel (via /vc-join), it
+      listens to what is said there and transcribes it into text on our own
+      servers. The transcribed text is stored and used like a text message.
+      Audio is processed in memory and never stored.
+    </p>
+    <h3>How We Use Collected Information</h3>
+    <p>
+      Stored messages and transcripts train a lightweight Markov chain for text
+      generation, tied to the server they came from and never shared between
+      servers. Media links are posted back by the bot in the same server. Login
+      data is used only to show you the servers you manage and let you configure
+      them.
+    </p>
+    <h3>Third Parties</h3>
+    <p>
+      We do not sell or share any collected data with third parties. Aggregate
+      counts (servers, users, voice connections) may be published to bot listing
+      sites. Discord itself handles all messages under its own privacy policy.
+    </p>
+    <h3>Data Storage and Retention</h3>
+    <p>
+      Each server's data is stored separately on our servers and kept until it
+      is deleted. We implement reasonable security measures, but no method of
+      transmission over the Internet or electronic storage is 100% secure.
+    </p>
+    <h3>User Controls and Data Deletion</h3>
+    <p>
+      Server managers can view, search and delete learned messages and media, or
+      clear all of a server's data, from the website (
+      <a href="/me">"My servers"</a> dashboard) or with the /wipe command.
+      Removing the bot from a server deletes all of that server's data. Anyone
+      can also request deletion by contacting us on the <CommunityLink />.
+    </p>
+    <h3>Children's Privacy</h3>
+    <p>
+      The bot is not intended for use by individuals under the age of 13. We do
+      not knowingly collect personal data from children under 13.
+    </p>
+    <h3>Changes to This Privacy Policy</h3>
+    <p>
+      We may update this Privacy Policy from time to time. We will notify users
+      of any changes by posting the new Privacy Policy on this page and updating
+      the date above.
+    </p>
+    <h3>Contact Us</h3>
+    <p>
+      If you have any questions about this Privacy Policy, please contact us on
+      the <CommunityLink />.
+    </p>
+  </section>
 </Layout>

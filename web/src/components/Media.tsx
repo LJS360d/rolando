@@ -68,7 +68,7 @@ export default function Media() {
   if (!summary || summary.state === "empty") return null;
 
   const remove = (url: string) => {
-    if (!confirm(`Forget this ${kind.value}? Rolando won't post it again.\n\n${url}`)) return;
+    if (!confirm(`Forget this ${kind.value}? It won't post it again.\n\n${url}`)) return;
     api("DELETE", `/guilds/${guildId}/media`, { url }).then(() => {
       forget(base, path);
       resource(path, true);
@@ -97,7 +97,7 @@ export default function Media() {
       </div>
       <p class="muted mb-3 flex items-start gap-2 text-xs">
         <span class="icon-[fa6-solid--circle-info] mt-0.5 shrink-0" />
-        Some media can't be previewed here, like posts on X or TikTok, Imgur pages and expired Discord attachments: they show as a link. Discord still embeds them when Rolando posts them.
+        Some media can't be previewed here, like posts on X or TikTok, Imgur pages and expired Discord attachments: they show as a link. Discord still embeds them when posted.
       </p>
       {error && <p class="banner">{error}</p>}
       <ul class={`grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6 ${loading ? "animate-pulse opacity-60" : ""}`}>
