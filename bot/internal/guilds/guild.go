@@ -467,7 +467,7 @@ type PageQuery struct {
 
 var likeEscaper = strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`)
 
-// MessagesPage returns limit messages in id order. A page jump walks from
+// MessagesPage returns limit messages newest first. A page jump walks from
 // whichever end is closer, since OFFSET steps through every skipped row.
 func (g *Guild) MessagesPage(limit int, q PageQuery) ([]Message, int64, error) {
 	match := func(tx *gorm.DB) *gorm.DB { return tx }
@@ -484,24 +484,24 @@ func (g *Guild) MessagesPage(limit int, q PageQuery) ([]Message, int64, error) {
 		return nil, 0, err
 	}
 	var rows []Message
-	tx := g.DB.Select("id", "content").Scopes(match).Limit(limit)
+	tx := g.DB.Select("id", "content", "created_at").Scopes(match).Limit(limit)
 	offset := int64(max(q.Page-1, 0)) * int64(limit)
-	desc := false
+	asc := false
 	switch {
 	case q.After > 0:
-		tx = tx.Where("id > ?", q.After).Order("id")
+		tx, asc = tx.Where("id > ?", q.After).Order("id"), true
 	case q.Before > 0:
-		tx, desc = tx.Where("id < ?", q.Before).Order("id DESC"), true
+		tx = tx.Where("id < ?", q.Before).Order("id DESC")
 	case offset > total/2 && offset < total:
 		tail := total - offset - int64(limit)
 		if tail < 0 {
 			tx, tail = tx.Limit(limit+int(tail)), 0
 		}
-		tx, desc = tx.Order("id DESC").Offset(int(tail)), true
+		tx, asc = tx.Order("id").Offset(int(tail)), true
 	default:
-		tx = tx.Order("id").Offset(int(offset))
+		tx = tx.Order("id DESC").Offset(int(offset))
 	}
-	if err = tx.Find(&rows).Error; err == nil && desc {
+	if err = tx.Find(&rows).Error; err == nil && asc {
 		slices.Reverse(rows)
 	}
 	return rows, total, err

@@ -55,7 +55,7 @@ export type BatchStatus = { op: string; total: number; ok: number; failed: numbe
 
 export type MediaPage = { urls: string[]; page: number; pages: number; total: number };
 
-export type MessagesPage = { messages: string[]; mentions?: Record<string, string>; page: number; pages: number; first: number; last: number };
+export type MessagesPage = { messages: string[]; times: number[]; mentions?: Record<string, string>; page: number; pages: number; first: number; last: number };
 
 export const browser = typeof window !== "undefined";
 export const login = () => location.assign("/api/auth/login");

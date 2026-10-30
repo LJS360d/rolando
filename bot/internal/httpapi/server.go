@@ -640,9 +640,11 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	contents := make([]string, len(msgs))
+	times := make([]int64, len(msgs))
 	var first, last int64
 	for i, m := range msgs {
 		contents[i] = m.Content
+		times[i] = m.CreatedAt.Unix()
 	}
 	if len(msgs) > 0 {
 		first, last = msgs[0].ID, msgs[len(msgs)-1].ID
@@ -650,6 +652,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	pages := (int(total) + messagesPageSize - 1) / messagesPageSize
 	writeJSON(w, map[string]any{
 		"messages": contents,
+		"times":    times,
 		"mentions": s.mentions(r.PathValue("id"), contents),
 		// keyset pages don't know their number; the client tracks it
 		"page":  min(q.Page, max(pages, 1)),
