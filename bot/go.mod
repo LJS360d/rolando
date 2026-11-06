@@ -3,7 +3,7 @@ module rolando
 go 1.26.0
 
 require (
-	github.com/disgoorg/disgo v0.19.6
+	github.com/disgoorg/disgo v0.20.0
 	github.com/disgoorg/godave/golibdave v0.3.0
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/glebarez/go-sqlite v1.23.0

@@ -291,7 +291,7 @@ type GuildRow struct {
 // localGuilds lists this node's guilds, only those in ids when given.
 func (s *Server) localGuilds(ids []string) []GuildRow {
 	rows := []GuildRow{}
-	add := func(g discord.Guild) {
+	add := func(g discord.CacheGuild) {
 		row := GuildRow{ID: g.ID.String(), Name: g.Name, Members: g.MemberCount, State: s.chains.State(g.ID.String())}
 		if g.Icon != nil {
 			row.Icon = *g.IconURL()
