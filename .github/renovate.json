@@ -1,0 +1,69 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommitsDisabled"],
+  "timezone": "Europe/Rome",
+  "schedule": ["before 9am"],
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 0,
+  "rangeStrategy": "bump",
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths", "pnpmDedupe"],
+  "vulnerabilityAlerts": {
+    "schedule": ["at any time"],
+    "labels": ["security"]
+  },
+  "customManagers": [
+    {
+      "description": "Vendored CGO libs pinned in bot/Makefile via '# renovate:' comments",
+      "customType": "regex",
+      "managerFilePatterns": ["/^bot/Makefile$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Z_]+_VERSION\\s*:=\\s*(?<currentValue>\\S+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Discord API/voice stack breaks on new Discord features; never wait, never mix with other deps. libdave ABI must match godave.",
+      "matchPackageNames": ["github.com/disgoorg/**", "discord/libdave"],
+      "schedule": ["at any time"],
+      "groupName": "discord stack",
+      "labels": ["discord-api"],
+      "prPriority": 10
+    },
+    {
+      "description": "libdave tags look like v1.2.2/cpp",
+      "matchPackageNames": ["discord/libdave"],
+      "extractVersion": "^v(?<version>[\\d.]+)/cpp$"
+    },
+    {
+      "description": "Makefile pins the bare version, tags are v-prefixed; v0.3.50 ships no linux-x86_64 zip",
+      "matchPackageNames": ["alphacep/vosk-api"],
+      "extractVersion": "^v(?<version>.+)$",
+      "allowedVersions": "!/^0\\.3\\.50$/"
+    },
+    {
+      "description": "Batch non-major Go updates",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["!github.com/disgoorg/**"],
+      "groupName": "go deps (non-major)"
+    },
+    {
+      "description": "Vosk C lib and its Go bindings move together",
+      "matchPackageNames": ["alphacep/vosk-api", "github.com/alphacep/vosk-api/**"],
+      "groupName": "vosk"
+    },
+    {
+      "description": "Batch non-major web updates",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "web deps (non-major)"
+    },
+    {
+      "description": "Batch toolchain, base images and actions",
+      "matchManagers": ["mise", "dockerfile", "docker-compose", "github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "toolchain & images"
+    }
+  ]
+}

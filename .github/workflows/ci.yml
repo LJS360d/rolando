@@ -1,0 +1,41 @@
+# PRs on main
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          working_directory: bot
+      - uses: actions/cache@v4
+        with:
+          path: |
+            bot/dave
+            bot/vosk
+          key: cgo-libs-${{ hashFiles('bot/Makefile') }}
+      - run: make build
+      - run: make test
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          working_directory: web
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build

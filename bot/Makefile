@@ -18,12 +18,16 @@ DAVE_DIR     := dave
 DAVE_INCLUDE := $(DAVE_DIR)/include
 DAVE_LIB_DIR := $(DAVE_DIR)/lib
 DAVE_LIB     := $(DAVE_LIB_DIR)/libdave.so
-DAVE_LIB_URL := https://github.com/discord/libdave/releases/download/v1.1.1%2Fcpp/libdave-Linux-X64-boringssl.zip
+# renovate: datasource=github-releases depName=discord/libdave
+DAVE_VERSION := 1.1.1
+DAVE_LIB_URL := https://github.com/discord/libdave/releases/download/v$(DAVE_VERSION)%2Fcpp/libdave-Linux-X64-boringssl.zip
 
 # ── VOSK ──────────────────────────────────────────────────────────────────────
 
-VOSK_LIB_RELEASE  := v0.3.45
-VOSK_ARCHIVE      := vosk-linux-x86_64-0.3.45
+# renovate: datasource=github-releases depName=alphacep/vosk-api
+VOSK_VERSION      := 0.3.45
+VOSK_LIB_RELEASE  := v$(VOSK_VERSION)
+VOSK_ARCHIVE      := vosk-linux-x86_64-$(VOSK_VERSION)
 VOSK_LIB_URL      := https://github.com/alphacep/vosk-api/releases/download/$(VOSK_LIB_RELEASE)/$(VOSK_ARCHIVE).zip
 
 VOSK_LIB          := vosk/lib
@@ -104,7 +108,7 @@ $(DAVE_LIB):
 	@cp -r $(DAVE_DIR)/.tmp/extract/include/dave/* $(DAVE_INCLUDE)/
 	@rm -rf $(DAVE_DIR)/.tmp
 	@echo "[dave] generating dave.pc"
-	@printf 'prefix=$(DAVE_LIB_PATH)\nName: dave\nDescription: libdave\nVersion: 1.1.1\nLibs: -L$${prefix} -ldave\nCflags: -I$(PWD)/$(DAVE_INCLUDE)\n' \
+	@printf 'prefix=$(DAVE_LIB_PATH)\nName: dave\nDescription: libdave\nVersion: $(DAVE_VERSION)\nLibs: -L$${prefix} -ldave\nCflags: -I$(PWD)/$(DAVE_INCLUDE)\n' \
 		> $(DAVE_PKGCONFIG)/dave.pc
 	@echo "[dave] ready"
 
