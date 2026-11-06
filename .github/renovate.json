@@ -64,6 +64,11 @@
       "matchManagers": ["mise", "dockerfile", "docker-compose", "github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
       "groupName": "toolchain & images"
+    },
+    {
+      "description": "pnpm is pinned in both web/mise.toml and web/package.json packageManager (the Dockerfile installs that one); bump them in one PR",
+      "matchPackageNames": ["pnpm"],
+      "groupName": "pnpm"
     }
   ]
 }
