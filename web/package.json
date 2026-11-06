@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro check && astro build",
+    "build": "tsc --noEmit --runExternalCode && astro build",
     "preview": "astro preview"
   },
   "dependencies": {
@@ -18,11 +18,11 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.12",
+    "@astrojs/ts-content-mapper": "^0.2.0",
     "@iconify-json/fa6-brands": "^1.2.6",
     "@iconify-json/fa6-solid": "^1.2.4",
     "@iconify/tailwind4": "^1.2.3",
-    "typescript": "^7.0.2"
+    "typescript": "^7.1.0-beta"
   },
   "packageManager": "pnpm@12.18.0"
 }
