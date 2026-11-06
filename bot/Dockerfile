@@ -12,7 +12,7 @@ WORKDIR /app
 COPY Makefile ./
 RUN make dave vosk && find dave vosk -exec touch -h -d @0 {} +
 
-FROM golang:1.26-trixie AS builder
+FROM golang:1.27-trixie AS builder
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt \
     apt-get update && apt-get install -y --no-install-recommends \
