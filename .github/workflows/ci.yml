@@ -18,7 +18,7 @@ jobs:
       - uses: jdx/mise-action@v2
         with:
           working_directory: bot
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             bot/dave
