@@ -19,7 +19,7 @@ DAVE_INCLUDE := $(DAVE_DIR)/include
 DAVE_LIB_DIR := $(DAVE_DIR)/lib
 DAVE_LIB     := $(DAVE_LIB_DIR)/libdave.so
 # renovate: datasource=github-releases depName=discord/libdave
-DAVE_VERSION := 1.1.1
+DAVE_VERSION := 1.2.2
 DAVE_LIB_URL := https://github.com/discord/libdave/releases/download/v$(DAVE_VERSION)%2Fcpp/libdave-Linux-X64-boringssl.zip
 
 # ── VOSK ──────────────────────────────────────────────────────────────────────
