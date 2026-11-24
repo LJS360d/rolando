@@ -11,7 +11,7 @@ ENV SITE_URL=http://site.invalid \
     COMMUNITY_INVITE_URL=__COMMUNITY_INVITE_URL__
 RUN pnpm run build
 
-FROM nginx:1.31.9-alpine
+FROM nginx:1.31.10-alpine
 ENV API_URL=http://rolando-0:8080 \
     SITE_URL=http://localhost
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
